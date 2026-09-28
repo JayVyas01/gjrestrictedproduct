@@ -17,6 +17,8 @@ ALLOWED_HOSTS = env.listed("DJANGO_ALLOWED_HOSTS")
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
+    "django.contrib.sessions",
+    "rest_framework",
     "core",
     "audit",
     "identity",
@@ -35,8 +37,10 @@ AUTH_PASSWORD_VALIDATORS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.DbContextMiddleware",
 ]
@@ -84,3 +88,28 @@ BLIND_INDEX_KEY = env.required("BLIND_INDEX_KEY")
 OTP_HMAC_KEY = env.required("OTP_HMAC_KEY")
 # Production sender (India-resident SMS/email provider) is chosen in Phase 2.
 OTP_SENDER = env.required("OTP_SENDER")
+
+# --- Sessions: server-side, short-lived, never readable by JavaScript --------------
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_AGE = 15 * 60  # 15 minutes of inactivity
+SESSION_SAVE_EVERY_REQUEST = True  # each request extends the idle timeout
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Strict"
+CSRF_COOKIE_SAMESITE = "Strict"
+
+# Shared across app servers so rate limits hold behind a load balancer.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "gj_cache",
+    }
+}
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_THROTTLE_RATES": {"login": "10/min", "otp": "10/min"},
+}

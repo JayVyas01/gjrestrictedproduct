@@ -1,2 +1,31 @@
 # gjrestrictedproduct
-Website/ App that serves as a tool for restricted product buying and selling with authorisation and authentication by authorised personnels. 
+
+Authorisation and audit platform for seller-initiated transactions of restricted items
+in Gujarat. See `highlevel_plan.md` (design) and `docs/superpowers/plans/` (roadmap and plans).
+
+## Local setup (macOS)
+
+1. Install `uv` (`brew install uv`) and Docker Desktop.
+2. Start Postgres: `cp .env.example .env && docker compose up -d db`
+3. Install the backend: `cd backend && uv sync`
+4. Run the tests: `uv run --env-file .env.test pytest`
+
+## Running the backend locally
+
+```bash
+cd backend
+cp .env.example .env            # then fill in the generated keys and gj_app password
+set -a; source .env; set +a     # load settings into this shell
+DB_USER=gj_owner DB_PASSWORD=gj_owner_local_only uv run python manage.py migrate
+DB_USER=gj_owner DB_PASSWORD=gj_owner_local_only uv run python manage.py createcachetable
+uv run python manage.py create_software_owner
+uv run python manage.py runserver
+```
+
+Migrations run as `gj_owner`; the app always runs as `gj_app`, which cannot change the schema,
+bypass row-level security, or edit or delete audit records.
+
+## Operations
+
+- `python manage.py verify_audit_chain`: recompute the audit hash chain. Exits non-zero on tampering. Schedule it.
+- Before every commit: `uv run ruff format . && uv run ruff check . && uv run --env-file .env.test pytest`

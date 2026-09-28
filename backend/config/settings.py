@@ -15,7 +15,21 @@ DEBUG = env.flag("DJANGO_DEBUG")
 ALLOWED_HOSTS = env.listed("DJANGO_ALLOWED_HOSTS")
 
 INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
     "core",
+    "identity",
+]
+
+AUTH_USER_MODEL = "identity.User"
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.Argon2PasswordHasher"]
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 MIDDLEWARE = [

@@ -9,9 +9,22 @@ Never use `transactional_db`: its TRUNCATE-based teardown is blocked by the audi
 import pytest
 from django.db import connection
 
+from identity.models import User
+from identity.roles import Role
+
+TEST_PASSWORD = "correct-horse-battery-9"
+
 
 @pytest.fixture
 def app_db(db):
     # SET ROLE is undone automatically when the test transaction rolls back.
     with connection.cursor() as cursor:
         cursor.execute("SET ROLE gj_app")
+
+
+@pytest.fixture
+def make_user(db):
+    def _make(role=Role.LICENSEE, password=TEST_PASSWORD, contact="+919800000001") -> User:
+        return User.objects.create_user(role=role, password=password, contact=contact)
+
+    return _make

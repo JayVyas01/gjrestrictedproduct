@@ -5,6 +5,7 @@ encrypted and can only be set by trusted server code, never by the user.
 """
 
 import secrets
+import uuid
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models
@@ -58,3 +59,20 @@ class User(AbstractBaseUser):
 
     def has_role(self, *roles: str) -> bool:
         return self.is_active and self.role in roles
+
+
+class OtpPurpose(models.TextChoices):
+    LOGIN = "LOGIN", "Login second factor"
+
+
+class OtpChallenge(models.Model):
+    """One issued code. Closed when verified, superseded, expired-and-tried, or out of attempts."""
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="otp_challenges")
+    purpose = models.CharField(max_length=16, choices=OtpPurpose.choices)
+    code_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    closed_at = models.DateTimeField(null=True, blank=True)

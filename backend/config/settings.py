@@ -79,3 +79,8 @@ SILENCED_SYSTEM_CHECKS = ["security.W021"]
 # --- Field-level encryption (keys come from the secrets vault in production) ----
 FIELD_ENCRYPTION_KEY = env.required("FIELD_ENCRYPTION_KEY")  # Fernet key
 BLIND_INDEX_KEY = env.required("BLIND_INDEX_KEY")
+
+# --- One-time passcodes ----------------------------------------------------------
+OTP_HMAC_KEY = env.required("OTP_HMAC_KEY")
+# Production sender (India-resident SMS/email provider) is chosen in Phase 2.
+OTP_SENDER = env.required("OTP_SENDER")

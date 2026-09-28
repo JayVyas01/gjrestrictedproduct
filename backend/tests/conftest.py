@@ -12,6 +12,7 @@ from django.db import connection, transaction
 from audit.models import AuditEvent
 from core.db_context import SYSTEM_ROLE, set_actor
 from identity.models import User
+from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
 
 TEST_PASSWORD = "correct-horse-battery-9"
@@ -42,3 +43,10 @@ def audit_actions():
             return list(AuditEvent.objects.order_by("id").values_list("action", flat=True))
 
     return _read
+
+
+@pytest.fixture
+def otp_outbox():
+    OutboxOtpSender.outbox.clear()
+    yield OutboxOtpSender.outbox
+    OutboxOtpSender.outbox.clear()

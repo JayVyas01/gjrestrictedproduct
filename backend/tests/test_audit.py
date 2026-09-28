@@ -101,6 +101,17 @@ def test_verify_detects_deleted_last_event(db):
     assert report.problem == "chain head does not match the last event"
 
 
+def test_verify_accepts_events_appended_after_head_read(db):
+    record(action="test.first")
+    record(action="test.second")
+    first_hash = events_as_system()[0].hash
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE audit_auditchainhead SET last_hash = %s WHERE id = 1", [first_hash])
+    report = verify_as_system()
+    assert report.ok
+    assert report.checked == 2
+
+
 @pytest.mark.parametrize("role", list(Role))
 def test_only_audit_readers_can_read_events(app_db, role):
     record(action="test.event")

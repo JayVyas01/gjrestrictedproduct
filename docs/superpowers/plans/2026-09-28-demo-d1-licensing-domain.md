@@ -27,6 +27,7 @@ Licences are protected by Postgres row-level security: a licensee reads only lic
 - An enrolment OTP goes **only** to the contact on the licence record, never to a contact supplied in the request.
 - Quantities are `Decimal` values with 3 decimal places, in the substance's own unit (`L` or `KG`).
 - Every user-facing failure message is plain language that says what to do (spec section 7).
+- Phase 1 conventions (from its final review): **raise to roll back, return to commit** (DRF exception handler rolls back on raised exceptions); call `audit.service.record()` as the **last lock** a request takes; audit payloads hold only IDs, codes and blind indexes — **never personal data or raw user input**; `blind_index(context, value)` always takes a context (`"licence_number"`, `"gstin"`, ...).
 
 ## Review Focus
 
@@ -63,7 +64,7 @@ backend/
 **Files:**
 - Modify: `backend/identity/models.py` (`OtpPurpose`, `OtpChallenge`)
 - Modify: `backend/identity/otp.py` (full replacement below)
-- Create (generated): `backend/identity/migrations/0004_otp_subject.py`
+- Create (generated): `backend/identity/migrations/0005_otp_subject.py`
 - Test: `backend/tests/test_otp_subject.py`
 
 **Interfaces:**
@@ -165,11 +166,16 @@ class OtpChallenge(models.Model):
                 ),
                 name="otp_user_xor_subject",
             ),
+            models.UniqueConstraint(
+                fields=["user", "purpose"],
+                condition=models.Q(closed_at__isnull=True),
+                name="one_open_otp_per_user_and_purpose",
+            ),
         ]
 ```
 
 Run: `uv run --env-file .env.test python manage.py makemigrations identity --name otp_subject`
-Expected: creates `identity/migrations/0004_otp_subject.py`.
+Expected: creates `identity/migrations/0005_otp_subject.py`.
 
 - [ ] **Step 4: Replace `backend/identity/otp.py`**
 
@@ -217,6 +223,9 @@ def _create_and_send(challenge: OtpChallenge, contact: str) -> OtpChallenge:
 
 
 def issue(user: User, purpose: str) -> OtpChallenge:
+    # Lock the user's row so concurrent issues for the same user are serialised
+    # (keeps "a new challenge supersedes the old one" true under concurrency).
+    User.objects.select_for_update().get(pk=user.pk)
     now = timezone.now()
     OtpChallenge.objects.filter(user=user, purpose=purpose, closed_at__isnull=True).update(
         closed_at=now
@@ -877,7 +886,7 @@ git commit -m "feat: area hierarchy, positions and personnel assignments with tr
 **Files:**
 - Modify: `backend/core/db_context.py` (add `acting_as_system`)
 - Modify: `backend/identity/models.py` (`User.licensee_gstin_index`, `UserManager.create_user`)
-- Create (generated): `backend/identity/migrations/0005_user_licensee_gstin_index.py`
+- Create (generated): `backend/identity/migrations/0006_user_licensee_gstin_index.py`
 - Create: `backend/licensing/__init__.py`, `apps.py`, `models.py`, `service.py`, `migrations/__init__.py`
 - Create (generated): `backend/licensing/migrations/0001_initial.py`
 - Create: `backend/licensing/migrations/0002_rls_and_append_only.py`
@@ -1344,7 +1353,7 @@ GRANT DELETE ON licensing_licence TO gj_app;
 class Migration(migrations.Migration):
     dependencies = [
         ("licensing", "0001_initial"),
-        ("identity", "0005_user_licensee_gstin_index"),
+        ("identity", "0006_user_licensee_gstin_index"),
         ("core", "0001_app_role_privileges"),
     ]
     operations = [migrations.RunSQL(sql=FORWARD, reverse_sql=BACKWARD)]
@@ -1440,9 +1449,9 @@ def _create_licence(*, number, gstin, holder_name, contact, licence_type, area, 
                     recorded_by, substance, substance_class) -> Licence:
     licence = Licence.objects.create(
         number_encrypted=crypto.encrypt(number.strip()),
-        number_index=crypto.blind_index(number),
+        number_index=crypto.blind_index("licence_number", number),
         gstin_encrypted=crypto.encrypt(gstin),
-        gstin_index=crypto.blind_index(gstin),
+        gstin_index=crypto.blind_index("gstin", gstin),
         holder_name=holder_name,
         contact_encrypted=crypto.encrypt(contact),
         licence_type=licence_type,
@@ -1514,7 +1523,7 @@ def find_by_number(number: str) -> Licence | None:
     """Exact match only (case and surrounding spaces ignored). No partial search exists."""
     return (
         Licence.objects.select_related("licence_type", "substance", "substance_class", "area")
-        .filter(number_index=crypto.blind_index(number))
+        .filter(number_index=crypto.blind_index("licence_number", number))
         .first()
     )
 ```
@@ -1694,12 +1703,12 @@ def start_enrolment(*, licence_number: str, gstin: str) -> OtpChallenge | None:
         licence = find_by_number(licence_number)
         matches = (
             licence is not None
-            and licence.gstin_index == crypto.blind_index(gstin)
+            and licence.gstin_index == crypto.blind_index("gstin", gstin)
             and licence.status == LicenceStatus.ACTIVE
             and not _already_enrolled(licence.gstin_index)
         )
         if not matches:
-            record(action="enrolment.failed", payload={"attempted": licence_number[:40]})
+            record(action="enrolment.failed", payload={"attempted_index": crypto.blind_index("licence_number", licence_number)})
             return None
         contact = licence.contact()
         gstin_index = licence.gstin_index

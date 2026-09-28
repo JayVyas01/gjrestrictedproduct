@@ -49,6 +49,24 @@ def test_middleware_sets_no_actor_for_anonymous_request(app_db, rf):
     assert not any(seen["actor"])
 
 
+def test_anonymous_request_after_authenticated_request_has_no_actor(app_db, rf, make_user):
+    user = make_user(role=Role.LICENSEE)
+    authenticated_request = rf.get("/")
+    authenticated_request.user = user
+    DbContextMiddleware(lambda req: HttpResponse())(authenticated_request)
+
+    anonymous_request = rf.get("/")
+    anonymous_request.user = AnonymousUser()
+    seen = {}
+
+    def view(req):
+        seen["actor"] = current_actor()
+        return HttpResponse()
+
+    DbContextMiddleware(view)(anonymous_request)
+    assert not any(seen["actor"])
+
+
 def test_middleware_rolls_back_writes_on_server_error(app_db, rf, make_user):
     user = make_user()
     request = rf.get("/")

@@ -10,7 +10,7 @@ import pytest
 from django.db import connection, transaction
 
 from audit.models import AuditEvent
-from core.db_context import SYSTEM_ROLE, set_actor
+from core.db_context import SYSTEM_ROLE, current_actor, set_actor
 from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
@@ -39,8 +39,12 @@ def audit_actions():
 
     def _read() -> list[str]:
         with transaction.atomic():
-            set_actor(user_id="test", role=SYSTEM_ROLE)
-            return list(AuditEvent.objects.order_by("id").values_list("action", flat=True))
+            previous_user_id, previous_role = current_actor()
+            try:
+                set_actor(user_id="test", role=SYSTEM_ROLE)
+                return list(AuditEvent.objects.order_by("id").values_list("action", flat=True))
+            finally:
+                set_actor(user_id=previous_user_id or "", role=previous_role or "")
 
     return _read
 

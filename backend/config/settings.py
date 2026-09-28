@@ -114,4 +114,5 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"login": "10/min", "otp": "10/min"},
     # Set to the number of trusted proxies in production; 0 = use REMOTE_ADDR, never client headers.
     "NUM_PROXIES": 0,
+    "EXCEPTION_HANDLER": "core.exceptions.rollback_on_exception",
 }

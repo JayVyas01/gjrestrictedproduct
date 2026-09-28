@@ -29,7 +29,7 @@ def start_login(user_id: str, password: str) -> OtpChallenge | None:
         record(
             action="login.failed",
             reason="unknown user id",
-            payload={"attempted_index": crypto.blind_index(user_id)},
+            payload={"attempted_index": crypto.blind_index("login_attempt", user_id)},
         )
         return None
 

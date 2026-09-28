@@ -2,6 +2,20 @@
 
 Uses a plain INSERT (no RETURNING) on purpose: RLS hides events from most roles, and
 RETURNING would require read access. Callers get the new hash back instead.
+
+record() takes the global chain-head row lock (SELECT ... FOR UPDATE on
+AuditChainHead) and holds it until the request's transaction ends. Call record() as
+the LAST lock a request takes -- lock user, licence or other rows first -- so two
+concurrent requests never wait on each other's chain-head lock while each also holds
+a row lock the other needs (deadlock).
+
+Audit events belong to the request's transaction: record() only writes inside the
+caller's transaction.atomic(), it does not open its own top-level transaction. So if
+the request's transaction rolls back (a raised exception, or a 5xx response under
+DbContextMiddleware), the audit events written during that request roll back with it.
+
+The audit trail is permanent and hash-chained, so payloads must hold only IDs, codes
+and pseudonyms (blind indexes) -- never personal data or raw user input.
 """
 
 import json

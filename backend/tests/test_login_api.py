@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import pytest
 from django.db import transaction
+from django.test import Client
 from django.utils import timezone
 
 from audit.models import AuditEvent
@@ -158,6 +159,28 @@ def test_locked_and_inactive_accounts_still_check_the_password(
     calls["count"] = 0
     start(client, inactive_user.user_id)
     assert calls["count"] == 1
+
+
+def test_login_requires_csrf_token(app_db, make_user):
+    enforcing_client = Client(enforce_csrf_checks=True)
+    user = make_user()
+
+    no_token = enforcing_client.post(
+        "/api/auth/login",
+        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        content_type="application/json",
+    )
+    assert no_token.status_code == 403
+
+    csrf_response = enforcing_client.get("/api/auth/csrf")
+    token = csrf_response.cookies["csrftoken"].value
+    with_token = enforcing_client.post(
+        "/api/auth/login",
+        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    assert with_token.status_code != 403
 
 
 def test_locking_cancels_outstanding_login_code(app_db, client, make_user, otp_outbox):

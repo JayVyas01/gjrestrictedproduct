@@ -2,6 +2,10 @@
 
 Each event's hash covers its own fields plus the previous event's hash, so changing,
 removing or reordering any event breaks every hash after it.
+
+The chain is unkeyed SHA-256, so it detects changes by anyone who cannot also rewrite
+every later hash and the head; anchoring to a separate write-once store (Phase 5)
+closes that gap.
 """
 
 import hashlib

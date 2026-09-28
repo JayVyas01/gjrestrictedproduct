@@ -1,4 +1,8 @@
-"""Liveness endpoint for the load balancer. Touches no data."""
+"""Liveness endpoint for the load balancer.
+
+Every request runs in a DB transaction (DbContextMiddleware), so this also shows the
+database is reachable.
+"""
 
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET

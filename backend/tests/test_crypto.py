@@ -31,15 +31,28 @@ def test_decrypt_rejects_value_encrypted_with_another_key(settings):
 
 
 def test_blind_index_is_deterministic_and_normalised():
-    assert blind_index(" gj/lic/001 ") == blind_index("GJ/LIC/001")
-    assert len(blind_index("GJ/LIC/001")) == 64
+    assert blind_index("licence_number", " gj/lic/001 ") == blind_index(
+        "licence_number", "GJ/LIC/001"
+    )
+    assert len(blind_index("licence_number", "GJ/LIC/001")) == 64
 
 
 def test_blind_index_differs_between_values():
-    assert blind_index("GJ/LIC/001") != blind_index("GJ/LIC/002")
+    assert blind_index("licence_number", "GJ/LIC/001") != blind_index(
+        "licence_number", "GJ/LIC/002"
+    )
 
 
 def test_blind_index_depends_on_secret_key(settings):
-    before = blind_index("GJ/LIC/001")
+    before = blind_index("licence_number", "GJ/LIC/001")
     settings.BLIND_INDEX_KEY = "another-test-key"
-    assert blind_index("GJ/LIC/001") != before
+    assert blind_index("licence_number", "GJ/LIC/001") != before
+
+
+def test_blind_index_differs_by_context():
+    assert blind_index("gstin", "X") != blind_index("licence_number", "X")
+
+
+def test_blind_index_rejects_empty_context():
+    with pytest.raises(ValueError):
+        blind_index("", "GJ/LIC/001")

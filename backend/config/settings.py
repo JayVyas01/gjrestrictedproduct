@@ -59,3 +59,7 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 # HSTS preload is a go-live decision for the production domain (roadmap Phase 6).
 SILENCED_SYSTEM_CHECKS = ["security.W021"]
+
+# --- Field-level encryption (keys come from the secrets vault in production) ----
+FIELD_ENCRYPTION_KEY = env.required("FIELD_ENCRYPTION_KEY")  # Fernet key
+BLIND_INDEX_KEY = env.required("BLIND_INDEX_KEY")

@@ -14,6 +14,13 @@ Decisions made so far:
 - **Authority is positional, not personal.** Approval chains are resolved from (area/jurisdiction of the transaction) x (item severity/complexity) to a chain of **positions** — e.g. Area Officer -> District Officer -> State Officer — not to named individuals. Whoever currently holds a position acts for it. A personnel transfer reassigns the position-holder; it does not change the chain itself, and historical approvals stay attributed to "position, held by [X] at the time."
 - **Security and legal compliance are top-level, non-negotiable requirements**, not hardening done later: strict least-privilege access, DPDP Act 2023 (consent/purpose limitation, data minimisation, breach notification, data-principal rights, data-localisation), and the Gujarat Prohibition Act plus other applicable prohibition/licensing acts drive retention, disclosure and access-logging rules baked into the design from the start.
 
+## Update 2026-09-28: licence types, applications and the demo
+Full design: [`docs/superpowers/specs/2026-09-28-licence-applications-and-demo-design.md`](docs/superpowers/specs/2026-09-28-licence-applications-and-demo-design.md). Where it differs from this document, it takes precedence:
+- **Licence types** form a configurable catalogue. Each (licence type × substance or substance class) rule sets the permissions (buy, sell, transport, maximum stock, per-transaction limit, validity, review mode). Permissions are frozen on the licence when it is issued or renewed.
+- **Licence application and renewal:** any business can apply through a limited **Applicant** account, against a published requirement checklist. An area verifier checks it, and the Licensing Authority approves and issues the licence. Reviewers can approve, reject or return for correction. Renewal grace period: **0 days for now**.
+- **Roles:** Buyer and Seller are combined into **Licensee**, and what a licensee may buy or sell comes from its licences. **Applicant** is added.
+- **Priorities:** the product must be **very user friendly**, and a **Demo milestone** (licence application and transaction approval on synthetic data, English only and ready for Gujarati) comes before the full build. Feedback from the authorities may change this design.
+
 ## Roles and data access
 | Role | Can see | Can do |
 |---|---|---|

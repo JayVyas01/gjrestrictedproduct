@@ -1,5 +1,12 @@
-import pytest
+from datetime import timedelta
 
+import pytest
+from django.db import transaction
+from django.utils import timezone
+
+from audit.models import AuditEvent
+from core.db_context import SYSTEM_ROLE, set_actor
+from identity.models import User
 from identity.roles import Role
 from tests.conftest import TEST_PASSWORD
 
@@ -111,3 +118,67 @@ def test_csrf_endpoint_sets_cookie(app_db, client):
     response = client.get("/api/auth/csrf")
     assert response.status_code == 204
     assert "csrftoken" in response.cookies
+
+
+def test_rate_limit_ignores_spoofed_forwarded_for(app_db, client):
+    statuses = [
+        client.post(
+            "/api/auth/login",
+            {"user_id": "GJNOSUCHUSER", "password": TEST_PASSWORD},
+            content_type="application/json",
+            HTTP_X_FORWARDED_FOR=f"10.0.0.{i}",
+        ).status_code
+        for i in range(11)
+    ]
+    assert statuses[10] == 429
+
+
+def test_locked_and_inactive_accounts_still_check_the_password(
+    app_db, client, make_user, monkeypatch
+):
+    calls = {"count": 0}
+    original = User.check_password
+
+    def counting_check_password(self, raw_password):
+        calls["count"] += 1
+        return original(self, raw_password)
+
+    monkeypatch.setattr(User, "check_password", counting_check_password)
+
+    locked_user = make_user()
+    locked_user.locked_until = timezone.now() + timedelta(minutes=15)
+    locked_user.save(update_fields=["locked_until"])
+    calls["count"] = 0
+    start(client, locked_user.user_id)
+    assert calls["count"] == 1
+
+    inactive_user = make_user()
+    inactive_user.is_active = False
+    inactive_user.save(update_fields=["is_active"])
+    calls["count"] = 0
+    start(client, inactive_user.user_id)
+    assert calls["count"] == 1
+
+
+def test_locking_cancels_outstanding_login_code(app_db, client, make_user, otp_outbox):
+    user = make_user()
+    challenge_id = start(client, user.user_id).json()["challenge_id"]
+    code = otp_outbox[-1][1]
+
+    for _ in range(5):
+        start(client, user.user_id, "wrong-password-123")
+
+    assert verify(client, challenge_id, code).status_code == 401
+    assert client.get("/api/auth/me").status_code == 403
+
+
+def test_unknown_user_attempt_is_not_stored_in_plaintext(app_db, client):
+    start(client, "GJSECRET1234")
+
+    with transaction.atomic():
+        set_actor(user_id="test", role=SYSTEM_ROLE)
+        payloads = list(AuditEvent.objects.order_by("id").values_list("payload", flat=True))
+
+    for payload in payloads:
+        for value in (payload or {}).values():
+            assert "GJSECRET1234" not in str(value)

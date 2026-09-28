@@ -1,6 +1,7 @@
 """HTTP endpoints for login and logout. Thin: validate, call a service, respond."""
 
 from django.contrib.auth import login, logout
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from rest_framework import status
@@ -58,7 +59,9 @@ class LoginVerifyView(APIView):
             purpose=OtpPurpose.LOGIN,
             code=data.validated_data["code"],
         )
-        if user is None:
+        if user is None or (user.locked_until and user.locked_until > timezone.now()):
+            # A code verified after the account was locked (e.g. by a burst of failed
+            # attempts on another challenge) must not complete the login (R11).
             record(action="login.otp_failed")
             return _invalid()
         login(request, user)  # also rotates the session key (prevents session fixation)

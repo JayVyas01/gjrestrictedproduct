@@ -76,3 +76,12 @@ class OtpChallenge(models.Model):
     expires_at = models.DateTimeField()
     attempts = models.PositiveSmallIntegerField(default=0)
     closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "purpose"],
+                condition=models.Q(closed_at__isnull=True),
+                name="one_open_otp_per_user_and_purpose",
+            ),
+        ]

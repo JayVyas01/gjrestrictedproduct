@@ -28,6 +28,10 @@ def _hash_code(challenge: OtpChallenge, code: str) -> str:
 
 
 def issue(user: User, purpose: str) -> OtpChallenge:
+    # Lock the user row so concurrent issue() calls for the same user+purpose serialise:
+    # without this, two transactions could both see the old challenge as open under
+    # READ COMMITTED and each close-then-insert, leaving two open challenges.
+    User.objects.select_for_update().get(pk=user.pk)
     now = timezone.now()
     OtpChallenge.objects.filter(user=user, purpose=purpose, closed_at__isnull=True).update(
         closed_at=now

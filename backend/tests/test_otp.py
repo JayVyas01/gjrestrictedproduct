@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 import pytest
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from identity import otp
@@ -92,3 +93,16 @@ def test_inactive_user_cannot_complete_otp(app_db, make_user, otp_outbox):
 
 def test_malformed_challenge_id_is_rejected(app_db):
     assert otp.verify(challenge_id="not-a-uuid", purpose=OtpPurpose.LOGIN, code="123456") is None
+
+
+def test_database_allows_one_open_challenge_per_user_and_purpose(app_db, make_user, otp_outbox):
+    user = make_user()
+    otp.issue(user, OtpPurpose.LOGIN)
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            OtpChallenge.objects.create(
+                user=user,
+                purpose=OtpPurpose.LOGIN,
+                code_hash="x" * 64,
+                expires_at=timezone.now(),
+            )

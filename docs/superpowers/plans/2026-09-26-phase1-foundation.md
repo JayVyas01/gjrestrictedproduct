@@ -28,7 +28,7 @@
 
 ## Decisions made in this plan (flag to reviewer)
 
-1. **Roles are a fixed enum (`identity.roles.Role`), not a `roles` table.** Per the [2026-09-28 design](../specs/2026-09-28-licence-applications-and-demo-design.md), buyer and seller are a single `LICENSEE` role (buy and sell rights come from licences), plus `APPLICANT`. The spec's role set is fixed and legally defined, and an enum plus a DB check constraint is simpler and easier to audit. It can be revisited if roles ever need to be configured at runtime.
+1. **Roles are a fixed enum (`identity.roles.Role`), not a `roles` table.** Per the [2026-09-28 design](../specs/2026-09-28-licence-types-and-demo-design.md), buyer and seller are a single `LICENSEE` role (buy and sell rights come from licences). The spec's role set is fixed and legally defined, and an enum plus a DB check constraint is simpler and easier to audit. It can be revisited if roles ever need to be configured at runtime.
 2. **Identity tables (`identity_user`, `identity_otpchallenge`) are not under RLS.** They must be read before anyone is authenticated (at login). They are protected by app-layer checks, encrypted contacts, and `REVOKE DELETE`. RLS covers the audit log now and every business table from Phase 2 onward. A security reviewer should confirm this.
 3. **Sessions are server-side Django sessions in HttpOnly, Secure, SameSite=Strict cookies, not JWTs.** They are simpler and can be revoked server-side.
 4. **Deferred to later phases per the roadmap:** session listing and revocation (Phase 2), personnel provisioning and forced password change (Phase 4), and audit anchoring to a WORM store (Phase 5).
@@ -861,7 +861,7 @@ git commit -m "feat: field-level encryption and blind index helpers"
 
 **Interfaces:**
 - Consumes: `core.crypto.encrypt/decrypt`.
-- Produces: `identity.roles.Role` (`LICENSEE`, `APPLICANT`, `PERSONNEL`, `LICENSING_AUTHORITY`, `SOFTWARE_OWNER`, `HEAD_AUTHORITY`); `identity.roles.AUDIT_READERS`, `identity.roles.PERSONNEL_PROVISIONERS` (frozensets of `Role`); `identity.models.User` with fields `user_id` (e.g. `GJ7K2M...`, 12 chars), `role`, `contact_encrypted`, `is_active`, `failed_login_count`, `locked_until`, `created_at`, and methods `get_contact() -> str`, `set_contact(contact: str)`, `has_role(*roles) -> bool`; `User.objects.create_user(*, role, password, contact) -> User`; conftest fixture `make_user(role=Role.LICENSEE, password=TEST_PASSWORD, contact=...) -> User` and constant `TEST_PASSWORD`.
+- Produces: `identity.roles.Role` (`LICENSEE`, `PERSONNEL`, `LICENSING_AUTHORITY`, `SOFTWARE_OWNER`, `HEAD_AUTHORITY`); `identity.roles.AUDIT_READERS`, `identity.roles.PERSONNEL_PROVISIONERS` (frozensets of `Role`); `identity.models.User` with fields `user_id` (e.g. `GJ7K2M...`, 12 chars), `role`, `contact_encrypted`, `is_active`, `failed_login_count`, `locked_until`, `created_at`, and methods `get_contact() -> str`, `set_contact(contact: str)`, `has_role(*roles) -> bool`; `User.objects.create_user(*, role, password, contact) -> User`; conftest fixture `make_user(role=Role.LICENSEE, password=TEST_PASSWORD, contact=...) -> User` and constant `TEST_PASSWORD`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -910,8 +910,8 @@ def test_database_rejects_unknown_role(app_db):
 
 def test_has_role(app_db, make_user):
     user = make_user(role=Role.LICENSEE)
-    assert user.has_role(Role.LICENSEE, Role.APPLICANT)
-    assert not user.has_role(Role.APPLICANT)
+    assert user.has_role(Role.LICENSEE, Role.PERSONNEL)
+    assert not user.has_role(Role.PERSONNEL)
 
 
 def test_inactive_user_has_no_role(app_db, make_user):
@@ -974,7 +974,6 @@ from django.db import models
 class Role(models.TextChoices):
     # What a licensee may buy, sell or transport comes from their licences, not their role.
     LICENSEE = "LICENSEE", "Licensee"
-    APPLICANT = "APPLICANT", "Licence applicant (cannot trade)"
     PERSONNEL = "PERSONNEL", "Authorised Personnel"
     LICENSING_AUTHORITY = "LICENSING_AUTHORITY", "Licensing Authority"
     SOFTWARE_OWNER = "SOFTWARE_OWNER", "Software Owner"

@@ -11,7 +11,7 @@
 
 Licences are protected by Postgres row-level security: a licensee reads only licences whose GSTIN matches their account, and only the Licensing Authority or a SYSTEM job can write. Code that must look across owners, such as enrolment matching, runs inside `acting_as_system(job)`, which is explicit, short-lived and audited.
 
-**Tech Stack:** Django 5.2, DRF 3.16, PostgreSQL 16, pytest-django. Same stack as Phase 1.
+**Tech Stack:** Django 5.2, DRF 3.17, PostgreSQL 16, pytest-django. Same stack as Phase 1.
 
 **Spec:** [`2026-09-28-licence-types-and-demo-design.md`](../specs/2026-09-28-licence-types-and-demo-design.md), sections 3, 4 and 5. **Builds on:** [`2026-09-26-phase1-foundation.md`](2026-09-26-phase1-foundation.md), which must be merged first. **Roadmap:** [`2026-09-26-roadmap.md`](2026-09-26-roadmap.md)
 

@@ -6,13 +6,13 @@
 
 **Architecture:** Modular monolith in `backend/`: `config` (settings/urls), `core` (shared plumbing: env, DB privileges, RLS context, crypto), `identity` (users, roles, OTP, login), `audit` (hash-chained trail). The app talks to Postgres as the non-owner role `gj_app` (no `BYPASSRLS`); migrations run as `gj_owner`. Every request runs in one transaction tagged with the acting user and role (`app.user_id`, `app.role`) so Postgres row-level security can enforce access independently of Python code.
 
-**Tech Stack:** Python 3.12, Django 5.2 LTS, Django REST Framework 3.16, PostgreSQL 16, psycopg 3, argon2-cffi, cryptography (Fernet), pytest + pytest-django, ruff, pip-audit, uv, GitHub Actions, Docker Compose (local Postgres only).
+**Tech Stack:** Python 3.12, Django 5.2 LTS, Django REST Framework 3.17, PostgreSQL 16, psycopg 3, argon2-cffi, cryptography (Fernet), pytest + pytest-django, ruff, pip-audit, uv, GitHub Actions, Docker Compose (local Postgres only).
 
 **Spec:** [`highlevel_plan.md`](../../../highlevel_plan.md) · **Roadmap:** [`2026-09-26-roadmap.md`](2026-09-26-roadmap.md)
 
 ## Global Constraints
 
-- Versions: Python `>=3.12,<3.13`; Django `>=5.2,<5.3`; DRF `>=3.16,<3.17`; psycopg `>=3.2,<3.3`; PostgreSQL 16.
+- Versions: Python `>=3.12,<3.13`; Django `>=5.2,<5.3`; DRF `>=3.17.2,<3.18` (raised from 3.16 by Ruling R5: PYSEC-2026-3827/3828); psycopg `>=3.2,<3.3`; PostgreSQL 16.
 - Tech stack is fixed by the spec: Django backend, React frontend (the frontend starts in Phase 2), Postgres.
 - The app role `gj_app` must never own tables, have `BYPASSRLS`, or run DDL. Migrations run as `gj_owner`.
 - Records are never edited or deleted. Append-only tables get `REVOKE UPDATE, DELETE, TRUNCATE ... FROM gj_app` plus a trigger. Any migration that revokes privileges must depend on `("core", "0001_app_role_privileges")`.
@@ -160,7 +160,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "django>=5.2,<5.3",
-    "djangorestframework>=3.16,<3.17",
+    "djangorestframework>=3.17.2,<3.18",
     "psycopg[binary]>=3.2,<3.3",
     "argon2-cffi>=23.1",
     "cryptography>=43",

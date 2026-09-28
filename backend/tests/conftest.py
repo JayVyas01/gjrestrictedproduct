@@ -7,8 +7,10 @@ Never use `transactional_db`: its TRUNCATE-based teardown is blocked by the audi
 """
 
 import pytest
-from django.db import connection
+from django.db import connection, transaction
 
+from audit.models import AuditEvent
+from core.db_context import SYSTEM_ROLE, set_actor
 from identity.models import User
 from identity.roles import Role
 
@@ -28,3 +30,15 @@ def make_user(db):
         return User.objects.create_user(role=role, password=password, contact=contact)
 
     return _make
+
+
+@pytest.fixture
+def audit_actions():
+    """Return a function listing audit actions recorded so far in this test."""
+
+    def _read() -> list[str]:
+        with transaction.atomic():
+            set_actor(user_id="test", role=SYSTEM_ROLE)
+            return list(AuditEvent.objects.order_by("id").values_list("action", flat=True))
+
+    return _read

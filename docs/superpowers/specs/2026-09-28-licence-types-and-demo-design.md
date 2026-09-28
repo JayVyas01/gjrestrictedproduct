@@ -36,6 +36,7 @@
 | D6 | Demo scope | The **transaction approval journey**. |
 | D7 | Language | **English only for the demo**. All text goes through i18n files so Gujarati can be added without code changes. |
 | D8 | Demo data | Licence types and permissions are **demo placeholders** that the admin will update later. |
+| D9 | Buyer rejection | Rejecting needs an OTP and a reason, and is final (`REJECTED_BY_BUYER`). An **in-app alert** goes to **every position in the transaction's approval chain**. |
 
 **Deferred:** Head Authority edit permissions (to be defined after the demo), the oversight
 dashboard, on-screen admin configuration, CSV licence import, session listing and notifications.
@@ -45,7 +46,7 @@ dashboard, on-screen admin configuration, CSV licence import, session listing an
 | Role | Can see | Can do |
 |---|---|---|
 | **Licensee** (replaces Buyer/Seller) | Own profile, own licences with the permissions each grants, own stock, own transactions | Sell, as the seller: look up a buyer by exact licence number and start a transaction. Buy, as the buyer: confirm or reject with an OTP. Only as their licences allow. |
-| **Authorised Personnel** | Transactions sent to a position they currently hold, plus the parties' licence status needed to decide | Accept or reject at their step, signed with an OTP, with a reason code (mandatory on reject) |
+| **Authorised Personnel** | Transactions sent to a position they currently hold, plus the parties' licence status needed to decide; buyer-rejection alerts for those positions | Accept or reject at their step, signed with an OTP, with a reason code (mandatory on reject); acknowledge alerts |
 | **Licensing Authority** | All licence records; the catalogue | Record licences and renewals (new validity periods); suspend or revoke; maintain licence types and rules (new versions); assign personnel to positions |
 | **Head Authority** | Everything, read-only (edit rights deferred) | Audit |
 | **Software Owner** | Everything, plus system configuration | Provision personnel accounts |
@@ -88,6 +89,28 @@ contact on file, then an account with the `LICENSEE` role.
     `max_per_transaction_qty`.
   - The buyer's recorded stock plus the quantity is no more than the buyer's `max_stock_qty`.
 
+## 5a. Buyer rejection alerts
+
+- **Buyer rejects:** signed with an OTP. A reason is **mandatory**, chosen from a configurable
+  list of buyer reason codes: "I did not place this order", "Quantity does not match", "Wrong
+  substance", "Terms dispute", or "Other" with free text. The transaction becomes
+  **`REJECTED_BY_BUYER`**, which is final.
+- **Alert:** for each position in the approval chain stored when the transaction was started, the
+  system creates one append-only `authority_alert` row (kind `BUYER_REJECTION`) addressed to that
+  **position**. Whoever currently holds the position sees it, including after a transfer.
+- **Alert content:** the transaction, both parties' licence numbers, the buyer's reason code and
+  comment, the status timeline, and a **pattern signal**: how many buyer rejections the seller has
+  had in the last 30 days (for example "3rd buyer rejection for this seller in the last 30 days").
+- **Acknowledging:** an append-only `alert_acknowledgement` row (position, the person who holds it,
+  time, optional note). The alert shows as acknowledged for that position. Creating and
+  acknowledging an alert each write an audit event.
+- **Seller view:** the rejection and the reason code appear in the seller's timeline. **The buyer's
+  free-text comment is visible only to the authority.**
+- **Visibility (RLS):** people currently holding a recipient position, and the Head Authority
+  (read-only).
+- **Delivery:** in-app (bell with a count, and a "What's next" card). SMS and email come later with
+  Phase 2 notifications.
+
 ## 6. The Demo milestone
 
 **Scope.** Everything here is production quality: tested and secure, not throwaway.
@@ -108,6 +131,10 @@ contact on file, then an account with the `LICENSEE` role.
 7. The **status timeline** updates at each step. The approved record shows each position and who
    held it at the time.
 
+**Buyer-rejection scene:** the seller starts a second sale, and the buyer rejects it with "I did
+not place this order". The Area Officer's bell lights up, and the alert shows the reason and the
+pattern signal. The officer acknowledges it.
+
 **What the journey needs underneath:** areas, positions and assignments; licence records with
 type, scope and frozen permissions; licence-gated enrolment; the demo catalogue and rules; a
 seeded read-only stock list per licensee; a demo approval policy matrix; configurable reason codes.
@@ -123,14 +150,14 @@ seeded read-only stock list per licensee; a demo approval policy matrix; configu
   - phone numbers in a reserved dummy range
   - demo licence types, rules and permissions
   - licences, including one close to its limits and one suspended, so the checks can be shown
-  - several dozen transactions in mixed states
+  - several dozen transactions in mixed states, including two earlier buyer rejections for the demo seller so the pattern signal appears
 - **Persona picker** (demo mode only) on the login screen: one click fills in the credentials for
   Seller, Buyer, Area Officer, District Officer or Licensing Authority. The **real password and
   OTP login still runs**.
 - **Demo SMS inbox:** a drawer showing OTPs sent to synthetic contacts. It exists only in demo mode
   and is backed by a `DemoInboxOtpSender`, which refuses to run outside demo mode.
 - **`docs/demo/script.md`:** a 10–12 minute storyline covering the order of personas, clicks and
-  talking points, including a blocked over-limit attempt and a rejection with a reason, plus a
+  talking points, including a blocked over-limit attempt, a buyer rejection alert and an officer rejection with a reason, plus a
   rehearsal and reset checklist.
 
 ## 7. User experience principles (every screen)
@@ -168,6 +195,10 @@ seeded read-only stock list per licensee; a demo approval policy matrix; configu
 - **`trading_permitted`:** before, at and after the validity period; gaps between periods;
   suspended or revoked licences.
 - **Transaction checks:** every rule in section 5, each with its exact plain-language message.
+- **Buyer rejection:** refused without a reason or an OTP; `REJECTED_BY_BUYER` is final; one alert
+  per chain position; the alert moves to the new holder after a transfer; only recipient positions
+  and the Head Authority can see it (RLS and IDOR); the seller never sees the buyer's comment; the
+  pattern count covers exactly the last 30 days.
 - **Access:** RLS and IDOR tests. A licensee sees only their own licences, stock and transactions.
   Personnel see only transactions for positions they currently hold, and lose access after a
   transfer. The Head Authority is read-only.

@@ -114,7 +114,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
-    "DEFAULT_THROTTLE_RATES": {"login": "10/min", "otp": "10/min"},
+    "DEFAULT_THROTTLE_RATES": {"login": "10/min", "otp": "10/min", "enrolment": "10/min"},
     # Set to the number of trusted proxies in production; 0 = use REMOTE_ADDR, never client headers.
     "NUM_PROXIES": 0,
     "EXCEPTION_HANDLER": "core.exceptions.rollback_on_exception",

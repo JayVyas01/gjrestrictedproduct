@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, D1 Task 4 licences (152 tests).
+**Last updated:** 2026-09-30, D1 Task 5 licence-gated enrolment (161 tests).
 
 ---
 
@@ -12,13 +12,13 @@
 
 | Role | What they can do today | Where it is enforced | Proving tests |
 |---|---|---|---|
-| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Log in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Transactions arrive in Demo D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`; `licensing/migrations/0002_rls_and_append_only.py` (licence read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_licensing.py::test_holder_sees_only_their_own_licences` |
+| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Created only by licence-gated enrolment (a business with an active licence on record proves control with a code sent to the contact on file). Logs in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Transactions arrive in Demo D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`, `licensing/enrolment.py`; `licensing/migrations/0002_rls_and_append_only.py` (licence read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_enrolment.py`, `test_licensing.py::test_holder_sees_only_their_own_licences` |
 | **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D1 and D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` |
 | **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D1). Records licences issued by the existing process, records renewals, suspends or revokes (row-level security lets only this role and SYSTEM write licences). | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/`; `licensing/service.py`, `licensing/migrations/0002_rls_and_append_only.py` | `test_permissions.py`, `test_catalogue.py`, `test_licensing.py` |
 | **Software Owner** | Log in; read the whole audit log; read all licences with their periods and snapshots; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
 | **Head Authority** | Log in; read the whole audit log (oversight); read all licences with their periods and snapshots; create or reset personnel accounts (Phase 4) | Same as Software Owner, plus `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_only_audit_readers_can_read_events` |
 | **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain; read and record licences (enrolment matching, seeding) | `core/db_context.py` (`SYSTEM_ROLE`, `acting_as_system`), `verify_audit_chain` command, `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_verify_command_*` |
-| **Anonymous** (not logged in) | Only the health check, the CSRF cookie and the two login steps | `settings.REST_FRAMEWORK` (deny by default), `AllowAny` on those views only | `test_login_api.py`, `test_permissions.py::test_anonymous_is_refused`, `test_audit.py::test_anonymous_context_cannot_read_events` |
+| **Anonymous** (not logged in) | Only the health check, the CSRF cookie, the two login steps and the two enrolment steps (start, complete) | `settings.REST_FRAMEWORK` (deny by default), `AllowAny` on those views only; `licensing/views.py` | `test_login_api.py`, `test_enrolment.py`, `test_permissions.py::test_anonymous_is_refused`, `test_audit.py::test_anonymous_context_cannot_read_events` |
 
 To restrict a new API endpoint to certain roles, use `permission_classes = [role_required(Role.X, ...)]` from `identity/permissions.py`.
 
@@ -93,6 +93,10 @@ Paths are relative to `backend/`.
 | `licensing/service.py` | Recording a licence or renewal (atomic: licence, snapshot, period and audit entry together or not at all; refused if no rule allows it), suspend/revoke, current permissions, may-this-licence-trade-on-a-date, substance coverage, exact-match lookup by number | `record_licence`, `record_renewal`, `set_status`, `current_permissions`, `current_period`, `trading_permitted`, `covers`, `find_by_number`, `LicenceNotPermitted`, `InvalidLicenceData` | `test_licensing.py` |
 | `licensing/migrations/0002_rls_and_append_only.py` | Row-level security (holder sees own by GSTIN; authority, Head, Software Owner, SYSTEM read all; only Licensing Authority and SYSTEM write); periods and snapshots append-only (REVOKE plus triggers) | — | `test_licensing.py` |
 | `licensing/migrations/0003_status_only_updates.py` | The app role may update only `status` on a licence (no moving a licence to another holder) | — | `test_licensing.py::test_only_status_can_change_on_a_licence` |
+| `licensing/enrolment.py` | Licence-gated enrolment: match licence number + GSTIN + active + not yet enrolled, send the code to the contact ON FILE, then create the Licensee account with `licensee_gstin_index` taken only from the matched licence; every failure looks the same and is audited | `start_enrolment`, `complete_enrolment` | `test_enrolment.py` |
+| `licensing/serializers.py` | Validates enrolment input (weak password rejected with 400 before the code is consumed) | `EnrolmentStartSerializer`, `EnrolmentCompleteSerializer` | `test_enrolment.py::test_weak_password_is_rejected_without_using_up_the_otp` |
+| `licensing/views.py` | Enrolment endpoints `POST /api/enrolment/start` and `/complete` (anonymous, CSRF-protected, throttled) | `EnrolmentStartView`, `EnrolmentCompleteView`, `ENROLMENT_FAILED` | `test_enrolment.py` |
+| `licensing/urls.py` | Routes enrolment endpoints under `/api/` | `urlpatterns` | `test_enrolment.py` |
 | `tests/conftest.py` fixtures | `make_licence(...)` records a licence as SYSTEM with sensible defaults; `DEMO_GSTIN` is a GSTIN with a non-existent state code | `make_licence`, `DEMO_GSTIN` | — |
 
 ### audit: tamper-evident audit log
@@ -308,6 +312,20 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_acting_as_system_does_not_mask_database_errors` | A failing SQL statement inside the SYSTEM block surfaces its own error |
 
 ---
+
+### `test_enrolment.py`: licence-gated enrolment
+
+| Test | Proves |
+|---|---|
+| `test_enrolment_creates_a_licensee_linked_to_the_gstin` | Full flow makes a Licensee whose GSTIN link and contact come from the licence |
+| `test_otp_always_goes_to_contact_on_file` | A contact supplied in the request is ignored |
+| `test_wrong_gstin_and_unknown_licence_look_identical` | Same 401 body for both; no code sent (no enumeration) |
+| `test_suspended_licence_cannot_enrol` | Only active licences can enrol |
+| `test_gstin_already_enrolled_cannot_enrol_again` | One account per GSTIN |
+| `test_weak_password_is_rejected_without_using_up_the_otp` | 400 on weak password, code still usable |
+| `test_wrong_code_does_not_enrol` | Wrong code gives 401 and no account |
+| `test_enrolment_is_rate_limited` | 11th start in a minute gets 429 |
+| `test_enrolment_is_audited` | failed, otp_sent and completed events are recorded |
 
 ## 4. Conventions every change must follow
 

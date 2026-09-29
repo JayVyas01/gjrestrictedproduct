@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-30, D1 Task 5 licence-gated enrolment (161 tests).
+**Last updated:** 2026-09-30, D1 Task 5 licence-gated enrolment (163 tests).
 
 ---
 
@@ -54,7 +54,8 @@ Paths are relative to `backend/`.
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `identity/roles.py` | The six fixed roles and role groups | `Role`, `AUDIT_READERS`, `PERSONNEL_PROVISIONERS` | `test_users.py`, `test_permissions.py`, `test_audit.py` |
-| `identity/models.py` | User accounts (system-generated ID, `licensee_gstin_index` linking a licensee to their licences, Argon2 password, encrypted contact, lockout fields) and one-time-code records (for a user or, before an account exists, a subject such as a GSTIN blind index; at most one open code per user, or per subject, and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py`, `test_otp_subject.py` |
+| `identity/models.py` | User accounts (system-generated ID, `licensee_gstin_index` linking a licensee to their licences, Argon2 password, encrypted contact, lockout fields; at most one account per non-empty `licensee_gstin_index`) and one-time-code records (for a user or, before an account exists, a subject such as a GSTIN blind index; at most one open code per user, or per subject, and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py`, `test_otp_subject.py` |
+| `identity/migrations/0008_one_account_per_licensee_gstin.py` | Partial unique constraint: one account per non-empty licensee GSTIN | — | `test_enrolment.py::test_database_allows_one_account_per_gstin` |
 | `identity/migrations/0007_user_licensee_gstin_index.py` | Adds the indexed `licensee_gstin_index` column | — | `test_licensing.py::test_holder_sees_only_their_own_licences` |
 | `identity/migrations/0002_protect_users.py` | Accounts can't be deleted, only deactivated | — | `test_users.py::test_app_role_cannot_delete_users` |
 | `identity/otp.py` | Issuing and checking 6-digit codes: stored as HMAC, 5-minute expiry, 5 attempts, single use, a new code cancels the old one, issuing locks the user row (subjects: a per-subject advisory lock); checking locks the user row first, then the challenge (same order as login, so no deadlock); also codes for subjects with no account yet (enrolment) | `issue`, `verify`, `issue_for_subject`, `verify_subject`, `OTP_TTL`, `OTP_MAX_ATTEMPTS` | `test_otp.py`, `test_otp_subject.py` |
@@ -93,7 +94,7 @@ Paths are relative to `backend/`.
 | `licensing/service.py` | Recording a licence or renewal (atomic: licence, snapshot, period and audit entry together or not at all; refused if no rule allows it), suspend/revoke, current permissions, may-this-licence-trade-on-a-date, substance coverage, exact-match lookup by number | `record_licence`, `record_renewal`, `set_status`, `current_permissions`, `current_period`, `trading_permitted`, `covers`, `find_by_number`, `LicenceNotPermitted`, `InvalidLicenceData` | `test_licensing.py` |
 | `licensing/migrations/0002_rls_and_append_only.py` | Row-level security (holder sees own by GSTIN; authority, Head, Software Owner, SYSTEM read all; only Licensing Authority and SYSTEM write); periods and snapshots append-only (REVOKE plus triggers) | — | `test_licensing.py` |
 | `licensing/migrations/0003_status_only_updates.py` | The app role may update only `status` on a licence (no moving a licence to another holder) | — | `test_licensing.py::test_only_status_can_change_on_a_licence` |
-| `licensing/enrolment.py` | Licence-gated enrolment: match licence number + GSTIN + active + not yet enrolled, send the code to the contact ON FILE, then create the Licensee account with `licensee_gstin_index` taken only from the matched licence; every failure looks the same and is audited | `start_enrolment`, `complete_enrolment` | `test_enrolment.py` |
+| `licensing/enrolment.py` | Licence-gated enrolment: match licence number + GSTIN + active + not yet enrolled, send the code to the contact ON FILE (the code is bound to that exact licence id, not just the GSTIN), audit after the send, then create the Licensee account with contact and `licensee_gstin_index` taken only from that same licence; every failure looks the same and is audited | `start_enrolment`, `complete_enrolment` | `test_enrolment.py` |
 | `licensing/serializers.py` | Validates enrolment input (weak password rejected with 400 before the code is consumed) | `EnrolmentStartSerializer`, `EnrolmentCompleteSerializer` | `test_enrolment.py::test_weak_password_is_rejected_without_using_up_the_otp` |
 | `licensing/views.py` | Enrolment endpoints `POST /api/enrolment/start` and `/complete` (anonymous, CSRF-protected, throttled) | `EnrolmentStartView`, `EnrolmentCompleteView`, `ENROLMENT_FAILED` | `test_enrolment.py` |
 | `licensing/urls.py` | Routes enrolment endpoints under `/api/` | `urlpatterns` | `test_enrolment.py` |
@@ -326,6 +327,8 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_wrong_code_does_not_enrol` | Wrong code gives 401 and no account |
 | `test_enrolment_is_rate_limited` | 11th start in a minute gets 429 |
 | `test_enrolment_is_audited` | failed, otp_sent and completed events are recorded |
+| `test_enrolment_uses_the_contact_of_the_licence_that_received_the_code` | With two licences on one GSTIN, the account gets the contact of the licence whose code was entered |
+| `test_database_allows_one_account_per_gstin` | The database itself refuses a second account for the same GSTIN |
 
 ## 4. Conventions every change must follow
 

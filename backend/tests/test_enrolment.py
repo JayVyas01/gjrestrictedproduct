@@ -1,4 +1,5 @@
 import pytest
+from django.db import IntegrityError, transaction
 
 from core.db_context import acting_as_system
 from identity.models import User
@@ -107,3 +108,31 @@ def test_enrolment_is_audited(app_db, client, make_licence, otp_outbox, audit_ac
     first = start(client, "GJ/TEST/0001")
     complete(client, first.json()["challenge_id"], otp_outbox[-1][1])
     assert audit_actions()[-3:] == ["enrolment.failed", "enrolment.otp_sent", "enrolment.completed"]
+
+
+def test_enrolment_uses_the_contact_of_the_licence_that_received_the_code(
+    app_db, client, make_licence, otp_outbox
+):
+    make_licence(contact="+919800000111")
+    second = make_licence(contact="+919800000222")
+    first = start(client, "GJ/TEST/0002")
+    assert otp_outbox[-1][0] == "+919800000222"
+    done = complete(client, first.json()["challenge_id"], otp_outbox[-1][1])
+    assert done.status_code == 201
+    assert User.objects.get(user_id=done.json()["user_id"]).get_contact() == second.contact()
+
+
+def test_database_allows_one_account_per_gstin(app_db, make_user):
+    User.objects.create_user(
+        role=Role.LICENSEE,
+        password="x-strong-pass-9",
+        contact="+919800000001",
+        licensee_gstin_index="abc",
+    )
+    with pytest.raises(IntegrityError), transaction.atomic():
+        User.objects.create_user(
+            role=Role.LICENSEE,
+            password="x-strong-pass-9",
+            contact="+919800000002",
+            licensee_gstin_index="abc",
+        )

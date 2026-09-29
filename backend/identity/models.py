@@ -53,6 +53,11 @@ class User(AbstractBaseUser):
             models.CheckConstraint(
                 condition=models.Q(role__in=Role.values), name="user_role_valid"
             ),
+            models.UniqueConstraint(
+                fields=["licensee_gstin_index"],
+                condition=~models.Q(licensee_gstin_index=""),
+                name="one_account_per_licensee_gstin",
+            ),
         ]
 
     def set_contact(self, contact: str) -> None:

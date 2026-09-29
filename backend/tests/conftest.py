@@ -19,6 +19,7 @@ from core.db_context import SYSTEM_ROLE, current_actor, set_actor
 from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
+from positions.models import Area, AreaLevel, Position
 
 TEST_PASSWORD = "correct-horse-battery-9"
 
@@ -103,4 +104,28 @@ def catalogue(db):
         wholesale=wholesale,
         retail_rule=retail_rule,
         wholesale_rule=wholesale_rule,
+    )
+
+
+@pytest.fixture
+def org(db):
+    state = Area.objects.create(code="GJ", name="Gujarat", level=AreaLevel.STATE)
+    ahmedabad = Area.objects.create(
+        code="GJ-AHD", name="Ahmedabad", level=AreaLevel.DISTRICT, parent=state
+    )
+    sanand = Area.objects.create(
+        code="GJ-AHD-SND", name="Sanand", level=AreaLevel.TALUKA, parent=ahmedabad
+    )
+    area_officer = Position.objects.create(
+        code="AO-SND", title="Area Officer, Sanand", level=AreaLevel.TALUKA, area=sanand
+    )
+    district_officer = Position.objects.create(
+        code="DO-AHD", title="District Officer, Ahmedabad", level=AreaLevel.DISTRICT, area=ahmedabad
+    )
+    return SimpleNamespace(
+        state=state,
+        ahmedabad=ahmedabad,
+        sanand=sanand,
+        area_officer=area_officer,
+        district_officer=district_officer,
     )

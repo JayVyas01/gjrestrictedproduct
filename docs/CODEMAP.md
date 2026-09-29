@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, D1 Task 2 catalogue (117 tests).
+**Last updated:** 2026-09-29, D1 Task 3 positions (125 tests).
 
 ---
 
@@ -13,7 +13,7 @@
 | Role | What they can do today | Where it is enforced | Proving tests |
 |---|---|---|---|
 | **Licensee** (buyer and seller combined; what they may do comes from their licences) | Log in with password and a one-time code. Licences and transactions arrive in Demo D1 and D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py` | `test_login_api.py`, `test_users.py::test_has_role` |
-| **Authorised Personnel** | Log in. Position-based approvals arrive in D1 and D2. | `identity/roles.py` (`Role.PERSONNEL`) | `test_permissions.py` |
+| **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D1 and D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` |
 | **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D1). Recording licences arrives in D1. | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/` | `test_permissions.py`, `test_catalogue.py` |
 | **Software Owner** | Log in; read the whole audit log; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
 | **Head Authority** | Log in; read the whole audit log (oversight); create or reset personnel accounts (Phase 4) | Same as Software Owner | `test_audit.py::test_only_audit_readers_can_read_events` |
@@ -73,6 +73,14 @@ Paths are relative to `backend/`.
 | `catalogue/migrations/0003_rule_version_trigger.py` | Rule versions also blocked by trigger for the table owner | — | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner` |
 | `catalogue/migrations/0004_rule_validity_positive.py` | Validity must be above zero | — | `test_catalogue.py::test_validity_must_be_positive` |
 | `catalogue/migrations/0002_append_only_versions.py` | Rule versions can't be updated or deleted by the app role: a change is a new version | — | `test_catalogue.py::test_rule_versions_cannot_be_edited` |
+
+### positions: areas, positions, who holds them
+
+| File | Responsible for | Key names | Tests |
+|---|---|---|---|
+| `positions/models.py` | The authority hierarchy: areas (taluka, district, state, each with a parent), positions in an area, and assignments saying who holds a position from when to when; the database allows only one active holder per position | `AreaLevel`, `Area`, `Position`, `PersonnelAssignment` | `test_positions.py` |
+| `positions/service.py` | Finding the position that covers an area at a level (walking up parents), assigning or transferring a position (ends the old holder, audited), current holder and positions held | `covering_position`, `assign`, `current_holder`, `positions_held` | `test_positions.py` |
+| `positions/migrations/0001_initial.py` | Creates the three tables and the one-active-holder constraint | — | `test_positions.py::test_database_allows_one_active_holder_per_position` |
 
 ### audit: tamper-evident audit log
 
@@ -246,6 +254,18 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_limits_must_be_positive` | The database rejects zero or negative limits |
 | `test_rule_versions_blocked_even_for_table_owner` | A trigger stops even the table owner editing a rule version |
 | `test_validity_must_be_positive` | The database rejects zero validity months |
+
+### `test_positions.py`: areas, positions, assignments
+| Test | Proves |
+|---|---|
+| `test_covering_position_at_same_level` | A taluka resolves to its own taluka position |
+| `test_covering_position_walks_up_the_hierarchy` | A taluka resolves to the district position above it |
+| `test_covering_position_none_when_level_has_no_position` | No position at a level means none is returned |
+| `test_assign_makes_user_the_holder` | Assigning makes the user holder, lists the position, writes an audit event |
+| `test_transfer_moves_the_position_immediately` | A new assignment removes the old holder at once |
+| `test_only_personnel_can_hold_positions` | Non-Personnel users can't be assigned |
+| `test_vacant_position_has_no_holder` | An unassigned position has no holder |
+| `test_database_allows_one_active_holder_per_position` | The database rejects two active holders |
 
 ---
 

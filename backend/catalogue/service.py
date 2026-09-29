@@ -35,6 +35,16 @@ def resolve_rule(
     return _latest(rules.filter(substance_class=substance_class).first())
 
 
+def substance_overrides(
+    licence_type: LicenceType, substance_class: SubstanceClass
+) -> list[LicenceTypeRuleVersion]:
+    """Latest versions of this type's substance-specific rules for substances in the class."""
+    rules = LicenceTypeRule.objects.filter(
+        licence_type=licence_type, substance__substance_class=substance_class
+    ).order_by("id")
+    return [version for rule in rules if (version := _latest(rule)) is not None]
+
+
 def add_rule_version(
     rule: LicenceTypeRule,
     *,

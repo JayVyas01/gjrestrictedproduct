@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-30, D1 Task 6 my-licences and substance list APIs (169 tests).
+**Last updated:** 2026-09-30, D1 final-review fixes (177 tests).
 
 ---
 
@@ -13,8 +13,8 @@
 | Role | What they can do today | Where it is enforced | Proving tests |
 |---|---|---|---|
 | **Licensee** (buyer and seller combined; what they may do comes from their licences) | Created only by licence-gated enrolment (a business with an active licence on record proves control with a code sent to the contact on file). Logs in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Can view the permissions card of each of their own licences (`GET /api/licences/mine`). Transactions arrive in Demo D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`, `licensing/enrolment.py`, `licensing/views.py` (`MyLicencesView`); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_enrolment.py`, `test_licence_api.py`, `test_licensing.py::test_holder_sees_only_their_own_licences` |
-| **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D1 and D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` |
-| **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D1). Records licences issued by the existing process, records renewals, suspends or revokes (row-level security lets only this role and SYSTEM write licences). | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/`; `licensing/service.py`, `licensing/migrations/0002_rls_and_append_only.py` | `test_permissions.py`, `test_catalogue.py`, `test_licensing.py` |
+| **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` |
+| **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D3). Records licences issued by the existing process, records renewals, suspends or revokes (row-level security lets only this role and SYSTEM write licences). | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/`; `licensing/service.py`, `licensing/migrations/0002_rls_and_append_only.py` | `test_permissions.py`, `test_catalogue.py`, `test_licensing.py` |
 | **Software Owner** | Log in; read the whole audit log; read all licences with their periods and snapshots; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
 | **Head Authority** | Log in; read the whole audit log (oversight); read all licences with their periods and snapshots; create or reset personnel accounts (Phase 4) | Same as Software Owner, plus `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_only_audit_readers_can_read_events` |
 | **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain; read and record licences (enrolment matching, seeding) | `core/db_context.py` (`SYSTEM_ROLE`, `acting_as_system`), `verify_audit_chain` command, `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_verify_command_*` |
@@ -34,8 +34,8 @@ Paths are relative to `backend/`.
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `config/env.py` | Reading environment variables; stops at startup if a required one is missing | `required`, `optional`, `flag`, `listed`, `MissingSetting` | `test_env.py` |
-| `config/settings.py` | All settings: database, security headers, sessions (15-minute idle timeout), rate limits (`login`, `otp` 10/min, `NUM_PROXIES: 0`), encryption keys, OTP sender, exception handler | `REST_FRAMEWORK`, `CACHES`, `MIDDLEWARE` | Covered indirectly by all API tests; `check --deploy` in CI |
-| `config/urls.py` | URL routing: `/api/health`, `/api/auth/*` | — | `test_health.py`, `test_login_api.py` |
+| `config/settings.py` | All settings: database, security headers, sessions (15-minute idle timeout), rate limits (`login`, `otp`, `enrolment` 10/min, `NUM_PROXIES: 0`), encryption keys, OTP sender, exception handler | `REST_FRAMEWORK`, `CACHES`, `MIDDLEWARE` | Covered indirectly by all API tests; `check --deploy` in CI |
+| `config/urls.py` | URL routing: `/api/health`, `/api/auth/*`, and the licensing routes under `/api/` (`enrolment/start`, `enrolment/complete`, `licences/mine`, `catalogue/substances`) | — | `test_health.py`, `test_login_api.py`, `test_enrolment.py`, `test_licence_api.py` |
 | `.env.test` | Test-only settings (never real secrets) | — | — |
 
 ### core: shared building blocks
@@ -44,7 +44,7 @@ Paths are relative to `backend/`.
 |---|---|---|---|
 | `core/views.py` | Health check; also confirms the database is reachable | `health` | `test_health.py` |
 | `core/crypto.py` | Encrypting sensitive fields; one-way lookup keys (blind indexes) for exact-match lookup only | `encrypt`, `decrypt`, `blind_index(context, value)`, `DecryptionError` | `test_crypto.py` |
-| `core/db_context.py` | Telling Postgres who is acting, so row-level security can check it; the setting lasts only for the current transaction | `set_actor`, `current_actor`, `SYSTEM_ROLE`, `acting_as_system(job)` (brief SYSTEM block in its own savepoint: restores the previous actor on normal exit, and any error rolls back to the savepoint so the actor reverts too; writes inside are all-or-nothing) | `test_db_context.py`, `test_licensing.py::test_acting_as_system_restores_previous_actor` |
+| `core/db_context.py` | Telling Postgres who is acting, so row-level security can check it; the setting lasts only for the current transaction | `set_actor`, `current_actor`, `SYSTEM_ROLE`, `acting_as_system(job)` (brief SYSTEM block in its own savepoint: restores the previous actor on normal exit, and any error rolls back to the savepoint so the actor reverts too; writes inside are all-or-nothing; writes no audit event itself, so every caller audits its cross-owner action; outside a transaction it opens its own short one) | `test_db_context.py`, `test_licensing.py::test_acting_as_system_restores_previous_actor`, `test_licensing.py::test_acting_as_system_does_not_mask_database_errors`, `test_licensing.py::test_acting_as_system_restores_actor_after_caught_nested_error` |
 | `core/middleware.py` | One database transaction per request, tagged with the user; a 5xx response rolls back | `DbContextMiddleware` | `test_db_context.py` |
 | `core/exceptions.py` | A raised API error undoes the request's writes (**raise to roll back, return to commit**) | `rollback_on_exception` | `test_rollback_on_exception.py` |
 | `core/migrations/0002_append_only_guard.py` | Shared trigger function `reject_append_only_change()`; append-only tables attach it (row trigger for update/delete, statement trigger for truncate); used by rule versions, licence validity periods and permission snapshots | `reject_append_only_change` | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner`, `test_licensing.py::test_periods_and_snapshots_blocked_even_for_table_owner` |
@@ -55,7 +55,7 @@ Paths are relative to `backend/`.
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `identity/roles.py` | The six fixed roles and role groups | `Role`, `AUDIT_READERS`, `PERSONNEL_PROVISIONERS` | `test_users.py`, `test_permissions.py`, `test_audit.py` |
-| `identity/models.py` | User accounts (system-generated ID, `licensee_gstin_index` linking a licensee to their licences, Argon2 password, encrypted contact, lockout fields; at most one account per non-empty `licensee_gstin_index`) and one-time-code records (for a user or, before an account exists, a subject such as a GSTIN blind index; at most one open code per user, or per subject, and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py`, `test_otp_subject.py` |
+| `identity/models.py` | User accounts (system-generated ID, `licensee_gstin_index` linking a licensee to their licences, Argon2 password, encrypted contact, lockout fields; at most one account per non-empty `licensee_gstin_index`) and one-time-code records (for a user or, before an account exists, a subject such as `"licence:<id>"`; at most one open code per user, or per subject, and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py`, `test_otp_subject.py` |
 | `identity/migrations/0008_one_account_per_licensee_gstin.py` | Partial unique constraint: one account per non-empty licensee GSTIN | — | `test_enrolment.py::test_database_allows_one_account_per_gstin` |
 | `identity/migrations/0007_user_licensee_gstin_index.py` | Adds the indexed `licensee_gstin_index` column | — | `test_licensing.py::test_holder_sees_only_their_own_licences` |
 | `identity/migrations/0002_protect_users.py` | Accounts can't be deleted, only deactivated | — | `test_users.py::test_app_role_cannot_delete_users` |
@@ -72,7 +72,7 @@ Paths are relative to `backend/`.
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `catalogue/models.py` | What can be traded and what each licence type may do with it: substance classes, substances (each with a unit), licence types, rules (scoped to exactly one substance or one class) and rule versions (buy/sell/transport, stock and per-transaction limits, validity) | `Unit`, `SubstanceClass`, `Substance`, `LicenceType`, `LicenceTypeRule`, `LicenceTypeRuleVersion` | `test_catalogue.py` |
-| `catalogue/service.py` | Finding the governing rule (substance rule beats class rule; none means not permitted) and adding a new rule version | `resolve_rule`, `add_rule_version` | `test_catalogue.py` |
+| `catalogue/service.py` | Finding the governing rule (substance rule beats class rule; none means not permitted), listing a licence type's substance-specific overrides within a class (latest versions), and adding a new rule version | `resolve_rule`, `substance_overrides`, `add_rule_version` | `test_catalogue.py` |
 | `catalogue/migrations/0003_rule_version_trigger.py` | Rule versions also blocked by trigger for the table owner | — | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner` |
 | `catalogue/migrations/0004_rule_validity_positive.py` | Validity must be above zero | — | `test_catalogue.py::test_validity_must_be_positive` |
 | `catalogue/migrations/0002_append_only_versions.py` | Rule versions can't be updated or deleted by the app role: a change is a new version | — | `test_catalogue.py::test_rule_versions_cannot_be_edited` |
@@ -81,9 +81,10 @@ Paths are relative to `backend/`.
 
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
-| `positions/models.py` | The authority hierarchy: areas (taluka, district, state, each with a parent), positions in an area, and assignments saying who holds a position from when to when; the database allows only one active holder per position | `AreaLevel`, `Area`, `Position`, `PersonnelAssignment` | `test_positions.py` |
-| `positions/service.py` | Finding the position that covers an area at a level (walking up parents), assigning or transferring a position (ends the old holder, audited), current holder and positions held | `covering_position`, `assign`, `current_holder`, `positions_held` | `test_positions.py` |
+| `positions/models.py` | The authority hierarchy: areas (taluka, district, state, each with a parent), exactly one approving position per area (its level is the area's level), and assignments saying who holds a position from when to when; the database allows only one active holder per position | `AreaLevel`, `Area`, `Position`, `PersonnelAssignment` | `test_positions.py` |
+| `positions/service.py` | Finding the position that covers an area at a level (walking up parents; deterministic since one position per area), assigning or transferring a position (atomic, locks the position row first, ends the old holder, audited with `user_id` and `previous_user_id`), current holder and positions held | `covering_position`, `assign`, `current_holder`, `positions_held` | `test_positions.py` |
 | `positions/migrations/0001_initial.py` | Creates the three tables and the one-active-holder constraint | — | `test_positions.py::test_database_allows_one_active_holder_per_position` |
+| `positions/migrations/0002_one_position_per_area.py` | Drops `Position.level`; `Position.area` becomes one-to-one (one position per area) | — | `test_positions.py::test_one_position_per_area` |
 
 ### licensing: licence records, frozen permissions, trading_permitted
 
@@ -91,12 +92,14 @@ Paths are relative to `backend/`.
 |---|---|---|---|
 | `licensing/apps.py` | App registration | `LicensingConfig` | — |
 | `licensing/migrations/0001_initial.py` | Creates the three licence tables and their constraints (exactly one scope, period ends after start) | — | `test_licensing.py` |
-| `licensing/models.py` | Licences as issued by the existing process (number and GSTIN encrypted with blind indexes, holder, type, one substance or one class, area, status), append-only validity periods, and append-only permission snapshots (frozen copy of the rule version in force) | `LicenceStatus`, `Licence`, `LicenceValidityPeriod`, `LicencePermissionsSnapshot` | `test_licensing.py` |
-| `licensing/service.py` | Recording a licence or renewal (atomic: licence, snapshot, period and audit entry together or not at all; refused if no rule allows it), suspend/revoke, current permissions, may-this-licence-trade-on-a-date, substance coverage, exact-match lookup by number | `record_licence`, `record_renewal`, `set_status`, `current_permissions`, `current_period`, `trading_permitted`, `covers`, `find_by_number`, `LicenceNotPermitted`, `InvalidLicenceData` | `test_licensing.py` |
+| `licensing/models.py` | Licences as issued by the existing process (number and GSTIN encrypted with blind indexes, holder, type, one substance or one class, area, status limited to the known values), append-only validity periods, and append-only permission snapshots taken in sets (a base row for the licence's scope plus, for a class licence, one override row per substance-specific rule in that class) | `LicenceStatus`, `Licence`, `LicenceValidityPeriod`, `LicencePermissionsSnapshot` | `test_licensing.py` |
+| `licensing/service.py` | Recording a licence or renewal (atomic: licence, snapshot set, period and audit entry together or not at all; refused if no rule allows it), suspend/revoke (unknown statuses refused), current permissions from the newest snapshot set (a substance override wins over the base row), may-this-licence-trade-on-a-date, substance coverage, exact-match lookup by number | `record_licence`, `record_renewal`, `set_status`, `current_permissions`, `current_period`, `trading_permitted`, `covers`, `find_by_number`, `LicenceNotPermitted`, `InvalidLicenceData` | `test_licensing.py` |
 | `licensing/migrations/0002_rls_and_append_only.py` | Row-level security (holder sees own by GSTIN; authority, Head, Software Owner, SYSTEM read all; only Licensing Authority and SYSTEM write); periods and snapshots append-only (REVOKE plus triggers) | — | `test_licensing.py` |
 | `licensing/migrations/0003_status_only_updates.py` | The app role may update only `status` on a licence (no moving a licence to another holder) | — | `test_licensing.py::test_only_status_can_change_on_a_licence` |
+| `licensing/migrations/0004_snapshot_substance.py` | Adds nullable `substance` to permission snapshots (NULL = base row, set = frozen substance override) | — | `test_licensing.py::test_class_licence_freezes_substance_override` |
+| `licensing/migrations/0005_licence_status_valid.py` | Check constraint: status must be ACTIVE, SUSPENDED or REVOKED | — | `test_licensing.py::test_unknown_status_is_rejected` |
 | `licensing/enrolment.py` | Licence-gated enrolment: match licence number + GSTIN + active + not yet enrolled, send the code to the contact ON FILE (the code is bound to that exact licence id, not just the GSTIN), audit after the send, then create the Licensee account with contact and `licensee_gstin_index` taken only from that same licence; every failure looks the same and is audited | `start_enrolment`, `complete_enrolment` | `test_enrolment.py` |
-| `licensing/serializers.py` | Validates enrolment input (weak password rejected with 400 before the code is consumed); presents a licence as the permissions card dict | `EnrolmentStartSerializer`, `EnrolmentCompleteSerializer`, `licence_card` | `test_enrolment.py::test_weak_password_is_rejected_without_using_up_the_otp`, `test_licence_api.py::test_licensee_sees_own_licence_card` |
+| `licensing/serializers.py` | Validates enrolment input (weak password rejected with 400 before the code is consumed); presents a licence as the permissions card dict (base permissions of the licence's own scope) | `EnrolmentStartSerializer`, `EnrolmentCompleteSerializer`, `licence_card` | `test_enrolment.py::test_weak_password_is_rejected_without_using_up_the_otp`, `test_licence_api.py::test_licensee_sees_own_licence_card` |
 | `licensing/views.py` | Enrolment endpoints `POST /api/enrolment/start` and `/complete` (anonymous, CSRF-protected, throttled); `GET /api/licences/mine` (Licensee only, filtered by GSTIN and by row-level security); `GET /api/catalogue/substances` (any logged-in user) | `EnrolmentStartView`, `EnrolmentCompleteView`, `ENROLMENT_FAILED`, `MyLicencesView`, `SubstanceListView` | `test_enrolment.py`, `test_licence_api.py` |
 | `licensing/urls.py` | Routes enrolment, my-licences and substance-list endpoints under `/api/` | `urlpatterns` | `test_enrolment.py` |
 | `tests/conftest.py` fixtures | `make_licence(...)` records a licence as SYSTEM with sensible defaults; `DEMO_GSTIN` is a GSTIN with a non-existent state code | `make_licence`, `DEMO_GSTIN` | — |
@@ -285,6 +288,8 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_only_personnel_can_hold_positions` | Non-Personnel users can't be assigned |
 | `test_vacant_position_has_no_holder` | An unassigned position has no holder |
 | `test_database_allows_one_active_holder_per_position` | The database rejects two active holders |
+| `test_one_position_per_area` | The database rejects a second position in the same area, so routing is deterministic |
+| `test_transfer_audit_names_previous_holder` | The assignment audit event names the new holder and the one it replaced (empty when vacant) |
 
 ### `test_licensing.py`: licence records and trading_permitted
 | Test | Proves |
@@ -292,6 +297,8 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_recorded_licence_freezes_rule_permissions` | A new licence gets a snapshot of the rule's permissions |
 | `test_rule_change_does_not_touch_existing_licence` | A later rule version does not change an existing licence |
 | `test_renewal_takes_a_fresh_snapshot_of_the_latest_rule` | Renewal freezes the latest rule; both events are audited |
+| `test_class_licence_freezes_substance_override` | A class licence freezes a stricter substance rule (Retail + Rum may not sell) while other substances and the base keep the class rule |
+| `test_override_added_after_recording_does_not_apply_until_renewal` | A substance override created later only applies once a renewal takes a new snapshot set |
 | `test_licence_type_without_rule_cannot_be_recorded` | No rule means the licence cannot be recorded |
 | `test_refused_licence_leaves_no_partial_record` | A refused licence leaves no rows behind |
 | `test_malformed_gstin_is_rejected` | GSTIN must be in the valid format |
@@ -301,10 +308,14 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_trading_permitted_follows_validity_period` | Trading is allowed only within a period (inclusive dates) |
 | `test_gap_between_periods_is_not_permitted` | A gap between renewals is not covered |
 | `test_suspended_or_revoked_licence_cannot_trade` | Suspended or revoked licences cannot trade |
+| `test_unknown_status_is_rejected` | `set_status` refuses an unknown status, and so does the database |
 | `test_covers_substance_directly_or_through_its_class` | A licence covers its substance or every substance in its class |
 | `test_holder_sees_only_their_own_licences` | A licensee sees only licences with their GSTIN (and their periods) |
 | `test_anonymous_context_sees_no_licences` | No actor, no licences |
 | `test_licensing_authority_sees_all_licences` | The authority reads every licence |
+| `test_non_holder_sees_no_snapshots` | A licensee sees no permission snapshots of another GSTIN's licence |
+| `test_licensee_cannot_change_licence_status` | A licensee's status update touches no rows; the status stays unchanged |
+| `test_head_authority_can_read_but_not_record_licences` | Head Authority reads licences but the database refuses its inserts |
 | `test_licensee_cannot_record_a_licence` | A licensee cannot write licences (database refuses) |
 | `test_validity_periods_cannot_be_edited` | The app role cannot update validity periods |
 | `test_periods_and_snapshots_blocked_even_for_table_owner` | Triggers stop even the owner editing periods and snapshots |
@@ -312,8 +323,6 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_only_status_can_change_on_a_licence` | Even the authority cannot rewrite other licence columns; status changes still work |
 | `test_acting_as_system_restores_actor_after_caught_nested_error` | A caught error inside the SYSTEM block never leaves the caller running as SYSTEM |
 | `test_acting_as_system_does_not_mask_database_errors` | A failing SQL statement inside the SYSTEM block surfaces its own error |
-
----
 
 ### `test_enrolment.py`: licence-gated enrolment
 
@@ -340,6 +349,8 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_my_licences_requires_login` | Anonymous gets 403 |
 | `test_substance_list_for_logged_in_users` | Any logged-in user can read the substance list |
 
+---
+
 ## 4. Conventions every change must follow
 
 | Rule | Why | Enforced by |
@@ -352,6 +363,8 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | Every new business table gets row-level-security policies in the migration that creates it | Database backstop for access rules | Code review |
 | Every change goes feature branch → PR into `dev` → PR from `dev` into `main` | Test in dev before production | GitHub ruleset, `source-branch` check |
 | Append-only tables REVOKE update/delete from `gj_app` and attach `reject_append_only_change()` triggers | Even the owner can't rewrite history | `core/migrations/0002_append_only_guard.py`, `test_catalogue.py` |
+| One unit per substance class (quantities in a class share the class's unit); D2 stores the unit on each transaction | Quantities in a class can be added up safely | Seed data and code review |
+| Catalogue tables are reference data with no row-level security, written only through Licensing Authority services (ruling D-R12) | Everyone may read the catalogue; writes go through `catalogue/service.py` | Code review |
 | **Update this file in the same PR** | Keeps the map trustworthy | Code review |
 
 Open follow-ups from the reviews: [`superpowers/plans/2026-09-29-phase1-followups.md`](superpowers/plans/2026-09-29-phase1-followups.md).

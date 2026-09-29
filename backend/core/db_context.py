@@ -38,6 +38,9 @@ def acting_as_system(job: str) -> Iterator[None]:
     Use only for reads or writes that genuinely cross owners, keep the block small, and
     return only the minimum data to the caller. The previous actor is restored afterwards.
 
+    It writes no audit event itself: every caller must audit the cross-owner action it
+    performs. Used outside a transaction, it opens its own short transaction.
+
     The block runs in its own savepoint: on any exception the rollback to that savepoint
     reverts the actor to the previous one without running more SQL (which could mask the
     real error), even if a caller catches the exception and carries on. The price is that

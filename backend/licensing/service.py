@@ -9,8 +9,8 @@ from datetime import date
 from django.db import transaction
 
 from audit.service import record
-from catalogue.models import LicenceType, Substance, SubstanceClass
-from catalogue.service import resolve_rule
+from catalogue.models import LicenceType, LicenceTypeRuleVersion, Substance, SubstanceClass
+from catalogue.service import resolve_rule, substance_overrides
 from core import crypto
 from licensing.models import (
     Licence,
@@ -36,16 +36,12 @@ def _check_period(starts_on: date, ends_on: date) -> None:
         raise InvalidLicenceData("The validity period must end on or after its start date")
 
 
-def _snapshot(licence: Licence) -> LicencePermissionsSnapshot:
-    version = resolve_rule(
-        licence.licence_type, substance=licence.substance, substance_class=licence.substance_class
-    )
-    if version is None:
-        raise LicenceNotPermitted(
-            f"{licence.licence_type.name} licences are not permitted for {licence.scope_name()}"
-        )
+def _freeze(
+    licence: Licence, version: LicenceTypeRuleVersion, substance: Substance | None = None
+) -> LicencePermissionsSnapshot:
     return LicencePermissionsSnapshot.objects.create(
         licence=licence,
+        substance=substance,
         rule_version=version,
         may_buy=version.may_buy,
         may_sell=version.may_sell,
@@ -53,6 +49,22 @@ def _snapshot(licence: Licence) -> LicencePermissionsSnapshot:
         max_stock_qty=version.max_stock_qty,
         max_per_transaction_qty=version.max_per_transaction_qty,
     )
+
+
+def _snapshot(licence: Licence) -> LicencePermissionsSnapshot:
+    """Take a new snapshot set: the base row, then any substance overrides after it."""
+    version = resolve_rule(
+        licence.licence_type, substance=licence.substance, substance_class=licence.substance_class
+    )
+    if version is None:
+        raise LicenceNotPermitted(
+            f"{licence.licence_type.name} licences are not permitted for {licence.scope_name()}"
+        )
+    base = _freeze(licence, version)
+    if licence.substance_class is not None:
+        for override in substance_overrides(licence.licence_type, licence.substance_class):
+            _freeze(licence, override, substance=override.rule.substance)
+    return base
 
 
 def record_licence(
@@ -148,6 +160,8 @@ def record_renewal(
 
 
 def set_status(licence: Licence, status: str, *, by: str, reason: str) -> None:
+    if status not in LicenceStatus.values:
+        raise InvalidLicenceData(f"Unknown licence status: {status}")
     licence.status = status
     licence.save(update_fields=["status"])
     record(
@@ -160,8 +174,21 @@ def set_status(licence: Licence, status: str, *, by: str, reason: str) -> None:
     )
 
 
-def current_permissions(licence: Licence) -> LicencePermissionsSnapshot:
-    return licence.permission_snapshots.order_by("-id").first()
+def current_permissions(
+    licence: Licence, substance: Substance | None = None
+) -> LicencePermissionsSnapshot | None:
+    """The permissions in force, from the newest snapshot set.
+
+    A set is written in one call: its base row (substance NULL) first, then its substance
+    overrides, so every row of the newest set has an id greater than the newest base row.
+    With `substance`, that set's override for it wins; otherwise the base row applies.
+    """
+    snapshots = licence.permission_snapshots
+    base = snapshots.filter(substance__isnull=True).order_by("-id").first()
+    if base is None or substance is None:
+        return base
+    override = snapshots.filter(substance=substance, id__gt=base.id).order_by("-id").first()
+    return override or base
 
 
 def current_period(licence: Licence, on: date) -> LicenceValidityPeriod | None:

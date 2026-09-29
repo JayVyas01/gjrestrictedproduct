@@ -120,11 +120,9 @@ def org(db):
     sanand = Area.objects.create(
         code="GJ-AHD-SND", name="Sanand", level=AreaLevel.TALUKA, parent=ahmedabad
     )
-    area_officer = Position.objects.create(
-        code="AO-SND", title="Area Officer, Sanand", level=AreaLevel.TALUKA, area=sanand
-    )
+    area_officer = Position.objects.create(code="AO-SND", title="Area Officer, Sanand", area=sanand)
     district_officer = Position.objects.create(
-        code="DO-AHD", title="District Officer, Ahmedabad", level=AreaLevel.DISTRICT, area=ahmedabad
+        code="DO-AHD", title="District Officer, Ahmedabad", area=ahmedabad
     )
     return SimpleNamespace(
         state=state,

@@ -28,10 +28,15 @@ class Area(models.Model):
 
 
 class Position(models.Model):
+    """The one approving position for an area; its level is the area's level.
+
+    One position per area keeps routing deterministic. A second kind of position in the
+    same area would later need a "kind" field (and uniqueness on area + kind).
+    """
+
     code = models.CharField(max_length=32, unique=True)
     title = models.CharField(max_length=120)
-    level = models.CharField(max_length=16, choices=AreaLevel.choices)
-    area = models.ForeignKey(Area, on_delete=models.PROTECT, related_name="positions")
+    area = models.OneToOneField(Area, on_delete=models.PROTECT, related_name="position")
 
     def __str__(self) -> str:
         return self.title

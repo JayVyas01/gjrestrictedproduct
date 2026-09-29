@@ -7,7 +7,7 @@ from identity.models import OtpChallenge, OtpPurpose
 
 pytestmark = pytest.mark.django_db
 
-SUBJECT = "gstin:" + "a" * 64
+SUBJECT = "licence:1"
 
 
 def test_subject_code_goes_to_the_given_contact(app_db, otp_outbox):

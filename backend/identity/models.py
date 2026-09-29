@@ -77,7 +77,7 @@ class OtpPurpose(models.TextChoices):
 
 class OtpChallenge(models.Model):
     """One issued code, for an existing user OR for a subject that has no account yet
-    (e.g. "gstin:<blind index>" during enrolment). Exactly one of the two is set.
+    (e.g. "licence:<id>" during enrolment). Exactly one of the two is set.
     Closed when verified, superseded, expired-and-tried, or out of attempts."""
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)

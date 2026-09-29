@@ -44,6 +44,9 @@ class Licence(models.Model):
                 ),
                 name="licence_exactly_one_scope",
             ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=LicenceStatus.values), name="licence_status_valid"
+            ),
         ]
 
     def number(self) -> str:
@@ -76,11 +79,17 @@ class LicenceValidityPeriod(models.Model):
 
 
 class LicencePermissionsSnapshot(models.Model):
-    """Frozen copy of the rule version in force when the licence (or a renewal) was recorded."""
+    """Frozen copy of the rule version in force when the licence (or a renewal) was recorded.
+
+    Snapshots are taken in sets. The base row (substance NULL) covers the licence's own
+    scope. A class-scoped licence also gets one row per substance-specific rule in that
+    class (substance set): specific substance beats class, frozen the same way.
+    """
 
     licence = models.ForeignKey(
         Licence, on_delete=models.PROTECT, related_name="permission_snapshots"
     )
+    substance = models.ForeignKey(Substance, on_delete=models.PROTECT, null=True, blank=True)
     rule_version = models.ForeignKey(LicenceTypeRuleVersion, on_delete=models.PROTECT)
     may_buy = models.BooleanField()
     may_sell = models.BooleanField()

@@ -137,13 +137,13 @@ def record_renewal(
         period = LicenceValidityPeriod.objects.create(
             licence=licence, starts_on=starts_on, ends_on=ends_on, recorded_by=recorded_by
         )
-    record(
-        action="licence.renewal_recorded",
-        actor=recorded_by,
-        subject_type="licence",
-        subject_id=str(licence.id),
-        payload={"starts_on": starts_on.isoformat(), "ends_on": ends_on.isoformat()},
-    )
+        record(
+            action="licence.renewal_recorded",
+            actor=recorded_by,
+            subject_type="licence",
+            subject_id=str(licence.id),
+            payload={"starts_on": starts_on.isoformat(), "ends_on": ends_on.isoformat()},
+        )
     return period
 
 

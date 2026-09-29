@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, D1 Task 4 licences (149 tests).
+**Last updated:** 2026-09-29, D1 Task 4 licences (151 tests).
 
 ---
 
@@ -15,9 +15,9 @@
 | **Licensee** (buyer and seller combined; what they may do comes from their licences) | Log in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Transactions arrive in Demo D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`; `licensing/migrations/0002_rls_and_append_only.py` (licence read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_licensing.py::test_holder_sees_only_their_own_licences` |
 | **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D1 and D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` |
 | **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D1). Records licences issued by the existing process, records renewals, suspends or revokes (row-level security lets only this role and SYSTEM write licences). | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/`; `licensing/service.py`, `licensing/migrations/0002_rls_and_append_only.py` | `test_permissions.py`, `test_catalogue.py`, `test_licensing.py` |
-| **Software Owner** | Log in; read the whole audit log; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
-| **Head Authority** | Log in; read the whole audit log (oversight); create or reset personnel accounts (Phase 4) | Same as Software Owner | `test_audit.py::test_only_audit_readers_can_read_events` |
-| **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain | `core/db_context.py` (`SYSTEM_ROLE`), `verify_audit_chain` command | `test_audit.py::test_verify_command_*` |
+| **Software Owner** | Log in; read the whole audit log; read all licences with their periods and snapshots; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
+| **Head Authority** | Log in; read the whole audit log (oversight); read all licences with their periods and snapshots; create or reset personnel accounts (Phase 4) | Same as Software Owner, plus `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_only_audit_readers_can_read_events` |
+| **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain; read and record licences (enrolment matching, seeding) | `core/db_context.py` (`SYSTEM_ROLE`, `acting_as_system`), `verify_audit_chain` command, `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_verify_command_*` |
 | **Anonymous** (not logged in) | Only the health check, the CSRF cookie and the two login steps | `settings.REST_FRAMEWORK` (deny by default), `AllowAny` on those views only | `test_login_api.py`, `test_permissions.py::test_anonymous_is_refused`, `test_audit.py::test_anonymous_context_cannot_read_events` |
 
 To restrict a new API endpoint to certain roles, use `permission_classes = [role_required(Role.X, ...)]` from `identity/permissions.py`.
@@ -87,9 +87,13 @@ Paths are relative to `backend/`.
 
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
+| `licensing/apps.py` | App registration | `LicensingConfig` | — |
+| `licensing/migrations/0001_initial.py` | Creates the three licence tables and their constraints (exactly one scope, period ends after start) | — | `test_licensing.py` |
 | `licensing/models.py` | Licences as issued by the existing process (number and GSTIN encrypted with blind indexes, holder, type, one substance or one class, area, status), append-only validity periods, and append-only permission snapshots (frozen copy of the rule version in force) | `LicenceStatus`, `Licence`, `LicenceValidityPeriod`, `LicencePermissionsSnapshot` | `test_licensing.py` |
-| `licensing/service.py` | Recording a licence or renewal (atomic: licence, snapshot, period and audit together or not at all; refused if no rule allows it), suspend/revoke, current permissions, may-this-licence-trade-on-a-date, substance coverage, exact-match lookup by number | `record_licence`, `record_renewal`, `set_status`, `current_permissions`, `current_period`, `trading_permitted`, `covers`, `find_by_number`, `LicenceNotPermitted`, `InvalidLicenceData` | `test_licensing.py` |
+| `licensing/service.py` | Recording a licence or renewal (atomic: licence, snapshot, period and audit entry together or not at all; refused if no rule allows it), suspend/revoke, current permissions, may-this-licence-trade-on-a-date, substance coverage, exact-match lookup by number | `record_licence`, `record_renewal`, `set_status`, `current_permissions`, `current_period`, `trading_permitted`, `covers`, `find_by_number`, `LicenceNotPermitted`, `InvalidLicenceData` | `test_licensing.py` |
 | `licensing/migrations/0002_rls_and_append_only.py` | Row-level security (holder sees own by GSTIN; authority, Head, Software Owner, SYSTEM read all; only Licensing Authority and SYSTEM write); periods and snapshots append-only (REVOKE plus triggers) | — | `test_licensing.py` |
+| `licensing/migrations/0003_status_only_updates.py` | The app role may update only `status` on a licence (no moving a licence to another holder) | — | `test_licensing.py::test_only_status_can_change_on_a_licence` |
+| `tests/conftest.py` fixtures | `make_licence(...)` records a licence as SYSTEM with sensible defaults; `DEMO_GSTIN` is a GSTIN with a non-existent state code | `make_licence`, `DEMO_GSTIN` | — |
 
 ### audit: tamper-evident audit log
 
@@ -299,6 +303,8 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_validity_periods_cannot_be_edited` | The app role cannot update validity periods |
 | `test_periods_and_snapshots_blocked_even_for_table_owner` | Triggers stop even the owner editing periods and snapshots |
 | `test_acting_as_system_restores_previous_actor` | The SYSTEM block puts the caller's actor back |
+| `test_only_status_can_change_on_a_licence` | Even the authority cannot rewrite other licence columns; status changes still work |
+| `test_acting_as_system_does_not_mask_database_errors` | A failing SQL statement inside the SYSTEM block surfaces its own error |
 
 ---
 

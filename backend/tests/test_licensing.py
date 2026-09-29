@@ -214,3 +214,20 @@ def test_periods_and_snapshots_blocked_even_for_table_owner(db, make_licence):
         LicenceValidityPeriod.objects.filter(licence=licence).update(ends_on=date(2099, 1, 1))
     with pytest.raises(DatabaseError, match="append-only"), transaction.atomic():
         LicencePermissionsSnapshot.objects.filter(licence=licence).update(may_sell=False)
+
+
+def test_only_status_can_change_on_a_licence(app_db, make_licence):
+    licence = make_licence()
+    with pytest.raises(DatabaseError, match="permission denied"), transaction.atomic():
+        set_actor(user_id="GJLAUSER0001", role=Role.LICENSING_AUTHORITY)
+        Licence.objects.filter(pk=licence.pk).update(gstin_index="z" * 64)
+    with transaction.atomic():
+        set_actor(user_id="GJLAUSER0001", role=Role.LICENSING_AUTHORITY)
+        set_status(licence, LicenceStatus.SUSPENDED, by="GJLAUSER0001", reason="inspection")
+        assert Licence.objects.get(pk=licence.pk).status == LicenceStatus.SUSPENDED
+
+
+def test_acting_as_system_does_not_mask_database_errors(app_db):
+    with pytest.raises(DatabaseError, match="division by zero"), transaction.atomic():
+        with acting_as_system("test"), connection.cursor() as cursor:
+            cursor.execute("SELECT 1/0")

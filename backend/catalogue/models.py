@@ -91,4 +91,7 @@ class LicenceTypeRuleVersion(models.Model):
                 condition=models.Q(max_stock_qty__gt=0, max_per_transaction_qty__gt=0),
                 name="rule_limits_positive",
             ),
+            models.CheckConstraint(
+                condition=models.Q(validity_months__gt=0), name="rule_validity_positive"
+            ),
         ]

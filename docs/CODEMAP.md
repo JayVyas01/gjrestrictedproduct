@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, D1 Task 2 catalogue (115 tests).
+**Last updated:** 2026-09-29, D1 Task 2 catalogue (117 tests).
 
 ---
 
@@ -46,6 +46,7 @@ Paths are relative to `backend/`.
 | `core/db_context.py` | Telling Postgres who is acting, so row-level security can check it; the setting lasts only for the current transaction | `set_actor`, `current_actor`, `SYSTEM_ROLE` | `test_db_context.py` |
 | `core/middleware.py` | One database transaction per request, tagged with the user; a 5xx response rolls back | `DbContextMiddleware` | `test_db_context.py` |
 | `core/exceptions.py` | A raised API error undoes the request's writes (**raise to roll back, return to commit**) | `rollback_on_exception` | `test_rollback_on_exception.py` |
+| `core/migrations/0002_append_only_guard.py` | Shared trigger function `reject_append_only_change()`; append-only tables attach it (row trigger for update/delete, statement trigger for truncate) | `reject_append_only_change` | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner` |
 | `core/migrations/0001_app_role_privileges.py` | The app role `gj_app` gets data access only: no schema changes, no ownership | — | `test_db_privileges.py` |
 
 ### identity: accounts, roles, one-time codes, login
@@ -69,6 +70,8 @@ Paths are relative to `backend/`.
 |---|---|---|---|
 | `catalogue/models.py` | What can be traded and what each licence type may do with it: substance classes, substances (each with a unit), licence types, rules (scoped to exactly one substance or one class) and rule versions (buy/sell/transport, stock and per-transaction limits, validity) | `Unit`, `SubstanceClass`, `Substance`, `LicenceType`, `LicenceTypeRule`, `LicenceTypeRuleVersion` | `test_catalogue.py` |
 | `catalogue/service.py` | Finding the governing rule (substance rule beats class rule; none means not permitted) and adding a new rule version | `resolve_rule`, `add_rule_version` | `test_catalogue.py` |
+| `catalogue/migrations/0003_rule_version_trigger.py` | Rule versions also blocked by trigger for the table owner | — | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner` |
+| `catalogue/migrations/0004_rule_validity_positive.py` | Validity must be above zero | — | `test_catalogue.py::test_validity_must_be_positive` |
 | `catalogue/migrations/0002_append_only_versions.py` | Rule versions can't be updated or deleted by the app role: a change is a new version | — | `test_catalogue.py::test_rule_versions_cannot_be_edited` |
 
 ### audit: tamper-evident audit log
@@ -241,6 +244,8 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_rule_needs_exactly_one_scope` | The database rejects a rule with both or neither of substance and class |
 | `test_rule_versions_cannot_be_edited` | The app role can't update rule versions |
 | `test_limits_must_be_positive` | The database rejects zero or negative limits |
+| `test_rule_versions_blocked_even_for_table_owner` | A trigger stops even the table owner editing a rule version |
+| `test_validity_must_be_positive` | The database rejects zero validity months |
 
 ---
 
@@ -255,6 +260,7 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | Tests use `app_db` (runs as `gj_app`), never `transactional_db` | Tests see production privileges | `tests/conftest.py` docstring |
 | Every new business table gets row-level-security policies in the migration that creates it | Database backstop for access rules | Code review |
 | Every change goes feature branch → PR into `dev` → PR from `dev` into `main` | Test in dev before production | GitHub ruleset, `source-branch` check |
+| Append-only tables REVOKE update/delete from `gj_app` and attach `reject_append_only_change()` triggers | Even the owner can't rewrite history | `core/migrations/0002_append_only_guard.py`, `test_catalogue.py` |
 | **Update this file in the same PR** | Keeps the map trustworthy | Code review |
 
 Open follow-ups from the reviews: [`superpowers/plans/2026-09-29-phase1-followups.md`](superpowers/plans/2026-09-29-phase1-followups.md).

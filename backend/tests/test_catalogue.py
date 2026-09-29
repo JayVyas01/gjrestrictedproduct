@@ -72,3 +72,17 @@ def test_limits_must_be_positive(app_db, catalogue):
             add_rule_version(
                 catalogue.retail_rule, created_by="test", **_permissions(max_stock_qty=Decimal("0"))
             )
+
+
+def test_rule_versions_blocked_even_for_table_owner(db, catalogue):
+    with pytest.raises(DatabaseError, match="append-only"):
+        with transaction.atomic():
+            LicenceTypeRuleVersion.objects.update(may_sell=False)
+
+
+def test_validity_must_be_positive(app_db, catalogue):
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            add_rule_version(
+                catalogue.retail_rule, created_by="test", **_permissions(validity_months=0)
+            )

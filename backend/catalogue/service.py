@@ -46,6 +46,8 @@ def add_rule_version(
     max_per_transaction_qty: Decimal,
     validity_months: int,
 ) -> LicenceTypeRuleVersion:
+    # Lock the rule row so concurrent additions can't compute the same version number.
+    rule = LicenceTypeRule.objects.select_for_update().get(pk=rule.pk)
     latest = _latest(rule)
     return LicenceTypeRuleVersion.objects.create(
         rule=rule,

@@ -3,6 +3,8 @@
 Authorisation and audit platform for seller-initiated transactions of restricted items
 in Gujarat. See `highlevel_plan.md` (design) and `docs/superpowers/plans/` (roadmap and plans).
 
+**Code map:** [`docs/CODEMAP.md`](docs/CODEMAP.md) shows which code does what, for which role, and which tests prove it. Keep it updated in every PR.
+
 ## Branching and environments
 
 | Branch | Environment | Rule |

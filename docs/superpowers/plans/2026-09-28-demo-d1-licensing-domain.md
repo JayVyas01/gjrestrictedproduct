@@ -887,7 +887,7 @@ git commit -m "feat: area hierarchy, positions and personnel assignments with tr
 **Files:**
 - Modify: `backend/core/db_context.py` (add `acting_as_system`)
 - Modify: `backend/identity/models.py` (`User.licensee_gstin_index`, `UserManager.create_user`)
-- Create (generated): `backend/identity/migrations/0006_user_licensee_gstin_index.py`
+- Create (generated): `backend/identity/migrations/0007_user_licensee_gstin_index.py`
 - Create: `backend/licensing/__init__.py`, `apps.py`, `models.py`, `service.py`, `migrations/__init__.py`
 - Create (generated): `backend/licensing/migrations/0001_initial.py`
 - Create: `backend/licensing/migrations/0002_rls_and_append_only.py`
@@ -1354,7 +1354,7 @@ GRANT DELETE ON licensing_licence TO gj_app;
 class Migration(migrations.Migration):
     dependencies = [
         ("licensing", "0001_initial"),
-        ("identity", "0006_user_licensee_gstin_index"),
+        ("identity", "0007_user_licensee_gstin_index"),
         ("core", "0001_app_role_privileges"),
     ]
     operations = [migrations.RunSQL(sql=FORWARD, reverse_sql=BACKWARD)]

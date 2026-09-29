@@ -15,6 +15,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.utils import timezone
 
 from identity.models import OtpChallenge, User
@@ -56,6 +57,11 @@ def issue(user: User, purpose: str) -> OtpChallenge:
 
 
 def issue_for_subject(*, subject: str, contact: str, purpose: str) -> OtpChallenge:
+    if not subject:
+        raise ValueError("subject is required")
+    # Serialise per subject (there is no user row to lock), so a new code reliably cancels the old.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [subject])
     now = timezone.now()
     OtpChallenge.objects.filter(subject=subject, purpose=purpose, closed_at__isnull=True).update(
         closed_at=now
@@ -93,7 +99,10 @@ def verify(*, challenge_id: str, purpose: str, code: str) -> User | None:
         code=code,
         usable=lambda c: c.user is not None and c.user.is_active,
     )
-    return challenge.user if challenge else None
+    if challenge is None:
+        return None
+    # Re-read and lock the user so a lockout committing concurrently is not missed.
+    return User.objects.select_for_update().get(pk=challenge.user_id)
 
 
 def verify_subject(*, challenge_id: str, purpose: str, code: str) -> str | None:

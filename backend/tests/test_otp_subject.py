@@ -72,3 +72,20 @@ def test_database_requires_exactly_one_of_user_or_subject(app_db, make_user):
                 code_hash="x" * 64,
                 expires_at=timezone.now(),
             )
+
+
+def test_database_allows_one_open_challenge_per_subject_and_purpose(app_db, otp_outbox):
+    otp.issue_for_subject(subject=SUBJECT, contact="+919800000555", purpose=OtpPurpose.ENROL)
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            OtpChallenge.objects.create(
+                subject=SUBJECT,
+                purpose=OtpPurpose.ENROL,
+                code_hash="x" * 64,
+                expires_at=timezone.now(),
+            )
+
+
+def test_issue_for_subject_rejects_empty_subject(app_db, otp_outbox):
+    with pytest.raises(ValueError):
+        otp.issue_for_subject(subject="", contact="+919800000555", purpose=OtpPurpose.ENROL)

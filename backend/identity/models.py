@@ -97,4 +97,9 @@ class OtpChallenge(models.Model):
                 condition=models.Q(closed_at__isnull=True),
                 name="one_open_otp_per_user_and_purpose",
             ),
+            models.UniqueConstraint(
+                fields=["subject", "purpose"],
+                condition=models.Q(closed_at__isnull=True) & ~models.Q(subject=""),
+                name="one_open_otp_per_subject_and_purpose",
+            ),
         ]

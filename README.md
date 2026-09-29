@@ -14,7 +14,7 @@ in Gujarat. See `highlevel_plan.md` (design) and `docs/superpowers/plans/` (road
 2. Open a pull request into `dev`. CI must pass before merging.
 3. Test on `dev`. When a set of changes is cleared, open a pull request from `dev` into `main`.
 
-GitHub enforces this with a repository ruleset on `dev` and `main`: pull request required (1 approval), `backend` CI, `source-branch` (only `dev` may merge into `main`) and CodeQL must pass, conversations resolved, no force-push or deletion. Never commit or push directly to `main` or `dev`. Hosted dev and prod deployments (India region) are added in the Hardening & go-live phase; until then, "environment" means the branch plus its CI run.
+GitHub enforces this with a repository ruleset on `dev` and `main`: pull request required (0 approvals for now; raise to 1 when a second developer joins), `backend` CI, `source-branch` (only `dev` may merge into `main`) and CodeQL must pass, conversations resolved, no force-push or deletion. Never commit or push directly to `main` or `dev`. Hosted dev and prod deployments (India region) are added in the Hardening & go-live phase; until then, "environment" means the branch plus its CI run.
 
 ## Local setup (macOS)
 

@@ -7,7 +7,7 @@ rollback and can never leak into the next request on a reused connection.
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from django.db import DatabaseError, connection
+from django.db import connection, transaction
 
 # Background jobs (e.g. audit verification). Never assigned to a user account.
 SYSTEM_ROLE = "SYSTEM"
@@ -36,20 +36,15 @@ def acting_as_system(job: str) -> Iterator[None]:
     """Briefly act as a named SYSTEM job, e.g. to match a licence during enrolment.
 
     Use only for reads or writes that genuinely cross owners, keep the block small, and
-    return only the minimum data to the caller. The previous actor is restored afterwards,
-    except after a database error, where the aborted transaction's rollback reverts it.
+    return only the minimum data to the caller. The previous actor is restored afterwards.
+
+    The block runs in its own savepoint: on any exception the rollback to that savepoint
+    reverts the actor to the previous one without running more SQL (which could mask the
+    real error), even if a caller catches the exception and carries on. The price is that
+    writes made inside the block are rolled back too; a SYSTEM block is all-or-nothing.
     """
     previous_user, previous_role = current_actor()
-    set_actor(user_id=job, role=SYSTEM_ROLE)
-    try:
+    with transaction.atomic():
+        set_actor(user_id=job, role=SYSTEM_ROLE)
         yield
-    except DatabaseError:
-        # The transaction is aborted and its rollback reverts the actor; running more SQL
-        # here would only replace the real error with "current transaction is aborted".
-        raise
-    except BaseException:
-        if not connection.needs_rollback:
-            set_actor(user_id=previous_user or "", role=previous_role or "")
-        raise
-    else:
         set_actor(user_id=previous_user or "", role=previous_role or "")

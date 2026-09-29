@@ -6,7 +6,7 @@ from django.db import DatabaseError, connection, transaction
 
 from catalogue.models import LicenceType
 from catalogue.service import add_rule_version
-from core.db_context import acting_as_system, set_actor
+from core.db_context import acting_as_system, current_actor, set_actor
 from identity.roles import Role
 from licensing.models import (
     Licence,
@@ -200,8 +200,6 @@ def test_validity_periods_cannot_be_edited(app_db, make_licence):
 
 
 def test_acting_as_system_restores_previous_actor(app_db):
-    from core.db_context import current_actor
-
     set_actor(user_id="GJLICENSEE01", role=Role.LICENSEE)
     with acting_as_system("test"):
         assert current_actor()[1] == "SYSTEM"
@@ -231,3 +229,14 @@ def test_acting_as_system_does_not_mask_database_errors(app_db):
     with pytest.raises(DatabaseError, match="division by zero"), transaction.atomic():
         with acting_as_system("test"), connection.cursor() as cursor:
             cursor.execute("SELECT 1/0")
+
+
+def test_acting_as_system_restores_actor_after_caught_nested_error(app_db):
+    with transaction.atomic():
+        set_actor(user_id="GJLICENSEE01", role=Role.LICENSEE)
+        try:
+            with acting_as_system("job"), transaction.atomic(), connection.cursor() as cursor:
+                cursor.execute("SELECT 1/0")
+        except DatabaseError:
+            pass
+        assert current_actor() == ("GJLICENSEE01", "LICENSEE")

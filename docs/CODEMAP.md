@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, D1 Task 4 licences (151 tests).
+**Last updated:** 2026-09-29, D1 Task 4 licences (152 tests).
 
 ---
 
@@ -43,7 +43,7 @@ Paths are relative to `backend/`.
 |---|---|---|---|
 | `core/views.py` | Health check; also confirms the database is reachable | `health` | `test_health.py` |
 | `core/crypto.py` | Encrypting sensitive fields; one-way lookup keys (blind indexes) for exact-match lookup only | `encrypt`, `decrypt`, `blind_index(context, value)`, `DecryptionError` | `test_crypto.py` |
-| `core/db_context.py` | Telling Postgres who is acting, so row-level security can check it; the setting lasts only for the current transaction | `set_actor`, `current_actor`, `SYSTEM_ROLE`, `acting_as_system(job)` (brief SYSTEM block that restores the previous actor; skips restore if the transaction already failed) | `test_db_context.py`, `test_licensing.py::test_acting_as_system_restores_previous_actor` |
+| `core/db_context.py` | Telling Postgres who is acting, so row-level security can check it; the setting lasts only for the current transaction | `set_actor`, `current_actor`, `SYSTEM_ROLE`, `acting_as_system(job)` (brief SYSTEM block in its own savepoint: restores the previous actor on normal exit, and any error rolls back to the savepoint so the actor reverts too; writes inside are all-or-nothing) | `test_db_context.py`, `test_licensing.py::test_acting_as_system_restores_previous_actor` |
 | `core/middleware.py` | One database transaction per request, tagged with the user; a 5xx response rolls back | `DbContextMiddleware` | `test_db_context.py` |
 | `core/exceptions.py` | A raised API error undoes the request's writes (**raise to roll back, return to commit**) | `rollback_on_exception` | `test_rollback_on_exception.py` |
 | `core/migrations/0002_append_only_guard.py` | Shared trigger function `reject_append_only_change()`; append-only tables attach it (row trigger for update/delete, statement trigger for truncate); used by rule versions, licence validity periods and permission snapshots | `reject_append_only_change` | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner`, `test_licensing.py::test_periods_and_snapshots_blocked_even_for_table_owner` |
@@ -304,6 +304,7 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_periods_and_snapshots_blocked_even_for_table_owner` | Triggers stop even the owner editing periods and snapshots |
 | `test_acting_as_system_restores_previous_actor` | The SYSTEM block puts the caller's actor back |
 | `test_only_status_can_change_on_a_licence` | Even the authority cannot rewrite other licence columns; status changes still work |
+| `test_acting_as_system_restores_actor_after_caught_nested_error` | A caught error inside the SYSTEM block never leaves the caller running as SYSTEM |
 | `test_acting_as_system_does_not_mask_database_errors` | A failing SQL statement inside the SYSTEM block surfaces its own error |
 
 ---

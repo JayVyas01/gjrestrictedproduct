@@ -63,13 +63,19 @@ class User(AbstractBaseUser):
 
 class OtpPurpose(models.TextChoices):
     LOGIN = "LOGIN", "Login second factor"
+    ENROL = "ENROL", "Licence-gated enrolment"
 
 
 class OtpChallenge(models.Model):
-    """One issued code. Closed when verified, superseded, expired-and-tried, or out of attempts."""
+    """One issued code, for an existing user OR for a subject that has no account yet
+    (e.g. "gstin:<blind index>" during enrolment). Exactly one of the two is set.
+    Closed when verified, superseded, expired-and-tried, or out of attempts."""
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="otp_challenges")
+    user = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="otp_challenges", null=True, blank=True
+    )
+    subject = models.CharField(max_length=100, blank=True)
     purpose = models.CharField(max_length=16, choices=OtpPurpose.choices)
     code_hash = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -79,6 +85,13 @@ class OtpChallenge(models.Model):
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(user__isnull=False, subject="")
+                    | (models.Q(user__isnull=True) & ~models.Q(subject=""))
+                ),
+                name="otp_user_xor_subject",
+            ),
             models.UniqueConstraint(
                 fields=["user", "purpose"],
                 condition=models.Q(closed_at__isnull=True),

@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, Phase 1 Foundation (100 tests).
+**Last updated:** 2026-09-29, D1 Task 1 OTP for enrolment (104 tests).
 
 ---
 
@@ -53,9 +53,9 @@ Paths are relative to `backend/`.
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `identity/roles.py` | The six fixed roles and role groups | `Role`, `AUDIT_READERS`, `PERSONNEL_PROVISIONERS` | `test_users.py`, `test_permissions.py`, `test_audit.py` |
-| `identity/models.py` | User accounts (system-generated ID, Argon2 password, encrypted contact, lockout fields) and one-time-code records (at most one open code per user and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py` |
+| `identity/models.py` | User accounts (system-generated ID, Argon2 password, encrypted contact, lockout fields) and one-time-code records (for a user or, before an account exists, a subject such as a GSTIN blind index; at most one open code per user and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py`, `test_otp_subject.py` |
 | `identity/migrations/0002_protect_users.py` | Accounts can't be deleted, only deactivated | — | `test_users.py::test_app_role_cannot_delete_users` |
-| `identity/otp.py` | Issuing and checking 6-digit codes: stored as HMAC, 5-minute expiry, 5 attempts, single use, a new code cancels the old one, issuing locks the user row | `issue`, `verify`, `OTP_TTL`, `OTP_MAX_ATTEMPTS` | `test_otp.py` |
+| `identity/otp.py` | Issuing and checking 6-digit codes: stored as HMAC, 5-minute expiry, 5 attempts, single use, a new code cancels the old one, issuing locks the user row; also codes for subjects with no account yet (enrolment) | `issue`, `verify`, `issue_for_subject`, `verify_subject`, `OTP_TTL`, `OTP_MAX_ATTEMPTS` | `test_otp.py`, `test_otp_subject.py` |
 | `identity/otp_delivery.py` | How codes are sent: console in development (refuses unless DEBUG), in-memory outbox in tests, real provider later | `get_sender`, `ConsoleOtpSender`, `OutboxOtpSender` | `test_otp.py` |
 | `identity/login.py` | Login step 1: password check on every path (timing is the same whether or not the account exists), lockout after 5 wrong passwords or 5 code requests in 15 minutes, locking cancels open codes | `start_login`, `LOCKOUT_THRESHOLD`, `LOCKOUT_DURATION` | `test_login_api.py` |
 | `identity/serializers.py` | Validating login input | `LoginSerializer`, `OtpVerifySerializer` | `test_login_api.py` |
@@ -164,6 +164,16 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_only_audit_readers_can_read_events` (every role) | Only Software Owner and Head Authority can read the log |
 | `test_anonymous_context_cannot_read_events` | Anonymous requests see nothing |
 | `test_verify_command_reports_ok` / `_fails_loudly_on_tampering` | The scheduled check reports correctly |
+
+### `test_otp_subject.py`: one-time codes before an account exists
+| Test | Proves |
+|---|---|
+| `test_subject_code_goes_to_the_given_contact` | The enrolment code is sent to the contact given, not to any stored user |
+| `test_verify_subject_returns_subject_once` | A subject code works exactly once and returns the subject |
+| `test_user_verify_rejects_subject_challenge` | An enrolment code cannot be used as a user login code |
+| `test_subject_verify_rejects_user_challenge` | A user's login code cannot be used for enrolment |
+| `test_new_subject_challenge_supersedes_old` | A new enrolment code cancels the previous one |
+| `test_database_requires_exactly_one_of_user_or_subject` | The database refuses a code tied to both a user and a subject |
 
 ### `test_otp.py`: one-time codes
 | Test | Proves |

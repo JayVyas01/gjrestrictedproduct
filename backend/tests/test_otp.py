@@ -1,7 +1,8 @@
 from datetime import timedelta
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from identity import otp
@@ -23,6 +24,20 @@ def test_code_is_not_stored_in_plaintext(app_db, make_user, otp_outbox):
     code = otp_outbox[-1][1]
     stored = OtpChallenge.objects.get(pk=challenge.pk).code_hash
     assert stored != code and len(stored) == 64
+
+
+def test_verify_locks_user_before_challenge(app_db, make_user, otp_outbox):
+    user = make_user()
+    challenge = otp.issue(user, OtpPurpose.LOGIN)
+    code = otp_outbox[-1][1]
+    with CaptureQueriesContext(connection) as ctx:
+        assert (
+            otp.verify(challenge_id=str(challenge.public_id), purpose=OtpPurpose.LOGIN, code=code)
+            == user
+        )
+    locks = [q["sql"] for q in ctx.captured_queries if "FOR UPDATE" in q["sql"]]
+    assert '"identity_user"' in locks[0]
+    assert '"identity_otpchallenge"' in locks[1]
 
 
 def test_correct_code_returns_user_once(app_db, make_user, otp_outbox):

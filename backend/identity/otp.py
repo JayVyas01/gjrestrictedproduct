@@ -93,16 +93,25 @@ def _consume(
 
 
 def verify(*, challenge_id: str, purpose: str, code: str) -> User | None:
-    challenge = _consume(
-        challenge_id=challenge_id,
-        purpose=purpose,
-        code=code,
-        usable=lambda c: c.user is not None and c.user.is_active,
-    )
-    if challenge is None:
+    # Lock order is always user row, then challenge rows (same as start_login/issue),
+    # so a verify racing a new login cannot deadlock.
+    try:
+        user_id = (
+            OtpChallenge.objects.filter(
+                public_id=challenge_id, purpose=purpose, closed_at__isnull=True
+            )
+            .values_list("user_id", flat=True)
+            .first()
+        )
+    except ValidationError:
         return None
-    # Re-read and lock the user so a lockout committing concurrently is not missed.
-    return User.objects.select_for_update().get(pk=challenge.user_id)
+    if user_id is None:
+        return None
+    user = User.objects.select_for_update().get(pk=user_id)
+    challenge = _consume(
+        challenge_id=challenge_id, purpose=purpose, code=code, usable=lambda c: user.is_active
+    )
+    return user if challenge else None
 
 
 def verify_subject(*, challenge_id: str, purpose: str, code: str) -> str | None:

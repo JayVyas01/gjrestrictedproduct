@@ -6,10 +6,15 @@ the schema owner, for example to simulate an attacker tampering with the audit t
 Never use `transactional_db`: its TRUNCATE-based teardown is blocked by the audit trigger.
 """
 
+from decimal import Decimal
+from types import SimpleNamespace
+
 import pytest
 from django.db import connection, transaction
 
 from audit.models import AuditEvent
+from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass, Unit
+from catalogue.service import add_rule_version
 from core.db_context import SYSTEM_ROLE, current_actor, set_actor
 from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
@@ -54,3 +59,48 @@ def otp_outbox():
     OutboxOtpSender.outbox.clear()
     yield OutboxOtpSender.outbox
     OutboxOtpSender.outbox.clear()
+
+
+def _permissions(**overrides):
+    values = dict(
+        may_buy=True,
+        may_sell=True,
+        may_transport=False,
+        max_stock_qty=Decimal("1000"),
+        max_per_transaction_qty=Decimal("500"),
+        validity_months=12,
+    )
+    values.update(overrides)
+    return values
+
+
+@pytest.fixture
+def catalogue(db):
+    spirits = SubstanceClass.objects.create(code="SPIRITS", name="Spirits")
+    whisky = Substance.objects.create(
+        code="WHISKY", name="Whisky", substance_class=spirits, unit=Unit.LITRE
+    )
+    rum = Substance.objects.create(code="RUM", name="Rum", substance_class=spirits, unit=Unit.LITRE)
+    retail = LicenceType.objects.create(code="RETAIL", name="Retail")
+    wholesale = LicenceType.objects.create(code="WHOLESALE", name="Wholesale")
+    retail_rule = LicenceTypeRule.objects.create(licence_type=retail, substance_class=spirits)
+    add_rule_version(retail_rule, created_by="test", **_permissions())
+    wholesale_rule = LicenceTypeRule.objects.create(licence_type=wholesale, substance_class=spirits)
+    add_rule_version(
+        wholesale_rule,
+        created_by="test",
+        **_permissions(
+            may_transport=True,
+            max_stock_qty=Decimal("50000"),
+            max_per_transaction_qty=Decimal("10000"),
+        ),
+    )
+    return SimpleNamespace(
+        spirits=spirits,
+        whisky=whisky,
+        rum=rum,
+        retail=retail,
+        wholesale=wholesale,
+        retail_rule=retail_rule,
+        wholesale_rule=wholesale_rule,
+    )

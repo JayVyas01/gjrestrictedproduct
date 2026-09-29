@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, D1 Task 1 OTP for enrolment (107 tests).
+**Last updated:** 2026-09-29, D1 Task 2 catalogue (115 tests).
 
 ---
 
@@ -14,7 +14,7 @@
 |---|---|---|---|
 | **Licensee** (buyer and seller combined; what they may do comes from their licences) | Log in with password and a one-time code. Licences and transactions arrive in Demo D1 and D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py` | `test_login_api.py`, `test_users.py::test_has_role` |
 | **Authorised Personnel** | Log in. Position-based approvals arrive in D1 and D2. | `identity/roles.py` (`Role.PERSONNEL`) | `test_permissions.py` |
-| **Licensing Authority** | Log in. Recording licences arrives in D1. | `identity/roles.py` (`Role.LICENSING_AUTHORITY`) | `test_permissions.py` |
+| **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D1). Recording licences arrives in D1. | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/` | `test_permissions.py`, `test_catalogue.py` |
 | **Software Owner** | Log in; read the whole audit log; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
 | **Head Authority** | Log in; read the whole audit log (oversight); create or reset personnel accounts (Phase 4) | Same as Software Owner | `test_audit.py::test_only_audit_readers_can_read_events` |
 | **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain | `core/db_context.py` (`SYSTEM_ROLE`), `verify_audit_chain` command | `test_audit.py::test_verify_command_*` |
@@ -62,6 +62,14 @@ Paths are relative to `backend/`.
 | `identity/views.py`, `identity/urls.py` | Login API: csrf, login, login/verify, logout, me | `CsrfView`, `LoginStartView`, `LoginVerifyView`, `LogoutView`, `MeView` | `test_login_api.py` |
 | `identity/permissions.py` | Restricting an endpoint to certain roles | `role_required` | `test_permissions.py` |
 | `identity/management/commands/create_software_owner.py` | Creating the very first Software Owner (run once, interactive) | — | `test_create_software_owner.py` |
+
+### catalogue: substances, licence types, versioned rules
+
+| File | Responsible for | Key names | Tests |
+|---|---|---|---|
+| `catalogue/models.py` | What can be traded and what each licence type may do with it: substance classes, substances (each with a unit), licence types, rules (scoped to exactly one substance or one class) and rule versions (buy/sell/transport, stock and per-transaction limits, validity) | `Unit`, `SubstanceClass`, `Substance`, `LicenceType`, `LicenceTypeRule`, `LicenceTypeRuleVersion` | `test_catalogue.py` |
+| `catalogue/service.py` | Finding the governing rule (substance rule beats class rule; none means not permitted) and adding a new rule version | `resolve_rule`, `add_rule_version` | `test_catalogue.py` |
+| `catalogue/migrations/0002_append_only_versions.py` | Rule versions can't be updated or deleted by the app role: a change is a new version | — | `test_catalogue.py::test_rule_versions_cannot_be_edited` |
 
 ### audit: tamper-evident audit log
 
@@ -221,6 +229,18 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_creates_first_owner_and_audits_it` | Creates the owner and writes it to the audit log |
 | `test_refuses_when_an_owner_already_exists` | It can only ever create the first owner |
 | `test_rejects_weak_password`, `test_rejects_mismatched_passwords` | Password rules are enforced |
+
+### `test_catalogue.py`: catalogue and rules
+| Test | Proves |
+|---|---|
+| `test_class_rule_applies_to_every_substance_in_the_class` | A class-level rule covers every substance in that class |
+| `test_substance_rule_overrides_class_rule` | A substance-specific rule beats the class rule, other substances keep the class rule |
+| `test_no_rule_means_not_permitted` | A licence type with no rule gets no permission |
+| `test_class_scope_resolves_class_rule` | Looking up by class alone finds the class rule |
+| `test_latest_version_wins_and_versions_increment` | A change is a new version (1, 2, ...) and the latest is used |
+| `test_rule_needs_exactly_one_scope` | The database rejects a rule with both or neither of substance and class |
+| `test_rule_versions_cannot_be_edited` | The app role can't update rule versions |
+| `test_limits_must_be_positive` | The database rejects zero or negative limits |
 
 ---
 

@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "core",
     "audit",
     "identity",
+    "catalogue",
 ]
 
 AUTH_USER_MODEL = "identity.User"

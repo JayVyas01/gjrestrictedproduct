@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-29, D1 Task 3 positions (125 tests).
+**Last updated:** 2026-09-29, D1 Task 4 licences (149 tests).
 
 ---
 
@@ -12,9 +12,9 @@
 
 | Role | What they can do today | Where it is enforced | Proving tests |
 |---|---|---|---|
-| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Log in with password and a one-time code. Licences and transactions arrive in Demo D1 and D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py` | `test_login_api.py`, `test_users.py::test_has_role` |
+| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Log in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Transactions arrive in Demo D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`; `licensing/migrations/0002_rls_and_append_only.py` (licence read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_licensing.py::test_holder_sees_only_their_own_licences` |
 | **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D1 and D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` |
-| **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D1). Recording licences arrives in D1. | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/` | `test_permissions.py`, `test_catalogue.py` |
+| **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D1). Records licences issued by the existing process, records renewals, suspends or revokes (row-level security lets only this role and SYSTEM write licences). | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/`; `licensing/service.py`, `licensing/migrations/0002_rls_and_append_only.py` | `test_permissions.py`, `test_catalogue.py`, `test_licensing.py` |
 | **Software Owner** | Log in; read the whole audit log; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
 | **Head Authority** | Log in; read the whole audit log (oversight); create or reset personnel accounts (Phase 4) | Same as Software Owner | `test_audit.py::test_only_audit_readers_can_read_events` |
 | **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain | `core/db_context.py` (`SYSTEM_ROLE`), `verify_audit_chain` command | `test_audit.py::test_verify_command_*` |
@@ -43,10 +43,10 @@ Paths are relative to `backend/`.
 |---|---|---|---|
 | `core/views.py` | Health check; also confirms the database is reachable | `health` | `test_health.py` |
 | `core/crypto.py` | Encrypting sensitive fields; one-way lookup keys (blind indexes) for exact-match lookup only | `encrypt`, `decrypt`, `blind_index(context, value)`, `DecryptionError` | `test_crypto.py` |
-| `core/db_context.py` | Telling Postgres who is acting, so row-level security can check it; the setting lasts only for the current transaction | `set_actor`, `current_actor`, `SYSTEM_ROLE` | `test_db_context.py` |
+| `core/db_context.py` | Telling Postgres who is acting, so row-level security can check it; the setting lasts only for the current transaction | `set_actor`, `current_actor`, `SYSTEM_ROLE`, `acting_as_system(job)` (brief SYSTEM block that restores the previous actor; skips restore if the transaction already failed) | `test_db_context.py`, `test_licensing.py::test_acting_as_system_restores_previous_actor` |
 | `core/middleware.py` | One database transaction per request, tagged with the user; a 5xx response rolls back | `DbContextMiddleware` | `test_db_context.py` |
 | `core/exceptions.py` | A raised API error undoes the request's writes (**raise to roll back, return to commit**) | `rollback_on_exception` | `test_rollback_on_exception.py` |
-| `core/migrations/0002_append_only_guard.py` | Shared trigger function `reject_append_only_change()`; append-only tables attach it (row trigger for update/delete, statement trigger for truncate) | `reject_append_only_change` | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner` |
+| `core/migrations/0002_append_only_guard.py` | Shared trigger function `reject_append_only_change()`; append-only tables attach it (row trigger for update/delete, statement trigger for truncate); used by rule versions, licence validity periods and permission snapshots | `reject_append_only_change` | `test_catalogue.py::test_rule_versions_blocked_even_for_table_owner`, `test_licensing.py::test_periods_and_snapshots_blocked_even_for_table_owner` |
 | `core/migrations/0001_app_role_privileges.py` | The app role `gj_app` gets data access only: no schema changes, no ownership | — | `test_db_privileges.py` |
 
 ### identity: accounts, roles, one-time codes, login
@@ -54,7 +54,8 @@ Paths are relative to `backend/`.
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `identity/roles.py` | The six fixed roles and role groups | `Role`, `AUDIT_READERS`, `PERSONNEL_PROVISIONERS` | `test_users.py`, `test_permissions.py`, `test_audit.py` |
-| `identity/models.py` | User accounts (system-generated ID, Argon2 password, encrypted contact, lockout fields) and one-time-code records (for a user or, before an account exists, a subject such as a GSTIN blind index; at most one open code per user, or per subject, and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py`, `test_otp_subject.py` |
+| `identity/models.py` | User accounts (system-generated ID, `licensee_gstin_index` linking a licensee to their licences, Argon2 password, encrypted contact, lockout fields) and one-time-code records (for a user or, before an account exists, a subject such as a GSTIN blind index; at most one open code per user, or per subject, and purpose) | `User`, `UserManager.create_user`, `generate_user_id`, `OtpChallenge`, `OtpPurpose` | `test_users.py`, `test_otp.py`, `test_otp_subject.py` |
+| `identity/migrations/0007_user_licensee_gstin_index.py` | Adds the indexed `licensee_gstin_index` column | — | `test_licensing.py::test_holder_sees_only_their_own_licences` |
 | `identity/migrations/0002_protect_users.py` | Accounts can't be deleted, only deactivated | — | `test_users.py::test_app_role_cannot_delete_users` |
 | `identity/otp.py` | Issuing and checking 6-digit codes: stored as HMAC, 5-minute expiry, 5 attempts, single use, a new code cancels the old one, issuing locks the user row (subjects: a per-subject advisory lock); checking locks the user row first, then the challenge (same order as login, so no deadlock); also codes for subjects with no account yet (enrolment) | `issue`, `verify`, `issue_for_subject`, `verify_subject`, `OTP_TTL`, `OTP_MAX_ATTEMPTS` | `test_otp.py`, `test_otp_subject.py` |
 | `identity/otp_delivery.py` | How codes are sent: console in development (refuses unless DEBUG), in-memory outbox in tests, real provider later | `get_sender`, `ConsoleOtpSender`, `OutboxOtpSender` | `test_otp.py` |
@@ -81,6 +82,14 @@ Paths are relative to `backend/`.
 | `positions/models.py` | The authority hierarchy: areas (taluka, district, state, each with a parent), positions in an area, and assignments saying who holds a position from when to when; the database allows only one active holder per position | `AreaLevel`, `Area`, `Position`, `PersonnelAssignment` | `test_positions.py` |
 | `positions/service.py` | Finding the position that covers an area at a level (walking up parents), assigning or transferring a position (ends the old holder, audited), current holder and positions held | `covering_position`, `assign`, `current_holder`, `positions_held` | `test_positions.py` |
 | `positions/migrations/0001_initial.py` | Creates the three tables and the one-active-holder constraint | — | `test_positions.py::test_database_allows_one_active_holder_per_position` |
+
+### licensing: licence records, frozen permissions, trading_permitted
+
+| File | Responsible for | Key names | Tests |
+|---|---|---|---|
+| `licensing/models.py` | Licences as issued by the existing process (number and GSTIN encrypted with blind indexes, holder, type, one substance or one class, area, status), append-only validity periods, and append-only permission snapshots (frozen copy of the rule version in force) | `LicenceStatus`, `Licence`, `LicenceValidityPeriod`, `LicencePermissionsSnapshot` | `test_licensing.py` |
+| `licensing/service.py` | Recording a licence or renewal (atomic: licence, snapshot, period and audit together or not at all; refused if no rule allows it), suspend/revoke, current permissions, may-this-licence-trade-on-a-date, substance coverage, exact-match lookup by number | `record_licence`, `record_renewal`, `set_status`, `current_permissions`, `current_period`, `trading_permitted`, `covers`, `find_by_number`, `LicenceNotPermitted`, `InvalidLicenceData` | `test_licensing.py` |
+| `licensing/migrations/0002_rls_and_append_only.py` | Row-level security (holder sees own by GSTIN; authority, Head, Software Owner, SYSTEM read all; only Licensing Authority and SYSTEM write); periods and snapshots append-only (REVOKE plus triggers) | — | `test_licensing.py` |
 
 ### audit: tamper-evident audit log
 
@@ -267,6 +276,30 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_vacant_position_has_no_holder` | An unassigned position has no holder |
 | `test_database_allows_one_active_holder_per_position` | The database rejects two active holders |
 
+### `test_licensing.py`: licence records and trading_permitted
+| Test | Proves |
+|---|---|
+| `test_recorded_licence_freezes_rule_permissions` | A new licence gets a snapshot of the rule's permissions |
+| `test_rule_change_does_not_touch_existing_licence` | A later rule version does not change an existing licence |
+| `test_renewal_takes_a_fresh_snapshot_of_the_latest_rule` | Renewal freezes the latest rule; both events are audited |
+| `test_licence_type_without_rule_cannot_be_recorded` | No rule means the licence cannot be recorded |
+| `test_refused_licence_leaves_no_partial_record` | A refused licence leaves no rows behind |
+| `test_malformed_gstin_is_rejected` | GSTIN must be in the valid format |
+| `test_period_must_end_after_it_starts` | A period cannot end before it starts |
+| `test_identifiers_are_encrypted_at_rest` | Number and GSTIN are unreadable in the database |
+| `test_find_by_number_is_exact_but_forgiving_about_case_and_spaces` | Lookup is exact; no partial search |
+| `test_trading_permitted_follows_validity_period` | Trading is allowed only within a period (inclusive dates) |
+| `test_gap_between_periods_is_not_permitted` | A gap between renewals is not covered |
+| `test_suspended_or_revoked_licence_cannot_trade` | Suspended or revoked licences cannot trade |
+| `test_covers_substance_directly_or_through_its_class` | A licence covers its substance or every substance in its class |
+| `test_holder_sees_only_their_own_licences` | A licensee sees only licences with their GSTIN (and their periods) |
+| `test_anonymous_context_sees_no_licences` | No actor, no licences |
+| `test_licensing_authority_sees_all_licences` | The authority reads every licence |
+| `test_licensee_cannot_record_a_licence` | A licensee cannot write licences (database refuses) |
+| `test_validity_periods_cannot_be_edited` | The app role cannot update validity periods |
+| `test_periods_and_snapshots_blocked_even_for_table_owner` | Triggers stop even the owner editing periods and snapshots |
+| `test_acting_as_system_restores_previous_actor` | The SYSTEM block puts the caller's actor back |
+
 ---
 
 ## 4. Conventions every change must follow
@@ -284,3 +317,4 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | **Update this file in the same PR** | Keeps the map trustworthy | Code review |
 
 Open follow-ups from the reviews: [`superpowers/plans/2026-09-29-phase1-followups.md`](superpowers/plans/2026-09-29-phase1-followups.md).
+

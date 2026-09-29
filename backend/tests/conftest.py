@@ -6,7 +6,9 @@ the schema owner, for example to simulate an attacker tampering with the audit t
 Never use `transactional_db`: its TRUNCATE-based teardown is blocked by the audit trigger.
 """
 
+from datetime import date
 from decimal import Decimal
+from itertools import count
 from types import SimpleNamespace
 
 import pytest
@@ -15,13 +17,15 @@ from django.db import connection, transaction
 from audit.models import AuditEvent
 from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass, Unit
 from catalogue.service import add_rule_version
-from core.db_context import SYSTEM_ROLE, current_actor, set_actor
+from core.db_context import SYSTEM_ROLE, acting_as_system, current_actor, set_actor
 from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
+from licensing.service import record_licence
 from positions.models import Area, AreaLevel, Position
 
 TEST_PASSWORD = "correct-horse-battery-9"
+DEMO_GSTIN = "99AAAAA0000A1Z5"  # state code 99 does not exist: can never match a real business
 
 
 @pytest.fixture
@@ -129,3 +133,38 @@ def org(db):
         area_officer=area_officer,
         district_officer=district_officer,
     )
+
+
+@pytest.fixture
+def make_licence(catalogue, org):
+    numbers = count(1)
+
+    def _make(
+        *,
+        gstin=DEMO_GSTIN,
+        licence_type=None,
+        substance=None,
+        substance_class=None,
+        starts_on=date(2026, 1, 1),
+        ends_on=date(2026, 12, 31),
+        contact="+919800000101",
+        holder_name="Sanand Test Traders",
+    ):
+        if substance is None and substance_class is None:
+            substance_class = catalogue.spirits
+        with acting_as_system("test"):
+            return record_licence(
+                number=f"GJ/TEST/{next(numbers):04d}",
+                gstin=gstin,
+                holder_name=holder_name,
+                contact=contact,
+                licence_type=licence_type or catalogue.retail,
+                area=org.sanand,
+                starts_on=starts_on,
+                ends_on=ends_on,
+                recorded_by="test",
+                substance=substance,
+                substance_class=substance_class,
+            )
+
+    return _make

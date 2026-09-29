@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "identity",
     "catalogue",
     "positions",
+    "licensing",
 ]
 
 AUTH_USER_MODEL = "identity.User"

@@ -22,8 +22,10 @@ def generate_user_id() -> str:
 
 
 class UserManager(BaseUserManager):
-    def create_user(self, *, role: str, password: str, contact: str) -> "User":
-        user = self.model(role=role)
+    def create_user(
+        self, *, role: str, password: str, contact: str, licensee_gstin_index: str = ""
+    ) -> "User":
+        user = self.model(role=role, licensee_gstin_index=licensee_gstin_index)
         user.set_contact(contact)
         user.set_password(password)
         user.save()
@@ -33,6 +35,8 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser):
     user_id = models.CharField(max_length=12, unique=True, default=generate_user_id, editable=False)
     role = models.CharField(max_length=32, choices=Role.choices)
+    # Blind index of the licensee's GSTIN; links the account to its licences. Blank otherwise.
+    licensee_gstin_index = models.CharField(max_length=64, blank=True, db_index=True)
     contact_encrypted = models.TextField()
     is_active = models.BooleanField(default=True)
     failed_login_count = models.PositiveSmallIntegerField(default=0)

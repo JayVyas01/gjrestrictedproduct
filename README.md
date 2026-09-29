@@ -3,6 +3,19 @@
 Authorisation and audit platform for seller-initiated transactions of restricted items
 in Gujarat. See `highlevel_plan.md` (design) and `docs/superpowers/plans/` (roadmap and plans).
 
+## Branching and environments
+
+| Branch | Environment | Rule |
+|---|---|---|
+| `dev` | Development (integration and testing) | Every change lands here first, through a pull request with CI green |
+| `main` | Production | Only receives merges from `dev` once everything is tested and approved |
+
+1. Branch from `dev` (for example `feature/licensing-domain`).
+2. Open a pull request into `dev`. CI must pass before merging.
+3. Test on `dev`. When a set of changes is cleared, open a pull request from `dev` into `main`.
+
+Never commit or push directly to `main`. Hosted dev and prod deployments (India region) are added in the Hardening & go-live phase; until then, "environment" means the branch plus its CI run.
+
 ## Local setup (macOS)
 
 1. Install `uv` (`brew install uv`) and Docker Desktop.

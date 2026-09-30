@@ -4,7 +4,10 @@ Values are transaction-local (set_config(..., true)): they disappear at commit o
 rollback and can never leak into the next request on a reused connection.
 """
 
-from django.db import connection
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from django.db import connection, transaction
 
 # Background jobs (e.g. audit verification). Never assigned to a user account.
 SYSTEM_ROLE = "SYSTEM"
@@ -26,3 +29,25 @@ def current_actor() -> tuple[str | None, str | None]:
             "SELECT current_setting('app.user_id', true), current_setting('app.role', true)"
         )
         return cursor.fetchone()
+
+
+@contextmanager
+def acting_as_system(job: str) -> Iterator[None]:
+    """Briefly act as a named SYSTEM job, e.g. to match a licence during enrolment.
+
+    Use only for reads or writes that genuinely cross owners, keep the block small, and
+    return only the minimum data to the caller. The previous actor is restored afterwards.
+
+    It writes no audit event itself: every caller must audit the cross-owner action it
+    performs. Used outside a transaction, it opens its own short transaction.
+
+    The block runs in its own savepoint: on any exception the rollback to that savepoint
+    reverts the actor to the previous one without running more SQL (which could mask the
+    real error), even if a caller catches the exception and carries on. The price is that
+    writes made inside the block are rolled back too; a SYSTEM block is all-or-nothing.
+    """
+    previous_user, previous_role = current_actor()
+    with transaction.atomic():
+        set_actor(user_id=job, role=SYSTEM_ROLE)
+        yield
+        set_actor(user_id=previous_user or "", role=previous_role or "")

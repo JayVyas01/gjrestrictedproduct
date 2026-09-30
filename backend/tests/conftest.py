@@ -6,16 +6,26 @@ the schema owner, for example to simulate an attacker tampering with the audit t
 Never use `transactional_db`: its TRUNCATE-based teardown is blocked by the audit trigger.
 """
 
+from datetime import date
+from decimal import Decimal
+from itertools import count
+from types import SimpleNamespace
+
 import pytest
 from django.db import connection, transaction
 
 from audit.models import AuditEvent
-from core.db_context import SYSTEM_ROLE, current_actor, set_actor
+from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass, Unit
+from catalogue.service import add_rule_version
+from core.db_context import SYSTEM_ROLE, acting_as_system, current_actor, set_actor
 from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
+from licensing.service import record_licence
+from positions.models import Area, AreaLevel, Position
 
 TEST_PASSWORD = "correct-horse-battery-9"
+DEMO_GSTIN = "99AAAAA0000A1Z5"  # state code 99 does not exist: can never match a real business
 
 
 @pytest.fixture
@@ -54,3 +64,105 @@ def otp_outbox():
     OutboxOtpSender.outbox.clear()
     yield OutboxOtpSender.outbox
     OutboxOtpSender.outbox.clear()
+
+
+def _permissions(**overrides):
+    values = dict(
+        may_buy=True,
+        may_sell=True,
+        may_transport=False,
+        max_stock_qty=Decimal("1000"),
+        max_per_transaction_qty=Decimal("500"),
+        validity_months=12,
+    )
+    values.update(overrides)
+    return values
+
+
+@pytest.fixture
+def catalogue(db):
+    spirits = SubstanceClass.objects.create(code="SPIRITS", name="Spirits")
+    whisky = Substance.objects.create(
+        code="WHISKY", name="Whisky", substance_class=spirits, unit=Unit.LITRE
+    )
+    rum = Substance.objects.create(code="RUM", name="Rum", substance_class=spirits, unit=Unit.LITRE)
+    retail = LicenceType.objects.create(code="RETAIL", name="Retail")
+    wholesale = LicenceType.objects.create(code="WHOLESALE", name="Wholesale")
+    retail_rule = LicenceTypeRule.objects.create(licence_type=retail, substance_class=spirits)
+    add_rule_version(retail_rule, created_by="test", **_permissions())
+    wholesale_rule = LicenceTypeRule.objects.create(licence_type=wholesale, substance_class=spirits)
+    add_rule_version(
+        wholesale_rule,
+        created_by="test",
+        **_permissions(
+            may_transport=True,
+            max_stock_qty=Decimal("50000"),
+            max_per_transaction_qty=Decimal("10000"),
+        ),
+    )
+    return SimpleNamespace(
+        spirits=spirits,
+        whisky=whisky,
+        rum=rum,
+        retail=retail,
+        wholesale=wholesale,
+        retail_rule=retail_rule,
+        wholesale_rule=wholesale_rule,
+    )
+
+
+@pytest.fixture
+def org(db):
+    state = Area.objects.create(code="GJ", name="Gujarat", level=AreaLevel.STATE)
+    ahmedabad = Area.objects.create(
+        code="GJ-AHD", name="Ahmedabad", level=AreaLevel.DISTRICT, parent=state
+    )
+    sanand = Area.objects.create(
+        code="GJ-AHD-SND", name="Sanand", level=AreaLevel.TALUKA, parent=ahmedabad
+    )
+    area_officer = Position.objects.create(code="AO-SND", title="Area Officer, Sanand", area=sanand)
+    district_officer = Position.objects.create(
+        code="DO-AHD", title="District Officer, Ahmedabad", area=ahmedabad
+    )
+    return SimpleNamespace(
+        state=state,
+        ahmedabad=ahmedabad,
+        sanand=sanand,
+        area_officer=area_officer,
+        district_officer=district_officer,
+    )
+
+
+@pytest.fixture
+def make_licence(catalogue, org):
+    numbers = count(1)
+
+    def _make(
+        *,
+        gstin=DEMO_GSTIN,
+        licence_type=None,
+        substance=None,
+        substance_class=None,
+        starts_on=date(2026, 1, 1),
+        ends_on=date(2026, 12, 31),
+        contact="+919800000101",
+        holder_name="Sanand Test Traders",
+    ):
+        if substance is None and substance_class is None:
+            substance_class = catalogue.spirits
+        with acting_as_system("test"):
+            return record_licence(
+                number=f"GJ/TEST/{next(numbers):04d}",
+                gstin=gstin,
+                holder_name=holder_name,
+                contact=contact,
+                licence_type=licence_type or catalogue.retail,
+                area=org.sanand,
+                starts_on=starts_on,
+                ends_on=ends_on,
+                recorded_by="test",
+                substance=substance,
+                substance_class=substance_class,
+            )
+
+    return _make

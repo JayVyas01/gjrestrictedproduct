@@ -27,6 +27,7 @@ Licences are protected by Postgres row-level security: a licensee reads only lic
 - An enrolment OTP goes **only** to the contact on the licence record, never to a contact supplied in the request.
 - Quantities are `Decimal` values with 3 decimal places, in the substance's own unit (`L` or `KG`).
 - Every user-facing failure message is plain language that says what to do (spec section 7).
+- **Every task updates `docs/CODEMAP.md` in the same commit**: new files in the responsibility map, role changes in the roles table, and every new test in the test catalogue with one line on what it proves.
 - Phase 1 conventions (from its final review): **raise to roll back, return to commit** (DRF exception handler rolls back on raised exceptions); call `audit.service.record()` as the **last lock** a request takes; audit payloads hold only IDs, codes and blind indexes — **never personal data or raw user input**; `blind_index(context, value)` always takes a context (`"licence_number"`, `"gstin"`, ...).
 
 ## Review Focus
@@ -886,7 +887,7 @@ git commit -m "feat: area hierarchy, positions and personnel assignments with tr
 **Files:**
 - Modify: `backend/core/db_context.py` (add `acting_as_system`)
 - Modify: `backend/identity/models.py` (`User.licensee_gstin_index`, `UserManager.create_user`)
-- Create (generated): `backend/identity/migrations/0006_user_licensee_gstin_index.py`
+- Create (generated): `backend/identity/migrations/0007_user_licensee_gstin_index.py`
 - Create: `backend/licensing/__init__.py`, `apps.py`, `models.py`, `service.py`, `migrations/__init__.py`
 - Create (generated): `backend/licensing/migrations/0001_initial.py`
 - Create: `backend/licensing/migrations/0002_rls_and_append_only.py`
@@ -1353,7 +1354,7 @@ GRANT DELETE ON licensing_licence TO gj_app;
 class Migration(migrations.Migration):
     dependencies = [
         ("licensing", "0001_initial"),
-        ("identity", "0006_user_licensee_gstin_index"),
+        ("identity", "0007_user_licensee_gstin_index"),
         ("core", "0001_app_role_privileges"),
     ]
     operations = [migrations.RunSQL(sql=FORWARD, reverse_sql=BACKWARD)]

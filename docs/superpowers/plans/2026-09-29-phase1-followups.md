@@ -32,3 +32,44 @@ Open items from the Phase 1 reviews. None of them block D1. Pick them up in the 
 - `core/middleware.py` `__init__` and `__call__` have no type hints.
 - `blind_index` explains itself in a comment instead of a docstring, and doesn't check that the context is lowercase.
 - `record()` docstring: narrow the wording "does not open its own top-level transaction" to say it holds only inside the request.
+
+---
+
+# Demo D1 follow-ups (added 2026-09-30)
+
+Open items from the D1 reviews. None of them block D2.
+
+## Decisions to confirm
+
+| Decision | Current behaviour | Revisit when |
+|---|---|---|
+| A renewal recorded in advance applies immediately (Ruling D-R8) | The newest permission snapshot wins as soon as it is recorded | Confirm against spec D3 before real renewals |
+| Areas, positions and assignments have no row-level security (Ruling D-R6) | Any logged-in user can see who holds which position | If the authority treats officer identities as sensitive |
+| The catalogue is reference data with no row-level security (Ruling D-R12) | `gj_app` can write catalogue tables from any role context | Add role checks on write paths with the D3 Licensing Authority screens |
+| One position per area (Ruling D-R11) | A second position type in an area would need a "kind" field | If the authority needs more than one approving post per area |
+| One unit per substance class | Quantities in a class share the class's unit | If a class ever mixes L and kg |
+| `Substance`, `LicenceType` and `LicenceTypeRule` rows can still be changed | Changing a rule's scope changes its meaning for existing versions | After the demo |
+
+## Robustness
+
+| Item | When |
+|---|---|
+| Enrolment: add a per-licence cooldown on code resends (today only 10/min per IP; someone could flood the holder with SMS) | Phase 2 |
+| Enrolment `complete` shares the `otp` rate-limit bucket with login; failed completes aren't audited and have no reason codes | Phase 2 |
+| Two concurrent completes on one GSTIN: the loser gets a 500 instead of the uniform 401 | Phase 2 |
+| Duplicate licence number raises a raw IntegrityError; error texts don't say what to do next | D3 (Licensing Authority screen) |
+| REVOKED → ACTIVE transitions have no policy | Phase 2 |
+| `current_permissions` return type should be Optional; `licence_card` returns 500 if a snapshot is missing | Phase 2 |
+| `assign()` ignores `is_active`; `PersonnelAssignment` can be changed and has no `ended_at >= started_at` check | Phase 2 |
+
+## Test gaps
+
+- **One-time codes (subject path):** the XOR constraint's "neither set" case, and expiry and max attempts. The `locks[0]` lock-order assertion is weak.
+- **Delete and truncate:** these aren't asserted for rule versions, periods or snapshots. Add `match=` to the RLS-error assertions.
+- **Enrolment:**
+  - a revoked licence
+  - a licence suspended between start and complete
+  - the audit payload holds no raw values
+  - the first complete returns 201
+- **Licence card:** an expired or suspended card. The API test can't isolate the row-level-security layer, which is covered in `test_licensing.py` instead.
+- **Style:** some tests lack docstrings; tests import the private `_permissions` helper; `SubstanceListView` lives in `licensing` rather than `catalogue`.

@@ -1,6 +1,6 @@
 # Licence Types and the Demo Milestone — Design
 
-**Status:** Revision 2, 2026-09-28. The authorities' demo review may change it.
+**Status:** Revision 3, 2026-09-30. The authorities' demo review may change it.
 **Extends:** [`highlevel_plan.md`](../../../highlevel_plan.md) · **Roadmap:** [`2026-09-26-roadmap.md`](../plans/2026-09-26-roadmap.md)
 
 > **Revision 2 change:** the **licence application and renewal process is out of scope.** A
@@ -9,6 +9,13 @@
 > the application workflow, requirement checklists, review modes, renewal grace periods and the
 > document store. They can be re-added if the authority asks; the earlier design is in git history
 > (commit `af25b64`).
+>
+> **Revision 3 change (2026-09-30):** the approval chain is replaced. **One designated officer**,
+> the Area Officer position covering the seller's area, approves each transaction. A
+> **superintendent** (district-level position) then reviews and **signs off periodic batches** of
+> approved transactions every 15 days, 1 month or 2 months, and can flag individual transactions.
+> The buyer is looked up by **GSTIN**, and the system picks the licences involved. Stock moves on
+> approval. See section 5b.
 
 ## 1. Summary
 
@@ -36,7 +43,12 @@
 | D6 | Demo scope | The **transaction approval journey**. |
 | D7 | Language | **English only for the demo**. All text goes through i18n files so Gujarati can be added without code changes. |
 | D8 | Demo data | Licence types and permissions are **demo placeholders** that the admin will update later. |
-| D9 | Buyer rejection | Rejecting needs an OTP and a reason, and is final (`REJECTED_BY_BUYER`). An **in-app alert** goes to **every position in the transaction's approval chain**. |
+| D9 | Buyer rejection | Rejecting needs an OTP and a reason, and is final (`REJECTED_BY_BUYER`). An **in-app alert** goes to the **designated officer and the superintendent** (Revision 3). |
+| D10 | Approval | **One designated officer**: the Area Officer position covering the **seller's** area approves or rejects each transaction with an OTP and a reason code (mandatory on reject). |
+| D11 | Oversight | A **superintendent** (district-level position covering all areas in its district) **signs off periodic batches** of approved transactions. The review period is set per superintendent by the Licensing Authority: 15 days, 1 month or 2 months. The superintendent can **flag** individual transactions with a reason code and comment, which alerts the approving officer. Nothing is reversed. |
+| D12 | Buyer lookup | The seller enters the buyer's **GSTIN**, not a licence number (a business holds one licence per compound). The system chooses the buyer's and the seller's licences for the chosen substance. |
+| D13 | Stock (demo) | A stock balance per licensee per substance. On approval the seller's balance goes down and the buyer's goes up, recorded in an append-only stock movement log. |
+| D14 | Reason codes | One configurable table with three kinds (officer rejection, buyer rejection, superintendent flag), seeded with defaults; each kind includes "Other" with free text. Admin can add codes later. |
 
 **Deferred:** Head Authority edit permissions (to be defined after the demo), the oversight
 dashboard, on-screen admin configuration, CSV licence import, session listing and notifications.
@@ -45,8 +57,9 @@ dashboard, on-screen admin configuration, CSV licence import, session listing an
 
 | Role | Can see | Can do |
 |---|---|---|
-| **Licensee** (replaces Buyer/Seller) | Own profile, own licences with the permissions each grants, own stock, own transactions | Sell, as the seller: look up a buyer by exact licence number and start a transaction. Buy, as the buyer: confirm or reject with an OTP. Only as their licences allow. |
-| **Authorised Personnel** | Transactions sent to a position they currently hold, plus the parties' licence status needed to decide; buyer-rejection alerts for those positions | Accept or reject at their step, signed with an OTP, with a reason code (mandatory on reject); acknowledge alerts |
+| **Licensee** (replaces Buyer/Seller) | Own profile, own licences with the permissions each grants, own stock, own transactions (as seller or buyer) | Sell, as the seller: look up a buyer by GSTIN and start a transaction. Buy, as the buyer: confirm or reject with an OTP. Only as their licences allow. |
+| **Authorised Personnel — designated officer** (Area Officer position) | Transactions whose seller is in their area; alerts addressed to their position | Approve or reject, signed with an OTP, with a reason code (mandatory on reject); acknowledge alerts |
+| **Authorised Personnel — superintendent** (district position) | Batches, transactions and alerts for every area in their district | Flag transactions in a batch (reason code + comment); sign off the batch with an OTP; acknowledge alerts |
 | **Licensing Authority** | All licence records; the catalogue | Record licences and renewals (new validity periods); suspend or revoke; maintain licence types and rules (new versions); assign personnel to positions |
 | **Head Authority** | Everything, read-only (edit rights deferred) | Audit |
 | **Software Owner** | Everything, plus system configuration | Provision personnel accounts |
@@ -95,9 +108,9 @@ contact on file, then an account with the `LICENSEE` role.
   list of buyer reason codes: "I did not place this order", "Quantity does not match", "Wrong
   substance", "Terms dispute", or "Other" with free text. The transaction becomes
   **`REJECTED_BY_BUYER`**, which is final.
-- **Alert:** for each position in the approval chain stored when the transaction was started, the
-  system creates one append-only `authority_alert` row (kind `BUYER_REJECTION`) addressed to that
-  **position**. Whoever currently holds the position sees it, including after a transfer.
+- **Alert:** the system creates one append-only `authority_alert` row (kind `BUYER_REJECTION`) for
+  each of the transaction's **designated officer position and superintendent position**, addressed
+  to the **position**. Whoever currently holds the position sees it, including after a transfer.
 - **Alert content:** the transaction, both parties' licence numbers, the buyer's reason code and
   comment, the status timeline, and a **pattern signal**: how many buyer rejections the seller has
   had in the last 30 days (for example "3rd buyer rejection for this seller in the last 30 days").
@@ -111,6 +124,53 @@ contact on file, then an account with the `LICENSEE` role.
 - **Delivery:** in-app (bell with a count, and a "What's next" card). SMS and email come later with
   Phase 2 notifications.
 
+## 5b. Transactions, approval and periodic oversight (Revision 3)
+
+**Starting a transaction (seller)**
+- Enter the buyer's **GSTIN** (exact match via blind index; only the buyer's registered name is
+  shown), then the substance, quantity and mandatory **transporter details** (identity, licence or
+  registration number, vehicle, route).
+- The system **selects the licences**: for each party, the licence that covers the substance, is
+  `trading_permitted` today and allows the needed action (seller `may_sell`, buyer `may_buy`).
+  Preference: a licence scoped to that substance over one scoped to its class; ties go to the
+  earliest recorded. No eligible licence → a plain reason (for example "This buyer has no licence
+  that allows buying Whisky").
+- Every GSTIN lookup is audited (by blind index, never the GSTIN) and rate limited.
+
+**Checks** (plain functions, each with a plain-language reason; they run at creation and again at
+approval): both licences eligible as above; quantity within both licences' per-transaction limits
+(using `current_permissions(licence, substance)`); seller's stock covers the quantity; buyer's stock
+plus quantity stays within the buyer licence's `max_stock_qty`.
+
+**States:** `AWAITING_BUYER` → `REJECTED_BY_BUYER` (final) or `AWAITING_OFFICER` → `APPROVED` or
+`REJECTED_BY_OFFICER` (final). The seller may cancel while `AWAITING_BUYER` (`CANCELLED`, final).
+
+**Decisions:** the buyer's confirm/reject and the officer's approve/reject are each signed with a
+fresh OTP (purpose `DECISION`). Reject needs a reason code; "Other" needs free text. Each decision is
+an append-only row recording the position, the person holding it at that moment, the OTP time and
+the reason.
+
+**Designated officer:** the Area Officer position covering the seller licence's area, resolved and
+stored on the transaction when it is created (a later transfer does not move it; whoever holds the
+position acts).
+
+**Approval effects:** in one all-or-nothing step, re-run the checks, write the decision, move stock
+(seller −q, buyer +q, recorded in `stock_movement`), write audit events.
+
+**Periodic oversight:**
+- `SuperintendentSetting` per district position: review period of 15, 30 or 60 days.
+- `create_due_batches` (command; scheduled later) creates a batch per superintendent for each
+  completed period, listing every transaction approved in the district in that period.
+- The superintendent opens a batch, may **flag** any transaction in it (reason code + comment →
+  alert to the approving officer's position), then **signs off** the batch with an OTP. A batch
+  unsigned after its period ends is shown as **overdue**. Batches, items, flags and sign-offs are
+  append-only.
+
+**Visibility (RLS):** seller and buyer see their own transactions (the buyer sees the seller's
+registered name and the transporter details, not the seller's contact); the designated officer's
+position sees transactions routed to it; the superintendent's position sees its district;
+Head Authority reads all. Free-text comments by the buyer are visible to authorities only.
+
 ## 6. The Demo milestone
 
 **Scope.** Everything here is production quality: tested and secure, not throwaway.
@@ -118,26 +178,28 @@ contact on file, then an account with the `LICENSEE` role.
 **Transaction journey:**
 1. The seller signs in and sees their licences, each with a **permissions card** (what it allows,
    stock limit, per-transaction limit and validity), and their stock.
-2. The seller looks up the buyer by **exact licence number**. There is no browsing and no partial
-   match.
+2. The seller looks up the buyer by **GSTIN**. There is no browsing and no partial match; the
+   system picks both parties' licences for the chosen substance.
 3. The seller enters the substance and quantity and the mandatory **transporter details**
    (identity, licence or registration, vehicle, route).
 4. The system checks the licence permissions and **blocks anything not allowed, with a plain
    explanation**, for example "Quantity 600 L exceeds this licence's per-transaction limit of
    500 L".
 5. The buyer confirms with an OTP.
-6. The **Area Officer**, then the **District Officer** accept or reject with an OTP and reason
-   codes. The approval chain is resolved from the area and the substance severity.
+6. The **designated officer** (Area Officer for the seller's area) approves or rejects with an
+   OTP and a reason code. On approval, stock moves from seller to buyer.
+6a. **Oversight scene:** the **Superintendent** opens the period's batch, flags one transaction
+   ("quantity unusually high"), and signs off the batch with an OTP.
 7. The **status timeline** updates at each step. The approved record shows each position and who
    held it at the time.
 
 **Buyer-rejection scene:** the seller starts a second sale, and the buyer rejects it with "I did
-not place this order". The Area Officer's bell lights up, and the alert shows the reason and the
+not place this order". The Area Officer's and Superintendent's bells light up, and the alert shows the reason and the
 pattern signal. The officer acknowledges it.
 
 **What the journey needs underneath:** areas, positions and assignments; licence records with
 type, scope and frozen permissions; licence-gated enrolment; the demo catalogue and rules; a
-seeded read-only stock list per licensee; a demo approval policy matrix; configurable reason codes.
+seeded stock balances that move on approval; superintendent review periods; configurable reason codes.
 
 **Demo tooling**
 - **`make demo`:** starts Postgres, the backend and the web app with Docker Compose on a laptop,
@@ -152,7 +214,7 @@ seeded read-only stock list per licensee; a demo approval policy matrix; configu
   - licences, including one close to its limits and one suspended, so the checks can be shown
   - several dozen transactions in mixed states, including two earlier buyer rejections for the demo seller so the pattern signal appears
 - **Persona picker** (demo mode only) on the login screen: one click fills in the credentials for
-  Seller, Buyer, Area Officer, District Officer or Licensing Authority. The **real password and
+  Seller, Buyer, Area Officer, Superintendent or Licensing Authority. The **real password and
   OTP login still runs**.
 - **Demo SMS inbox:** a drawer showing OTPs sent to synthetic contacts. It exists only in demo mode
   and is backed by a `DemoInboxOtpSender`, which refuses to run outside demo mode.

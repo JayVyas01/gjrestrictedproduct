@@ -118,6 +118,15 @@ def test_holder_sees_only_own_stock(app_db, catalogue, make_licence, make_licens
         assert StockMovement.objects.count() == 1
 
 
+def test_licensing_authority_cannot_read_stock(app_db, catalogue, make_user):
+    opening(catalogue, SELLER, "50")
+    authority = make_user(role=Role.LICENSING_AUTHORITY, contact="+919800000501")
+    with transaction.atomic():
+        set_actor(user_id=authority.user_id, role=Role.LICENSING_AUTHORITY)
+        assert StockBalance.objects.count() == 0
+        assert StockMovement.objects.count() == 0
+
+
 def test_only_system_can_write_stock(app_db, catalogue):
     with pytest.raises(DatabaseError):
         with transaction.atomic():

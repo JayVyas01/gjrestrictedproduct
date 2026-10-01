@@ -213,3 +213,19 @@ def test_post_requires_csrf_token(app_db, trade, otp_outbox):
         "/api/transactions", NEW_TX, content_type="application/json", HTTP_X_CSRFTOKEN=token
     )
     assert created.status_code == 201
+
+
+def test_timeline_shows_holder_to_authority_only(app_db, client, trade, otp_outbox):
+    login(client, trade.seller, otp_outbox)
+    ref = post(client, "/api/transactions", NEW_TX).json()["reference"]
+    assert client.get(f"/api/transactions/{ref}").json()["can_decide"] is False
+    login(client, trade.buyer, otp_outbox)
+    assert client.get(f"/api/transactions/{ref}").json()["can_decide"] is True
+    sign(client, ref, otp_outbox, "CONFIRM")
+    login(client, trade.officer, otp_outbox)
+    approved = sign(client, ref, otp_outbox, "APPROVE").json()
+    assert approved["timeline"][-1]["held_by"] == trade.officer.user_id
+    assert approved["timeline"][0]["held_by"] is None
+    login(client, trade.seller, otp_outbox)
+    seller_view = client.get(f"/api/transactions/{ref}").json()
+    assert [e["held_by"] for e in seller_view["timeline"]] == [None, None, None]

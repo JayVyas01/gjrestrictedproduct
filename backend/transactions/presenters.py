@@ -1,13 +1,16 @@
 """What each viewer sees of a transaction. Party names are read as SYSTEM (the other party's
 licence is hidden from the viewer by RLS) and only the registered name is shown. The buyer's
-and officer's free-text comments are shown to authority viewers only."""
+and officer's free-text comments, and who held the officer position when it decided
+(`held_by`), are shown to officer, superintendent and authority viewers only. `can_decide`
+says whether the viewer is the one whose decision is awaited."""
 
 from core.db_context import acting_as_system
 from identity.models import User
 from identity.roles import Role
 from positions.service import positions_held
 from transactions.checks import fmt_qty
-from transactions.models import Transaction, TransactionStatus
+from transactions.models import DecisionStep, Transaction, TransactionStatus
+from transactions.service import decision_role
 
 _AUTHORITY_ROLES = {Role.HEAD_AUTHORITY, Role.SOFTWARE_OWNER}
 _NEXT_ACTION = {
@@ -59,7 +62,7 @@ def _next_action(tx: Transaction, role: str) -> str | None:
     return _NEXT_ACTION.get(tx.status)
 
 
-def _timeline(tx: Transaction, show_comments: bool) -> list[dict]:
+def _timeline(tx: Transaction, for_authority: bool) -> list[dict]:
     events = [
         {
             "step": "SELLER",
@@ -68,6 +71,7 @@ def _timeline(tx: Transaction, show_comments: bool) -> list[dict]:
             "by": "Seller",
             "reason": None,
             "comment": None,
+            "held_by": None,
         }
     ]
     for d in tx.decisions.select_related("reason", "position").order_by("id"):
@@ -78,7 +82,10 @@ def _timeline(tx: Transaction, show_comments: bool) -> list[dict]:
                 "at": d.created_at.isoformat(),
                 "by": d.position.title if d.position else d.get_step_display(),
                 "reason": d.reason.label if d.reason else None,
-                "comment": (d.comment or None) if show_comments else None,
+                "comment": (d.comment or None) if for_authority else None,
+                "held_by": (
+                    d.actor_user_id if for_authority and d.step == DecisionStep.OFFICER else None
+                ),
             }
         )
     return events
@@ -87,7 +94,7 @@ def _timeline(tx: Transaction, show_comments: bool) -> list[dict]:
 def transaction_detail(tx: Transaction, viewer: User) -> dict:
     summary = transaction_summary(tx, viewer)
     role = summary["your_role"]
-    show_comments = (
+    for_authority = (
         role in {"officer", "superintendent", "authority"} or viewer.role in _AUTHORITY_ROLES
     )
     return {
@@ -99,6 +106,7 @@ def transaction_detail(tx: Transaction, viewer: User) -> dict:
             "route": tx.route,
         },
         "designated_officer": tx.designated_position.title,
-        "timeline": _timeline(tx, show_comments),
+        "timeline": _timeline(tx, for_authority),
         "next_action": _next_action(tx, role),
+        "can_decide": decision_role(tx, viewer) is not None,
     }

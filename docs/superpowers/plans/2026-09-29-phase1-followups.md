@@ -73,3 +73,37 @@ Open items from the D1 reviews. None of them block D2.
   - the first complete returns 201
 - **Licence card:** an expired or suspended card. The API test can't isolate the row-level-security layer, which is covered in `test_licensing.py` instead.
 - **Style:** some tests lack docstrings; tests import the private `_permissions` helper; `SubstanceListView` lives in `licensing` rather than `catalogue`.
+
+---
+
+# Demo D2a follow-ups (added 2026-10-01)
+
+## ⚠️ Time-sensitive
+
+- **The test suite will fail from 2027-01-01.** The `make_licence` fixture defaults to a validity of 2026-01-01 to 2026-12-31, and many tests use the real `timezone.localdate()`. Make the default validity relative to today, for example from today minus 30 days to today plus 335 days. Fix this in D2b.
+
+## Hardening (Phase 2 or later)
+
+| Item | Note |
+|---|---|
+| A decision code's owner is checked only after the code is verified | The challenge id is a random UUID and is only ever returned to its owner. Pass the expected user into `otp.verify` so another user's id can't burn attempts. |
+| The decision SMS should name the transaction reference | The code stays bound to the user, but the signer should see what they are signing. |
+| No test that `StockLimitExceeded` is mapped to a refusal inside `_approve` | The `InsufficientStock` branch is tested end to end. |
+| `transfer()` has no guard against a quantity of zero or less, or against transferring to the same business | The only caller passes `Transaction.quantity`, which database CHECKs already guard. |
+| `set_opening_balance` checks then inserts, so a race gives an IntegrityError | Seeding is single-threaded. |
+| No database indexes on `seller_gstin_index` and `buyer_gstin_index` | Add them with D2b's 30-day pattern count. |
+| A licence recorded on a district or state area gets the misleading "no officer" message | Require a taluka-level area for licences on the D3 Licensing Authority screen. |
+| The transaction list runs about 6 queries per row | Batch `positions_held` and party names in D3. |
+
+## Test gaps
+
+- **Stock:** row-level-security tests for Head Authority and Software Owner reads, personnel and other licensees being denied, a non-SYSTEM update, and the `gstin_index` column grant.
+- **Transactions:**
+  - decisions read through row-level security
+  - SYSTEM updating the status
+  - a transfer removing an officer's visibility
+  - the superintendent's view and list ordering over HTTP
+  - an expired code
+  - the reject audit actions
+- **Service:** a seller without a selling licence, an outsider getting `NotAllowed`, and a refused start writing no audit event.
+- **Naming:** `test_stock_and_buyer_capacity_messages` only checks the seller's stock.

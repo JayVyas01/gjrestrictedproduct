@@ -118,7 +118,7 @@ Reference data with no row-level security (ruling D-R12, same as the catalogue):
 
 ### stock: balances and movements
 
-Per business (GSTIN blind index) per substance. Only SYSTEM writes; holders read their own; authorities read all.
+Per business (GSTIN blind index) per substance. Only SYSTEM writes; holders read their own; Head Authority, Software Owner and SYSTEM read all.
 
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|

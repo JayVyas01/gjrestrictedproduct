@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-01, D2a Task 3 transaction records, licence selection and checks (208 tests).
+**Last updated:** 2026-10-01, D2a Task 4 starting, looking up and cancelling transactions (218 tests).
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Role | What they can do today | Where it is enforced | Proving tests |
 |---|---|---|---|
-| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Created only by licence-gated enrolment (a business with an active licence on record proves control with a code sent to the contact on file). Logs in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Can view the permissions card of each of their own licences (`GET /api/licences/mine`). Sees own stock (`GET /api/stock/mine`). Sees transactions where their business is seller or buyer, matched by GSTIN. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`, `licensing/enrolment.py`, `licensing/views.py` (`MyLicencesView`); `stock/views.py` (`MyStockView`); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `stock/migrations/0002_rls_and_append_only.py` (own-stock read policy); `transactions/migrations/0002_rls_and_append_only.py` (party read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_enrolment.py`, `test_licence_api.py`, `test_licensing.py::test_holder_sees_only_their_own_licences`, `test_stock.py::test_holder_sees_only_own_stock`, `test_stock.py::test_my_stock_api`, `test_transaction_rules.py::test_transaction_visibility` |
+| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Created only by licence-gated enrolment (a business with an active licence on record proves control with a code sent to the contact on file). Logs in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Can view the permissions card of each of their own licences (`GET /api/licences/mine`). Sees own stock (`GET /api/stock/mine`). Sees transactions where their business is seller or buyer, matched by GSTIN. May look up a buyer by GSTIN (sees only the registered name), start a transaction and cancel it while it waits for the buyer. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`, `licensing/enrolment.py`, `licensing/views.py` (`MyLicencesView`); `stock/views.py` (`MyStockView`); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `stock/migrations/0002_rls_and_append_only.py` (own-stock read policy); `transactions/service.py` (`find_buyer`, `start_transaction`, `cancel_transaction`); `transactions/migrations/0002_rls_and_append_only.py` (party read policy) | `test_transaction_service.py`, `test_login_api.py`, `test_users.py::test_has_role`, `test_enrolment.py`, `test_licence_api.py`, `test_licensing.py::test_holder_sees_only_their_own_licences`, `test_stock.py::test_holder_sees_only_own_stock`, `test_stock.py::test_my_stock_api`, `test_transaction_rules.py::test_transaction_visibility` |
 | **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D2. Reads transactions where they currently hold the designated or superintendent position. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned); `transactions/migrations/0002_rls_and_append_only.py` (position-holder read policy) | `test_permissions.py`, `test_positions.py`, `test_transaction_rules.py::test_transaction_visibility` |
 | **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D3). Records licences issued by the existing process, records renewals, suspends or revokes (row-level security lets only this role and SYSTEM write licences). Reads all stock. | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/`; `licensing/service.py`, `licensing/migrations/0002_rls_and_append_only.py` | `test_permissions.py`, `test_catalogue.py`, `test_licensing.py` |
 | **Software Owner** | Log in; read the whole audit log; read all licences with their periods and snapshots; read all stock; create or reset personnel accounts (the API comes in Phase 4); reads all transactions. | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `create_software_owner` command (first account only); `transactions/migrations/0002_rls_and_append_only.py` (authority read policy) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py`, `test_transaction_rules.py::test_transaction_visibility` |
@@ -128,15 +128,16 @@ Per business (GSTIN blind index) per substance. Only SYSTEM writes; holders read
 | `stock/migrations/0002_rls_and_append_only.py` | Row-level security (own-business read, SYSTEM-only write), balance updates limited to quantity, movements append-only | — | `test_stock.py` |
 | `tests/conftest.py` fixtures | `make_licensee(licence)` creates a Licensee linked to the licence's GSTIN | `make_licensee` | — |
 
-### transactions: records, licence selection, checks
+### transactions: records, licence selection, checks, start and cancel
 
-A seller-initiated sale of a substance to another business. Only SYSTEM writes (services, added in the next task, check who may act first); parties, position holders and authorities read.
+A seller-initiated sale of a substance to another business. Only SYSTEM writes (services check who may act first); parties, position holders and authorities read.
 
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `transactions/models.py` | The transaction (encrypted transporter details, designated and superintendent positions fixed at creation, status) and its append-only decisions | `Transaction`, `TransactionDecision`, `TransactionStatus`, `DecisionStep`, `DecisionOutcome`, `generate_reference` | `test_transaction_rules.py` |
 | `transactions/selection.py` | Choosing the licence a business uses for a substance and action: valid on the day, permissions allow the action, substance-specific licence preferred, then earliest | `select_licence` | `test_transaction_rules.py` |
 | `transactions/checks.py` | Plain-language problems: missing licence, per-transaction limits, seller stock, buyer stock limit | `fmt_qty`, `eligibility_problems`, `transaction_problems` | `test_transaction_rules.py` |
+| `transactions/service.py` | The journey's first steps: buyer lookup by GSTIN (registered name only, audited by blind index), start (checks, licence selection, routing to the seller area's taluka and district positions, encrypted transporter details), seller cancel while awaiting the buyer, read under the caller's own RLS. Writes run in `acting_as_system` after a plain-Python who-may-act check. Lock order: user row, OTP challenge rows, transaction row, stock balance rows (sorted), audit last | `find_buyer`, `start_transaction`, `cancel_transaction`, `load_visible`, `Transport`, `TransactionRefused`, `NotAllowed` | `test_transaction_service.py` |
 | `transactions/migrations/0002_rls_and_append_only.py` | Row-level security (party, position-holder and authority read; SYSTEM-only write), only status and decided_at updatable, decisions append-only | — | `test_transaction_rules.py` |
 
 ### audit: tamper-evident audit log
@@ -429,6 +430,23 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_transaction_visibility` | Parties, position holders and authorities see a transaction; outsiders do not |
 | `test_only_system_writes_and_only_status_changes` | Non-SYSTEM cannot update; only status and decided_at are updatable |
 | `test_decisions_are_append_only_even_for_owner` | Decisions cannot be updated, even by the schema owner |
+
+---
+
+### `test_transaction_service.py`: start, look up and cancel
+
+| Test | Proves |
+|---|---|
+| `test_find_buyer_returns_registered_name_only` | Lookup tolerates case and spaces, returns only the name, gives None for unknown or malformed GSTINs, and audits every lookup |
+| `test_buyer_lookup_audit_holds_no_gstin` | The lookup audit payload never contains the GSTIN |
+| `test_start_creates_transaction_routed_to_seller_area_officer` | A new transaction awaits the buyer, uses the seller area's taluka and district positions, the selected licences, and is audited |
+| `test_transporter_identifiers_are_encrypted` | Transporter id and vehicle number are stored encrypted |
+| `test_over_limit_is_refused_with_plain_reasons` | Over-limit quantity is refused with the plain reason and nothing is saved |
+| `test_unknown_buyer_is_refused` | A buyer without a valid buying licence is refused in plain words |
+| `test_cannot_sell_to_own_business` | Selling to your own GSTIN is refused |
+| `test_area_without_officer_position_is_refused` | No taluka officer position for the seller's area is refused |
+| `test_seller_can_cancel_only_while_awaiting_buyer` | Seller cancels while awaiting buyer (audited); a second cancel is not allowed |
+| `test_buyer_cannot_cancel` | Only the seller can cancel |
 
 ---
 

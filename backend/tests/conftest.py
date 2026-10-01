@@ -166,3 +166,18 @@ def make_licence(catalogue, org):
             )
 
     return _make
+
+
+@pytest.fixture
+def make_licensee(db):
+    """A LICENSEE account linked to the licence's business (as enrolment would create it)."""
+
+    def _make(licence, contact="+919800000900") -> User:
+        return User.objects.create_user(
+            role=Role.LICENSEE,
+            password=TEST_PASSWORD,
+            contact=contact,
+            licensee_gstin_index=licence.gstin_index,
+        )
+
+    return _make

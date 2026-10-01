@@ -14,11 +14,15 @@ from audit.service import record
 from catalogue.models import Substance
 from core import crypto
 from core.db_context import acting_as_system
-from identity.models import User
+from identity import otp
+from identity.models import OtpChallenge, OtpPurpose, User
 from licensing.models import Licence, LicenceStatus
 from licensing.service import GSTIN_PATTERN
 from positions.models import AreaLevel
-from positions.service import covering_position
+from positions.service import covering_position, positions_held
+from reasons.models import ReasonKind
+from reasons.service import resolve_reason
+from stock.service import InsufficientStock, transfer
 from transactions.checks import eligibility_problems, transaction_problems
 from transactions.models import (
     DecisionOutcome,
@@ -156,3 +160,128 @@ def cancel_transaction(*, reference: str, seller: User) -> Transaction:
             subject_id=locked.reference,
         )
     return locked
+
+
+WRONG_TURN = "This transaction is not waiting for your decision."
+_ALLOWED = {
+    "buyer": {DecisionOutcome.CONFIRM, DecisionOutcome.REJECT},
+    "officer": {DecisionOutcome.APPROVE, DecisionOutcome.REJECT},
+}
+_REASON_KIND = {"buyer": ReasonKind.BUYER_REJECTION, "officer": ReasonKind.OFFICER_REJECTION}
+
+
+def decision_role(tx: Transaction, user: User) -> str | None:
+    if (
+        tx.status == TransactionStatus.AWAITING_BUYER
+        and user.licensee_gstin_index == tx.buyer_gstin_index
+    ):
+        return "buyer"
+    if tx.status == TransactionStatus.AWAITING_OFFICER and tx.designated_position in positions_held(
+        user
+    ):
+        return "officer"
+    return None
+
+
+def _for_decision(reference: str, user: User) -> tuple[Transaction, str]:
+    tx = load_visible(reference)
+    role = decision_role(tx, user) if tx else None
+    if role is None:
+        raise NotAllowed(WRONG_TURN)
+    return tx, role
+
+
+def request_decision_code(*, reference: str, user: User) -> OtpChallenge:
+    # The code is bound to its USER, not to one transaction: it can only be spent on a
+    # transaction that is currently waiting for that user (checked again in decide()).
+    _for_decision(reference, user)
+    return otp.issue(user, OtpPurpose.DECISION)
+
+
+def decide(
+    *,
+    reference: str,
+    user: User,
+    challenge_id: str,
+    code: str,
+    outcome: str,
+    reason_code: str = "",
+    comment: str = "",
+) -> Transaction | None:
+    tx, role = _for_decision(reference, user)
+    if outcome not in _ALLOWED[role]:
+        raise NotAllowed("That decision is not available at this step.")
+    reason = (
+        resolve_reason(_REASON_KIND[role], reason_code, comment)
+        if outcome == DecisionOutcome.REJECT
+        else None
+    )
+    signer = otp.verify(challenge_id=challenge_id, purpose=OtpPurpose.DECISION, code=code)
+    if signer is None:
+        return None  # wrong or expired code: the attempt counts, nothing else changes
+    if signer.pk != user.pk:
+        raise NotAllowed("This code belongs to someone else.")
+    with acting_as_system("decide_transaction"):
+        return _apply(tx, user, role, outcome, reason, comment)
+
+
+def _apply(
+    tx: Transaction, user: User, role: str, outcome: str, reason, comment: str
+) -> Transaction:
+    locked = Transaction.objects.select_for_update().get(pk=tx.pk)
+    if decision_role(locked, user) != role:
+        raise NotAllowed(WRONG_TURN)
+    now = timezone.now()
+    if role == "officer" and outcome == DecisionOutcome.APPROVE:
+        _approve(locked)
+    locked.status = _NEXT[(role, outcome)]
+    if locked.status != TransactionStatus.AWAITING_OFFICER:
+        locked.decided_at = now
+    locked.save(update_fields=["status", "decided_at"])
+    TransactionDecision.objects.create(
+        transaction=locked,
+        step=DecisionStep.BUYER if role == "buyer" else DecisionStep.OFFICER,
+        outcome=outcome,
+        actor_user_id=user.user_id,
+        position=locked.designated_position if role == "officer" else None,
+        reason=reason,
+        comment=comment.strip(),
+        otp_verified_at=now,
+    )
+    record(
+        action=_AUDIT[(role, outcome)],
+        actor=user.user_id,
+        subject_type="transaction",
+        subject_id=locked.reference,
+    )
+    return locked
+
+
+def _approve(tx: Transaction) -> None:
+    problems = _refusals(tx.seller_licence, tx.buyer_licence, tx.substance, tx.quantity)
+    if problems:
+        raise TransactionRefused(problems)
+    try:
+        transfer(
+            from_gstin_index=tx.seller_gstin_index,
+            to_gstin_index=tx.buyer_gstin_index,
+            substance=tx.substance,
+            quantity=tx.quantity,
+            transaction_reference=tx.reference,
+        )
+    except InsufficientStock as exc:
+        raise TransactionRefused([str(exc) + "."]) from exc
+
+
+_NEXT = {
+    ("buyer", DecisionOutcome.CONFIRM): TransactionStatus.AWAITING_OFFICER,
+    ("buyer", DecisionOutcome.REJECT): TransactionStatus.REJECTED_BY_BUYER,
+    ("officer", DecisionOutcome.APPROVE): TransactionStatus.APPROVED,
+    ("officer", DecisionOutcome.REJECT): TransactionStatus.REJECTED_BY_OFFICER,
+}
+_AUDIT = {
+    ("buyer", DecisionOutcome.CONFIRM): "transaction.buyer_confirmed",
+    ("buyer", DecisionOutcome.REJECT): "transaction.buyer_rejected",
+    ("officer", DecisionOutcome.APPROVE): "transaction.approved",
+    ("officer", DecisionOutcome.REJECT): "transaction.officer_rejected",
+}

@@ -18,7 +18,7 @@ from identity import otp
 from identity.models import OtpChallenge, OtpPurpose, User
 from licensing.models import Licence, LicenceStatus
 from licensing.service import GSTIN_PATTERN, current_permissions
-from positions.models import AreaLevel
+from positions.models import AreaLevel, Position
 from positions.service import covering_position, positions_held
 from reasons.models import ReasonKind
 from reasons.service import resolve_reason
@@ -34,6 +34,10 @@ from transactions.models import (
 from transactions.selection import licence_eligible, select_licence
 
 NO_OFFICER = "No officer is responsible for your area yet. Please contact the Licensing Authority."
+NO_SUPERINTENDENT = (
+    "No superintendent is responsible for your district yet. "
+    "Please contact the Licensing Authority."
+)
 
 
 class TransactionRefused(Exception):
@@ -86,6 +90,17 @@ def _refusals(seller_licence, buyer_licence, substance, quantity) -> list[str]:
     )
 
 
+def _route(seller_licence: Licence) -> tuple[Position, Position]:
+    """The seller's taluka officer and district superintendent positions; both must exist."""
+    designated = covering_position(seller_licence.area, AreaLevel.TALUKA)
+    if designated is None:
+        raise TransactionRefused([NO_OFFICER])
+    superintendent = covering_position(seller_licence.area, AreaLevel.DISTRICT)
+    if superintendent is None:
+        raise TransactionRefused([NO_SUPERINTENDENT])
+    return designated, superintendent
+
+
 def start_transaction(
     *, seller: User, buyer_gstin: str, substance: Substance, quantity: Decimal, transport: Transport
 ) -> Transaction:
@@ -99,9 +114,7 @@ def start_transaction(
         problems = _refusals(seller_licence, buyer_licence, substance, quantity)
         if problems:
             raise TransactionRefused(problems)
-        designated = covering_position(seller_licence.area, AreaLevel.TALUKA)
-        if designated is None:
-            raise TransactionRefused([NO_OFFICER])
+        designated, superintendent = _route(seller_licence)
         tx = Transaction.objects.create(
             seller_licence=seller_licence,
             buyer_licence=buyer_licence,
@@ -115,7 +128,7 @@ def start_transaction(
             vehicle_number_encrypted=crypto.encrypt(transport.vehicle_number),
             route=transport.route,
             designated_position=designated,
-            superintendent_position=covering_position(seller_licence.area, AreaLevel.DISTRICT),
+            superintendent_position=superintendent,
             created_by=seller.user_id,
         )
         record(

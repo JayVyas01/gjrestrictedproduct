@@ -115,6 +115,21 @@ def test_area_without_officer_position_is_refused(app_db, catalogue, org, trade)
     ]
 
 
+def test_district_without_superintendent_is_refused(app_db, catalogue, org, trade):
+    from positions.models import Position
+
+    with acting_as_system("test"):
+        Position.objects.filter(pk=org.district_officer.pk).update(
+            area=org.state
+        )  # detach Ahmedabad's post
+    with pytest.raises(TransactionRefused) as refused:
+        start(trade, catalogue)
+    assert refused.value.reasons == [
+        "No superintendent is responsible for your district yet. "
+        "Please contact the Licensing Authority."
+    ]
+
+
 def test_seller_can_cancel_only_while_awaiting_buyer(app_db, catalogue, trade, audit_actions):
     tx = start(trade, catalogue)
     cancelled = cancel_transaction(reference=tx.reference, seller=trade.seller)

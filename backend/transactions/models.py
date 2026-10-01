@@ -60,7 +60,7 @@ class Transaction(models.Model):
     route = models.CharField(max_length=300)
     designated_position = models.ForeignKey(Position, on_delete=models.PROTECT, related_name="+")
     superintendent_position = models.ForeignKey(
-        Position, on_delete=models.PROTECT, null=True, related_name="+"
+        Position, on_delete=models.PROTECT, related_name="+"
     )
     status = models.CharField(
         max_length=24, choices=TransactionStatus.choices, default=TransactionStatus.AWAITING_BUYER

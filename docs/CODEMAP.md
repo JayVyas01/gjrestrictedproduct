@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-01, D2a Task 6, transaction API with per-viewer detail and timeline (236 tests).
+**Last updated:** 2026-10-01, D2a Task 6, transaction API with per-viewer detail and timeline (241 tests).
 
 ---
 
@@ -35,7 +35,7 @@ Paths are relative to `backend/`.
 |---|---|---|---|
 | `config/env.py` | Reading environment variables; stops at startup if a required one is missing | `required`, `optional`, `flag`, `listed`, `MissingSetting` | `test_env.py` |
 | `config/settings.py` | All settings: database, security headers, sessions (15-minute idle timeout), rate limits (`login`, `otp`, `enrolment` 10/min, `lookup` 30/min, `NUM_PROXIES: 0`), encryption keys, OTP sender, exception handler | `REST_FRAMEWORK`, `CACHES`, `MIDDLEWARE` | Covered indirectly by all API tests; `check --deploy` in CI |
-| `config/urls.py` | URL routing: `/api/health`, `/api/auth/*`, and the licensing routes under `/api/` (`enrolment/start`, `enrolment/complete`, `licences/mine`, `catalogue/substances`), the stock route, and the transaction routes (`transactions`, `transactions/buyer-lookup`, `transactions/<ref>`, `.../decision-code`, `.../decide`, `.../cancel`) | — | `test_health.py`, `test_login_api.py`, `test_enrolment.py`, `test_licence_api.py` |
+| `config/urls.py` | URL routing: `/api/health`, `/api/auth/*`, and the licensing routes under `/api/` (`enrolment/start`, `enrolment/complete`, `licences/mine`, `catalogue/substances`), the stock route, and the transaction routes (`transactions`, `transactions/buyer-lookup`, `transactions/<ref>`, `.../decision-code`, `.../decide`, `.../cancel`) | — | `test_health.py`, `test_login_api.py`, `test_enrolment.py`, `test_licence_api.py`, `test_stock.py::test_my_stock_api`, `test_transaction_api.py` |
 | `.env.test` | Test-only settings (never real secrets) | — | — |
 
 ### core: shared building blocks
@@ -465,6 +465,24 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_transferred_officer_cannot_decide` | After a transfer only the new position holder can decide |
 | `test_approval_rechecks_stock` | Approval re-runs the checks; a refusal rolls back and leaves the transaction waiting |
 | `test_decision_code_is_bound_to_the_user` | Another user's valid code cannot be spent |
+
+### `test_transaction_api.py`: transaction API
+
+| Test | Proves |
+|---|---|
+| `test_full_journey_over_http` | Lookup, create, buyer confirm and officer approve over HTTP; the timeline and next action are right and stock moves |
+| `test_refused_transaction_returns_reasons` | A refused start returns 422 with the plain-language reasons |
+| `test_invalid_input_is_400` | Empty vehicle number, negative quantity and unknown substance return 400 |
+| `test_unknown_buyer_lookup_is_404` | An unknown GSTIN returns 404 with the check-15-characters message |
+| `test_wrong_code_is_401` | A wrong code returns 401 with the request-a-new-code message |
+| `test_outsider_cannot_see_transaction` | An unrelated business gets 404 on detail and an empty list |
+| `test_buyer_comment_is_hidden_from_seller` | The seller sees the reason label but not the buyer's comment; the officer sees it |
+| `test_seller_sees_buyer_name_but_not_licence_number` | The seller sees the buyer's registered name; no licence number appears |
+| `test_confirm_with_blank_reason_code_is_accepted` | A confirm that sends an empty reason code is accepted |
+| `test_seller_can_cancel_and_buyer_cannot` | The seller cancels (200, CANCELLED); the buyer gets 403 |
+| `test_non_licensee_cannot_start_or_look_up` | Personnel get 403 on create and buyer lookup |
+| `test_decide_maps_errors` | A wrong-kind reason returns 400; an approval refused for stock returns 422 with the reason |
+| `test_post_requires_csrf_token` | Creating a transaction without the CSRF header returns 403; with it, 201 |
 
 ---
 

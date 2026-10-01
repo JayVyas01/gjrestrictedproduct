@@ -31,5 +31,5 @@ class DecideSerializer(serializers.Serializer):
     challenge_id = serializers.UUIDField()
     code = serializers.RegexField(r"^\d{6}$")
     outcome = serializers.ChoiceField(choices=["CONFIRM", "APPROVE", "REJECT"])
-    reason_code = serializers.CharField(max_length=40, required=False, default="")
+    reason_code = serializers.CharField(max_length=40, required=False, default="", allow_blank=True)
     comment = serializers.CharField(max_length=500, required=False, default="", allow_blank=True)

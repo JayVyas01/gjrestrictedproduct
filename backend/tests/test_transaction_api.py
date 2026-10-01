@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+from django.test import Client
 
 from core.db_context import acting_as_system
 from stock.service import balance_of
@@ -142,3 +143,73 @@ def test_seller_sees_buyer_name_but_not_licence_number(app_db, client, trade, ot
     detail = post(client, "/api/transactions", NEW_TX).json()
     assert detail["buyer_name"] == "Bopal Bar & Kitchen"
     assert "GJ/TEST" not in str(detail)  # licence numbers are never shown
+
+
+def test_confirm_with_blank_reason_code_is_accepted(app_db, client, trade, otp_outbox):
+    login(client, trade.seller, otp_outbox)
+    ref = post(client, "/api/transactions", NEW_TX).json()["reference"]
+    login(client, trade.buyer, otp_outbox)
+    response = sign(client, ref, otp_outbox, "CONFIRM", reason_code="")
+    assert response.status_code == 200
+    assert response.json()["status"] == "AWAITING_OFFICER"
+
+
+def test_seller_can_cancel_and_buyer_cannot(app_db, client, trade, otp_outbox):
+    login(client, trade.seller, otp_outbox)
+    first = post(client, "/api/transactions", NEW_TX).json()["reference"]
+    second = post(client, "/api/transactions", NEW_TX).json()["reference"]
+    cancelled = post(client, f"/api/transactions/{first}/cancel")
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "CANCELLED"
+    login(client, trade.buyer, otp_outbox)
+    assert post(client, f"/api/transactions/{second}/cancel").status_code == 403
+
+
+def test_non_licensee_cannot_start_or_look_up(app_db, client, trade, otp_outbox):
+    login(client, trade.officer, otp_outbox)
+    assert post(client, "/api/transactions", NEW_TX).status_code == 403
+    lookup = post(client, "/api/transactions/buyer-lookup", {"gstin": BUYER_GSTIN})
+    assert lookup.status_code == 403
+
+
+def test_decide_maps_errors(app_db, client, trade, otp_outbox):
+    login(client, trade.seller, otp_outbox)
+    big = {**NEW_TX, "quantity": "300"}
+    first = post(client, "/api/transactions", big).json()["reference"]
+    second = post(client, "/api/transactions", big).json()["reference"]
+    third = post(client, "/api/transactions", big).json()["reference"]
+
+    login(client, trade.buyer, otp_outbox)
+    wrong_kind = sign(client, third, otp_outbox, "REJECT", reason_code="TRANSPORTER_INVALID")
+    assert wrong_kind.status_code == 400
+    assert sign(client, first, otp_outbox, "CONFIRM").status_code == 200
+    assert sign(client, second, otp_outbox, "CONFIRM").status_code == 200
+
+    login(client, trade.officer, otp_outbox)
+    assert sign(client, first, otp_outbox, "APPROVE").status_code == 200
+    refused = sign(client, second, otp_outbox, "APPROVE")
+    assert refused.status_code == 422
+    assert any("in stock" in r for r in refused.json()["reasons"])
+
+
+def test_post_requires_csrf_token(app_db, trade, otp_outbox):
+    c = Client(enforce_csrf_checks=True)
+    token = c.get("/api/auth/csrf").cookies["csrftoken"].value
+    headers = {"HTTP_X_CSRFTOKEN": token}
+    first = c.post(
+        "/api/auth/login",
+        {"user_id": trade.seller.user_id, "password": TEST_PASSWORD},
+        content_type="application/json",
+        **headers,
+    )
+    c.post(
+        "/api/auth/login/verify",
+        {"challenge_id": first.json()["challenge_id"], "code": otp_outbox[-1][1]},
+        content_type="application/json",
+        **headers,
+    )
+    token = c.cookies["csrftoken"].value
+    assert post(c, "/api/transactions", NEW_TX).status_code == 403
+    created = c.post(
+        "/api/transactions", NEW_TX, content_type="application/json", HTTP_X_CSRFTOKEN=token
+    )
+    assert created.status_code == 201

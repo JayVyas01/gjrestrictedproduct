@@ -8,4 +8,5 @@ urlpatterns = [
     path("api/", include("licensing.urls")),
     path("api/", include("reasons.urls")),
     path("api/", include("stock.urls")),
+    path("api/", include("transactions.urls")),
 ]

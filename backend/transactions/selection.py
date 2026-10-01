@@ -19,16 +19,21 @@ def _allows(licence: Licence, substance: Substance, action: str) -> bool:
     return permissions.may_sell if action == "sell" else permissions.may_buy
 
 
+def licence_eligible(licence: Licence, substance: Substance, action: str, on: date) -> bool:
+    """True if the licence covers the substance, may trade on the day and allows the action."""
+    return (
+        covers(licence, substance)
+        and trading_permitted(licence, on)
+        and _allows(licence, substance, action)
+    )
+
+
 def select_licence(gstin_index: str, substance: Substance, action: str, on: date) -> Licence | None:
     candidates = Licence.objects.filter(
         gstin_index=gstin_index, status=LicenceStatus.ACTIVE
     ).order_by("id")
     eligible = [
-        licence
-        for licence in candidates
-        if covers(licence, substance)
-        and trading_permitted(licence, on)
-        and _allows(licence, substance, action)
+        licence for licence in candidates if licence_eligible(licence, substance, action, on)
     ]
     eligible.sort(key=lambda licence: (licence.substance_id is None, licence.id))
     return eligible[0] if eligible else None

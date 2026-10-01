@@ -31,7 +31,7 @@ from transactions.models import (
     TransactionDecision,
     TransactionStatus,
 )
-from transactions.selection import select_licence
+from transactions.selection import licence_eligible, select_licence
 
 NO_OFFICER = "No officer is responsible for your area yet. Please contact the Licensing Authority."
 
@@ -258,7 +258,17 @@ def _apply(
 
 
 def _approve(tx: Transaction) -> None:
-    problems = _refusals(tx.seller_licence, tx.buyer_licence, tx.substance, tx.quantity)
+    """Re-check everything at approval: both licences are still eligible today, the limits,
+    and stock."""
+    today = timezone.localdate()
+    seller = tx.seller_licence
+    buyer = tx.buyer_licence
+    problems = _refusals(
+        seller if licence_eligible(seller, tx.substance, "sell", today) else None,
+        buyer if licence_eligible(buyer, tx.substance, "buy", today) else None,
+        tx.substance,
+        tx.quantity,
+    )
     if problems:
         raise TransactionRefused(problems)
     try:

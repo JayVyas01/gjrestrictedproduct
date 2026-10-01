@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -6,8 +7,11 @@ from core.db_context import acting_as_system, set_actor
 from identity import otp
 from identity.models import OtpPurpose
 from identity.roles import Role
+from licensing.models import LicenceStatus
+from licensing.service import set_status
 from positions.service import assign
 from reasons.service import InvalidReason
+from stock.models import StockMovement
 from stock.service import balance_of
 from tests.conftest import BUYER_GSTIN
 from transactions.models import TransactionDecision, TransactionStatus
@@ -210,3 +214,53 @@ def test_decision_code_is_bound_to_the_user(app_db, catalogue, trade, otp_outbox
             code=otp_outbox[-1][1],
             outcome="APPROVE",
         )
+
+
+def _assert_unmoved(tx, trade, catalogue, buyer_index):
+    with acting_as_system("test"):
+        tx.refresh_from_db()
+        assert tx.status == TransactionStatus.AWAITING_OFFICER
+        assert balance_of(trade.seller_licence.gstin_index, catalogue.whisky) == Decimal("400")
+        assert balance_of(buyer_index, catalogue.whisky) == Decimal("0")
+        assert not StockMovement.objects.filter(transaction_reference=tx.reference).exists()
+
+
+def test_approval_refused_when_seller_suspended_after_confirm(app_db, catalogue, trade, otp_outbox):
+    tx = new_tx(trade, catalogue)
+    act(trade.buyer, Role.LICENSEE, tx, otp_outbox, "CONFIRM")
+    with acting_as_system("test"):
+        set_status(trade.seller_licence, LicenceStatus.SUSPENDED, by="test", reason="test")
+    with pytest.raises(TransactionRefused) as refused:
+        act(trade.officer, Role.PERSONNEL, tx, otp_outbox, "APPROVE")
+    assert "You have no valid licence that allows selling Whisky." in refused.value.reasons
+    _assert_unmoved(tx, trade, catalogue, trade.buyer_licence.gstin_index)
+
+
+EXPIRING_GSTIN = "99CCCCC2222C1Z5"
+
+
+def test_approval_refused_when_buyer_licence_expired(
+    app_db, catalogue, trade, otp_outbox, make_licence, make_licensee, monkeypatch
+):
+    licence = make_licence(
+        gstin=EXPIRING_GSTIN,
+        holder_name="Expiring Bar",
+        contact="+919800000203",
+        ends_on=date(2026, 6, 30),
+    )
+    buyer = make_licensee(licence, contact="+919800000203")
+    monkeypatch.setattr("transactions.service.timezone.localdate", lambda: date(2026, 6, 1))
+    as_user(trade.seller, Role.LICENSEE)
+    tx = start_transaction(
+        seller=trade.seller,
+        buyer_gstin=EXPIRING_GSTIN,
+        substance=catalogue.whisky,
+        quantity=Decimal("150"),
+        transport=TRANSPORT,
+    )
+    act(buyer, Role.LICENSEE, tx, otp_outbox, "CONFIRM")
+    monkeypatch.setattr("transactions.service.timezone.localdate", lambda: date(2026, 7, 1))
+    with pytest.raises(TransactionRefused) as refused:
+        act(trade.officer, Role.PERSONNEL, tx, otp_outbox, "APPROVE")
+    assert "This buyer has no valid licence that allows buying Whisky." in refused.value.reasons
+    _assert_unmoved(tx, trade, catalogue, licence.gstin_index)

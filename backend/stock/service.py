@@ -17,6 +17,10 @@ class InsufficientStock(Exception):
     pass
 
 
+class StockLimitExceeded(Exception):
+    pass
+
+
 def balance_of(gstin_index: str, substance: Substance) -> Decimal:
     row = StockBalance.objects.filter(gstin_index=gstin_index, substance=substance).first()
     return row.quantity if row else Decimal("0")
@@ -66,7 +70,10 @@ def transfer(
     substance: Substance,
     quantity: Decimal,
     transaction_reference: str,
+    max_target: Decimal,
 ) -> None:
+    """Move stock between two businesses under the balance locks. Refuses if the source holds
+    too little or the target would end above max_target (its licence's stock limit)."""
     with transaction.atomic():
         rows = {
             index: _locked(index, substance) for index in sorted({from_gstin_index, to_gstin_index})
@@ -74,6 +81,10 @@ def transfer(
         source, target = rows[from_gstin_index], rows[to_gstin_index]
         if source.quantity < quantity:
             raise InsufficientStock("The seller no longer has enough stock for this transaction")
+        if target.quantity + quantity > max_target:
+            raise StockLimitExceeded(
+                "This sale would take the buyer's stock above their licence limit"
+            )
         for row, delta in ((source, -quantity), (target, quantity)):
             row.quantity += delta
             row.save(update_fields=["quantity", "updated_at"])

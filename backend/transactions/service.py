@@ -17,12 +17,12 @@ from core.db_context import acting_as_system
 from identity import otp
 from identity.models import OtpChallenge, OtpPurpose, User
 from licensing.models import Licence, LicenceStatus
-from licensing.service import GSTIN_PATTERN
+from licensing.service import GSTIN_PATTERN, current_permissions
 from positions.models import AreaLevel
 from positions.service import covering_position, positions_held
 from reasons.models import ReasonKind
 from reasons.service import resolve_reason
-from stock.service import InsufficientStock, transfer
+from stock.service import InsufficientStock, StockLimitExceeded, transfer
 from transactions.checks import eligibility_problems, transaction_problems
 from transactions.models import (
     DecisionOutcome,
@@ -259,7 +259,7 @@ def _apply(
 
 def _approve(tx: Transaction) -> None:
     """Re-check everything at approval: both licences are still eligible today, the limits,
-    and stock."""
+    and stock (again under the balance locks, with the buyer's stock cap)."""
     today = timezone.localdate()
     seller = tx.seller_licence
     buyer = tx.buyer_licence
@@ -278,8 +278,9 @@ def _approve(tx: Transaction) -> None:
             substance=tx.substance,
             quantity=tx.quantity,
             transaction_reference=tx.reference,
+            max_target=current_permissions(buyer, tx.substance).max_stock_qty,
         )
-    except InsufficientStock as exc:
+    except (InsufficientStock, StockLimitExceeded) as exc:
         raise TransactionRefused([str(exc) + "."]) from exc
 
 

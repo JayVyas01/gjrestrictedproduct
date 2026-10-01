@@ -6,7 +6,13 @@ from django.db import DatabaseError, IntegrityError, transaction
 from core.db_context import acting_as_system, set_actor
 from identity.roles import Role
 from stock.models import StockBalance, StockMovement
-from stock.service import InsufficientStock, balance_of, set_opening_balance, transfer
+from stock.service import (
+    InsufficientStock,
+    StockLimitExceeded,
+    balance_of,
+    set_opening_balance,
+    transfer,
+)
 from tests.conftest import TEST_PASSWORD
 
 pytestmark = pytest.mark.django_db
@@ -50,6 +56,7 @@ def test_transfer_moves_stock_and_logs_both_sides(app_db, catalogue):
             substance=catalogue.whisky,
             quantity=Decimal("150"),
             transaction_reference="TXTEST00001",
+            max_target=Decimal("1000"),
         )
         assert balance_of(SELLER, catalogue.whisky) == Decimal("250")
         assert balance_of(BUYER, catalogue.whisky) == Decimal("150")
@@ -69,9 +76,28 @@ def test_transfer_refuses_more_than_the_seller_holds(app_db, catalogue):
                 substance=catalogue.whisky,
                 quantity=Decimal("101"),
                 transaction_reference="TXTEST00002",
+                max_target=Decimal("1000"),
             )
     with acting_as_system("test"):
         assert balance_of(SELLER, catalogue.whisky) == Decimal("100")
+
+
+def test_transfer_refuses_above_target_limit(app_db, catalogue):
+    opening(catalogue, SELLER, "400")
+    opening(catalogue, BUYER, "90")
+    with pytest.raises(StockLimitExceeded, match="above their licence limit"):
+        with acting_as_system("test"):
+            transfer(
+                from_gstin_index=SELLER,
+                to_gstin_index=BUYER,
+                substance=catalogue.whisky,
+                quantity=Decimal("20"),
+                transaction_reference="TXTEST00003",
+                max_target=Decimal("100"),
+            )
+    with acting_as_system("test"):
+        assert balance_of(SELLER, catalogue.whisky) == Decimal("400")
+        assert balance_of(BUYER, catalogue.whisky) == Decimal("90")
 
 
 def test_database_never_allows_negative_stock(app_db, catalogue):

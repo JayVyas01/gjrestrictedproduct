@@ -12,7 +12,7 @@ from licensing.service import set_status
 from positions.service import assign
 from reasons.service import InvalidReason
 from stock.models import StockMovement
-from stock.service import balance_of
+from stock.service import balance_of, transfer
 from tests.conftest import BUYER_GSTIN
 from transactions.models import TransactionDecision, TransactionStatus
 from transactions.service import (
@@ -264,3 +264,27 @@ def test_approval_refused_when_buyer_licence_expired(
         act(trade.officer, Role.PERSONNEL, tx, otp_outbox, "APPROVE")
     assert "This buyer has no valid licence that allows buying Whisky." in refused.value.reasons
     _assert_unmoved(tx, trade, catalogue, licence.gstin_index)
+
+
+def test_transfer_insufficient_under_lock_maps_to_refusal(
+    app_db, catalogue, trade, otp_outbox, monkeypatch
+):
+    tx = new_tx(trade, catalogue)
+    act(trade.buyer, Role.LICENSEE, tx, otp_outbox, "CONFIRM")
+    monkeypatch.setattr("transactions.service.transaction_problems", lambda **kwargs: [])
+    with acting_as_system("test"):
+        transfer(
+            from_gstin_index=trade.seller_licence.gstin_index,
+            to_gstin_index="c" * 64,
+            substance=catalogue.whisky,
+            quantity=Decimal("300"),
+            transaction_reference="TXELSEWHERE1",
+            max_target=Decimal("1000"),
+        )
+    with pytest.raises(TransactionRefused) as refused:
+        act(trade.officer, Role.PERSONNEL, tx, otp_outbox, "APPROVE")
+    assert refused.value.reasons == ["The seller no longer has enough stock for this transaction."]
+    with acting_as_system("test"):
+        tx.refresh_from_db()
+        assert tx.status == TransactionStatus.AWAITING_OFFICER
+        assert not StockMovement.objects.filter(transaction_reference=tx.reference).exists()

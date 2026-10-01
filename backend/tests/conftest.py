@@ -23,9 +23,12 @@ from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
 from licensing.service import record_licence
 from positions.models import Area, AreaLevel, Position
+from positions.service import assign
+from stock.service import set_opening_balance
 
 TEST_PASSWORD = "correct-horse-battery-9"
 DEMO_GSTIN = "99AAAAA0000A1Z5"  # state code 99 does not exist: can never match a real business
+BUYER_GSTIN = "99BBBBB1111B1Z5"
 
 
 @pytest.fixture
@@ -147,6 +150,7 @@ def make_licence(catalogue, org):
         ends_on=date(2026, 12, 31),
         contact="+919800000101",
         holder_name="Sanand Test Traders",
+        area=None,
     ):
         if substance is None and substance_class is None:
             substance_class = catalogue.spirits
@@ -157,7 +161,7 @@ def make_licence(catalogue, org):
                 holder_name=holder_name,
                 contact=contact,
                 licence_type=licence_type or catalogue.retail,
-                area=org.sanand,
+                area=area or org.sanand,
                 starts_on=starts_on,
                 ends_on=ends_on,
                 recorded_by="test",
@@ -181,3 +185,32 @@ def make_licensee(db):
         )
 
     return _make
+
+
+@pytest.fixture
+def trade(catalogue, org, make_licence, make_licensee, make_user):
+    """A seller and a buyer (Retail/Spirits licences in Sanand), the Area Officer for Sanand,
+    the District superintendent, and 400 L of whisky in the seller's stock."""
+    seller_licence = make_licence(holder_name="Sanand Spirits Pvt Ltd", contact="+919800000201")
+    buyer_licence = make_licence(
+        gstin=BUYER_GSTIN, holder_name="Bopal Bar & Kitchen", contact="+919800000202"
+    )
+    officer = make_user(role=Role.PERSONNEL, contact="+919800000301")
+    superintendent = make_user(role=Role.PERSONNEL, contact="+919800000302")
+    assign(org.area_officer, officer, by="test")
+    assign(org.district_officer, superintendent, by="test")
+    with acting_as_system("test"):
+        set_opening_balance(
+            gstin_index=seller_licence.gstin_index,
+            substance=catalogue.whisky,
+            quantity=Decimal("400"),
+            by="test",
+        )
+    return SimpleNamespace(
+        seller_licence=seller_licence,
+        buyer_licence=buyer_licence,
+        seller=make_licensee(seller_licence, contact="+919800000201"),
+        buyer=make_licensee(buyer_licence, contact="+919800000202"),
+        officer=officer,
+        superintendent=superintendent,
+    )

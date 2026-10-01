@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-01, D2a Task 2 stock balances and movements (194 tests).
+**Last updated:** 2026-10-01, D2a Task 3 transaction records, licence selection and checks (208 tests).
 
 ---
 
@@ -12,12 +12,12 @@
 
 | Role | What they can do today | Where it is enforced | Proving tests |
 |---|---|---|---|
-| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Created only by licence-gated enrolment (a business with an active licence on record proves control with a code sent to the contact on file). Logs in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Can view the permissions card of each of their own licences (`GET /api/licences/mine`). Sees own stock (`GET /api/stock/mine`). Transactions arrive in Demo D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`, `licensing/enrolment.py`, `licensing/views.py` (`MyLicencesView`); `stock/views.py` (`MyStockView`); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `stock/migrations/0002_rls_and_append_only.py` (own-stock read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_enrolment.py`, `test_licence_api.py`, `test_licensing.py::test_holder_sees_only_their_own_licences`, `test_stock.py::test_holder_sees_only_own_stock`, `test_stock.py::test_my_stock_api` |
-| **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` |
+| **Licensee** (buyer and seller combined; what they may do comes from their licences) | Created only by licence-gated enrolment (a business with an active licence on record proves control with a code sent to the contact on file). Logs in with password and a one-time code. Sees only licences whose GSTIN matches their account (`licensee_gstin_index`, enforced by row-level security). Can view the permissions card of each of their own licences (`GET /api/licences/mine`). Sees own stock (`GET /api/stock/mine`). Transactions arrive in Demo D2. | `identity/roles.py` (`Role.LICENSEE`), `identity/login.py`, `identity/views.py`, `licensing/enrolment.py`, `licensing/views.py` (`MyLicencesView`); `stock/views.py` (`MyStockView`); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `stock/migrations/0002_rls_and_append_only.py` (own-stock read policy) | `test_login_api.py`, `test_users.py::test_has_role`, `test_enrolment.py`, `test_licence_api.py`, `test_licensing.py::test_holder_sees_only_their_own_licences`, `test_stock.py::test_holder_sees_only_own_stock`, `test_stock.py::test_my_stock_api` Sees transactions where their business is seller or buyer, matched by GSTIN (`transactions/migrations/0002_rls_and_append_only.py`; proof `test_transaction_rules.py::test_transaction_visibility`). |
+| **Authorised Personnel** | Log in. They hold positions (e.g. Area Officer for a taluka); authority is positional, so a transfer moves the position to the new person immediately. Approvals arrive in D2. | `identity/roles.py` (`Role.PERSONNEL`); `positions/` (only Personnel can be assigned) | `test_permissions.py`, `test_positions.py` Read transactions where they currently hold the designated or superintendent position (`transactions/migrations/0002_rls_and_append_only.py`; proof `test_transaction_rules.py::test_transaction_visibility`). |
 | **Licensing Authority** | Log in. Maintains the catalogue (substances, licence types, versioned rules; screens arrive in D3). Records licences issued by the existing process, records renewals, suspends or revokes (row-level security lets only this role and SYSTEM write licences). Reads all stock. | `identity/roles.py` (`Role.LICENSING_AUTHORITY`); `catalogue/`; `licensing/service.py`, `licensing/migrations/0002_rls_and_append_only.py` | `test_permissions.py`, `test_catalogue.py`, `test_licensing.py` |
-| **Software Owner** | Log in; read the whole audit log; read all licences with their periods and snapshots; read all stock; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
-| **Head Authority** | Log in; read the whole audit log (oversight); read all licences with their periods and snapshots; read all stock; create or reset personnel accounts (Phase 4) | Same as Software Owner, plus `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_only_audit_readers_can_read_events` |
-| **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain; read and record licences (enrolment matching, seeding); the only writer of stock balances and movements | `core/db_context.py` (`SYSTEM_ROLE`, `acting_as_system`), `verify_audit_chain` command, `licensing/migrations/0002_rls_and_append_only.py`, `stock/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_verify_command_*`, `test_stock.py::test_only_system_can_write_stock` |
+| **Software Owner** | Log in; read the whole audit log; read all licences with their periods and snapshots; read all stock; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` Read all transactions (`transactions/migrations/0002_rls_and_append_only.py`). |
+| **Head Authority** | Log in; read the whole audit log (oversight); read all licences with their periods and snapshots; read all stock; create or reset personnel accounts (Phase 4) | Same as Software Owner, plus `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_only_audit_readers_can_read_events` Read all transactions (`transactions/migrations/0002_rls_and_append_only.py`). |
+| **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain; read and record licences (enrolment matching, seeding); the only writer of stock balances and movements | `core/db_context.py` (`SYSTEM_ROLE`, `acting_as_system`), `verify_audit_chain` command, `licensing/migrations/0002_rls_and_append_only.py`, `stock/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_verify_command_*`, `test_stock.py::test_only_system_can_write_stock` The only writer of transactions and decisions (`transactions/migrations/0002_rls_and_append_only.py`; `test_transaction_rules.py::test_only_system_writes_and_only_status_changes`). |
 | **Any logged-in user** (all roles) | Read the substance list (`GET /api/catalogue/substances`); list reason codes (`GET /api/reason-codes?kind=`) | `licensing/views.py` (`SubstanceListView`); `reasons/views.py` (`ReasonCodeListView`) | `test_licence_api.py::test_substance_list_for_logged_in_users`, `test_reasons.py::test_reason_code_api_lists_active_codes` |
 | **Anonymous** (not logged in) | Only the health check, the CSRF cookie, the two login steps and the two enrolment steps (start, complete) | `settings.REST_FRAMEWORK` (deny by default), `AllowAny` on those views only; `licensing/views.py` | `test_login_api.py`, `test_enrolment.py`, `test_permissions.py::test_anonymous_is_refused`, `test_audit.py::test_anonymous_context_cannot_read_events` |
 
@@ -127,6 +127,17 @@ Per business (GSTIN blind index) per substance. Only SYSTEM writes; holders read
 | `stock/views.py`, `stock/urls.py` | `GET /api/stock/mine` (Licensee only) | `MyStockView` | `test_stock.py::test_my_stock_api` |
 | `stock/migrations/0002_rls_and_append_only.py` | Row-level security (own-business read, SYSTEM-only write), balance updates limited to quantity, movements append-only | — | `test_stock.py` |
 | `tests/conftest.py` fixtures | `make_licensee(licence)` creates a Licensee linked to the licence's GSTIN | `make_licensee` | — |
+
+### transactions: records, licence selection, checks
+
+A seller-initiated sale of a substance to another business. Only SYSTEM writes (services, added in the next task, check who may act first); parties, position holders and authorities read.
+
+| File | Responsible for | Key names | Tests |
+|---|---|---|---|
+| `transactions/models.py` | The transaction (encrypted transporter details, designated and superintendent positions fixed at creation, status) and its append-only decisions | `Transaction`, `TransactionDecision`, `TransactionStatus`, `DecisionStep`, `DecisionOutcome`, `generate_reference` | `test_transaction_rules.py` |
+| `transactions/selection.py` | Choosing the licence a business uses for a substance and action: valid on the day, permissions allow the action, substance-specific licence preferred, then earliest | `select_licence` | `test_transaction_rules.py` |
+| `transactions/checks.py` | Plain-language problems: missing licence, per-transaction limits, seller stock, buyer stock limit | `fmt_qty`, `eligibility_problems`, `transaction_problems` | `test_transaction_rules.py` |
+| `transactions/migrations/0002_rls_and_append_only.py` | Row-level security (party, position-holder and authority read; SYSTEM-only write), only status and decided_at updatable, decisions append-only | — | `test_transaction_rules.py` |
 
 ### audit: tamper-evident audit log
 
@@ -400,6 +411,25 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_movements_are_append_only_even_for_owner` | Movements cannot be updated, even by the schema owner |
 | `test_my_stock_api` | `/api/stock/mine` returns the holder's balances |
 
+### `test_transaction_rules.py`: transaction records, selection and checks
+
+| Test | Proves |
+|---|---|
+| `test_fmt_qty_drops_trailing_zeros` | Quantities print without trailing zeros |
+| `test_reference_format` | References start with TX and are 12 characters |
+| `test_selects_licence_that_allows_the_action` | A licence permitting sell or buy is selected |
+| `test_substance_scoped_licence_is_preferred` | A licence for the exact substance beats a class licence |
+| `test_expired_or_suspended_licence_is_not_selected` | Expired or suspended licences are never selected |
+| `test_substance_override_can_forbid_selling` | A substance rule can forbid selling while the class allows it |
+| `test_eligibility_problems_are_plain` | Missing-licence messages are plain sentences |
+| `test_per_transaction_limit_message` | Both parties' per-transaction limits are reported |
+| `test_stock_and_buyer_capacity_messages` | Seller shortfall is reported |
+| `test_buyer_stock_limit_message` | Buyer stock-limit breach is reported |
+| `test_valid_transaction_has_no_problems` | A valid request gives no problems |
+| `test_transaction_visibility` | Parties, position holders and authorities see a transaction; outsiders do not |
+| `test_only_system_writes_and_only_status_changes` | Non-SYSTEM cannot update; only status and decided_at are updatable |
+| `test_decisions_are_append_only_even_for_owner` | Decisions cannot be updated, even by the schema owner |
+
 ---
 
 ## 4. Conventions every change must follow
@@ -417,6 +447,7 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | One unit per substance class (quantities in a class share the class's unit); D2 stores the unit on each transaction | Quantities in a class can be added up safely | Seed data and code review |
 | Catalogue tables are reference data with no row-level security, written only through Licensing Authority services (ruling D-R12) | Everyone may read the catalogue; writes go through `catalogue/service.py` | Code review |
 | Reason codes are data. Add a row, never rename a code | Stored decisions keep pointing at the same meaning | Code review |
+| D2a lock order: stock balances in sorted order, then the transaction row, then the audit log last. Transaction writes happen only through services under SYSTEM | Prevents deadlocks; no path lets a user write a transaction directly | `transactions/migrations/0002_rls_and_append_only.py`, code review |
 | **Update this file in the same PR** | Keeps the map trustworthy | Code review |
 
 Open follow-ups from the reviews: [`superpowers/plans/2026-09-29-phase1-followups.md`](superpowers/plans/2026-09-29-phase1-followups.md).

@@ -6,4 +6,5 @@ urlpatterns = [
     path("api/health", health),
     path("api/auth/", include("identity.urls")),
     path("api/", include("licensing.urls")),
+    path("api/", include("reasons.urls")),
 ]

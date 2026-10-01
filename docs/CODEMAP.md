@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-09-30, D1 final-review fixes (177 tests).
+**Last updated:** 2026-10-01, D2a Task 1 reason codes (185 tests).
 
 ---
 
@@ -18,7 +18,7 @@
 | **Software Owner** | Log in; read the whole audit log; read all licences with their periods and snapshots; create or reset personnel accounts (the API comes in Phase 4) | `identity/roles.py` (`AUDIT_READERS`, `PERSONNEL_PROVISIONERS`); `audit/migrations/0002_protect_and_rls.py` (read policy); `licensing/migrations/0002_rls_and_append_only.py` (licence read policy); `create_software_owner` command (first account only) | `test_audit.py::test_only_audit_readers_can_read_events`, `test_create_software_owner.py` |
 | **Head Authority** | Log in; read the whole audit log (oversight); read all licences with their periods and snapshots; create or reset personnel accounts (Phase 4) | Same as Software Owner, plus `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_only_audit_readers_can_read_events` |
 | **SYSTEM** (background jobs, never a person) | Read the audit log to verify the chain; read and record licences (enrolment matching, seeding) | `core/db_context.py` (`SYSTEM_ROLE`, `acting_as_system`), `verify_audit_chain` command, `licensing/migrations/0002_rls_and_append_only.py` | `test_audit.py::test_verify_command_*` |
-| **Any logged-in user** (all roles) | Read the substance list (`GET /api/catalogue/substances`) | `licensing/views.py` (`SubstanceListView`) | `test_licence_api.py::test_substance_list_for_logged_in_users` |
+| **Any logged-in user** (all roles) | Read the substance list (`GET /api/catalogue/substances`); list reason codes (`GET /api/reason-codes?kind=`) | `licensing/views.py` (`SubstanceListView`); `reasons/views.py` (`ReasonCodeListView`) | `test_licence_api.py::test_substance_list_for_logged_in_users`, `test_reasons.py::test_reason_code_api_lists_active_codes` |
 | **Anonymous** (not logged in) | Only the health check, the CSRF cookie, the two login steps and the two enrolment steps (start, complete) | `settings.REST_FRAMEWORK` (deny by default), `AllowAny` on those views only; `licensing/views.py` | `test_login_api.py`, `test_enrolment.py`, `test_permissions.py::test_anonymous_is_refused`, `test_audit.py::test_anonymous_context_cannot_read_events` |
 
 To restrict a new API endpoint to certain roles, use `permission_classes = [role_required(Role.X, ...)]` from `identity/permissions.py`.
@@ -103,6 +103,18 @@ Paths are relative to `backend/`.
 | `licensing/views.py` | Enrolment endpoints `POST /api/enrolment/start` and `/complete` (anonymous, CSRF-protected, throttled); `GET /api/licences/mine` (Licensee only, filtered by GSTIN and by row-level security); `GET /api/catalogue/substances` (any logged-in user) | `EnrolmentStartView`, `EnrolmentCompleteView`, `ENROLMENT_FAILED`, `MyLicencesView`, `SubstanceListView` | `test_enrolment.py`, `test_licence_api.py` |
 | `licensing/urls.py` | Routes enrolment, my-licences and substance-list endpoints under `/api/` | `urlpatterns` | `test_enrolment.py` |
 | `tests/conftest.py` fixtures | `make_licence(...)` records a licence as SYSTEM with sensible defaults; `DEMO_GSTIN` is a GSTIN with a non-existent state code | `make_licence`, `DEMO_GSTIN` | — |
+
+### reasons: configurable reason codes
+
+Reference data with no row-level security (ruling D-R12, same as the catalogue): everyone logged in may read it.
+
+| File | Responsible for | Key names | Tests |
+|---|---|---|---|
+| `reasons/models.py` | Reason codes in a table so admins can add new ones without a code change; unique per kind; kind checked by the database | `ReasonKind`, `ReasonCode` | `test_reasons.py` |
+| `reasons/service.py` | Listing active codes of a kind; validating a chosen code (must exist, be active, be of that kind; "OTHER" needs text) | `active_reasons`, `resolve_reason`, `InvalidReason` | `test_reasons.py` |
+| `reasons/views.py`, `reasons/urls.py` | `GET /api/reason-codes?kind=` for dropdowns (any logged-in user; 400 for unknown kind) | `ReasonCodeListView` | `test_reasons.py::test_reason_code_api_*` |
+| `reasons/migrations/0001_initial.py` | Creates the reason code table and its constraints | — | `test_reasons.py` |
+| `reasons/migrations/0002_seed_defaults.py` | Seeds the default codes per kind, each with an "OTHER" that requires text | `DEFAULTS` | `test_reasons.py::test_defaults_*` |
 
 ### audit: tamper-evident audit log
 
@@ -349,6 +361,19 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | `test_my_licences_requires_login` | Anonymous gets 403 |
 | `test_substance_list_for_logged_in_users` | Any logged-in user can read the substance list |
 
+### `test_reasons.py`: reason codes
+
+| Test | Proves |
+|---|---|
+| `test_defaults_are_seeded_for_every_kind` | Every kind has at least four active codes including OTHER |
+| `test_buyer_defaults_match_the_spec` | The buyer rejection labels match the spec |
+| `test_other_requires_text` | OTHER with blank text is refused; with text it is accepted |
+| `test_unknown_or_inactive_code_is_rejected` | Unknown or deactivated codes are refused |
+| `test_code_of_another_kind_is_rejected` | A code from a different kind is refused |
+| `test_admin_can_add_a_new_reason_without_code_change` | A new row is usable immediately |
+| `test_reason_code_api_lists_active_codes` | The API lists active codes for a kind; unknown kind gives 400 |
+| `test_reason_code_api_requires_login` | Anonymous gets 403 |
+
 ---
 
 ## 4. Conventions every change must follow
@@ -365,6 +390,7 @@ Run all: `cd backend && uv run --env-file .env.test pytest`. Run one: `... pytes
 | Append-only tables REVOKE update/delete from `gj_app` and attach `reject_append_only_change()` triggers | Even the owner can't rewrite history | `core/migrations/0002_append_only_guard.py`, `test_catalogue.py` |
 | One unit per substance class (quantities in a class share the class's unit); D2 stores the unit on each transaction | Quantities in a class can be added up safely | Seed data and code review |
 | Catalogue tables are reference data with no row-level security, written only through Licensing Authority services (ruling D-R12) | Everyone may read the catalogue; writes go through `catalogue/service.py` | Code review |
+| Reason codes are data. Add a row, never rename a code | Stored decisions keep pointing at the same meaning | Code review |
 | **Update this file in the same PR** | Keeps the map trustworthy | Code review |
 
 Open follow-ups from the reviews: [`superpowers/plans/2026-09-29-phase1-followups.md`](superpowers/plans/2026-09-29-phase1-followups.md).

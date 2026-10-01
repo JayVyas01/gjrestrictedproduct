@@ -185,7 +185,7 @@ def test_transferred_officer_cannot_decide(app_db, catalogue, org, trade, otp_ou
     )
 
 
-def test_approval_rechecks_stock(app_db, catalogue, trade, otp_outbox, make_licence, make_licensee):
+def test_approval_rechecks_stock(app_db, catalogue, trade, otp_outbox, audit_actions):
     first = new_tx(trade, catalogue, qty="300")
     second = new_tx(trade, catalogue, qty="300")
     for tx in (first, second):
@@ -198,6 +198,7 @@ def test_approval_rechecks_stock(app_db, catalogue, trade, otp_outbox, make_lice
         second.refresh_from_db()
         assert second.status == TransactionStatus.AWAITING_OFFICER
         assert balance_of(trade.seller_licence.gstin_index, catalogue.whisky) == Decimal("100")
+    assert audit_actions()[-1] == "transaction.approval_refused"
 
 
 def test_decision_code_is_bound_to_the_user(app_db, catalogue, trade, otp_outbox, make_user):

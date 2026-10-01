@@ -234,8 +234,18 @@ def decide(
         return None  # wrong or expired code: the attempt counts, nothing else changes
     if signer.pk != user.pk:
         raise NotAllowed("This code belongs to someone else.")
-    with acting_as_system("decide_transaction"):
-        return _apply(tx, user, role, outcome, reason, comment)
+    try:
+        with acting_as_system("decide_transaction"):
+            return _apply(tx, user, role, outcome, reason, comment)
+    except TransactionRefused:
+        # The decision's writes rolled back with the savepoint; the refusal itself is kept.
+        record(
+            action="transaction.approval_refused",
+            actor=user.user_id,
+            subject_type="transaction",
+            subject_id=tx.reference,
+        )
+        raise
 
 
 def _apply(

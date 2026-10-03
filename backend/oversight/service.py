@@ -7,13 +7,33 @@ superintendent position it is, decided (local date) within the period. Idempoten
 
 from datetime import date, timedelta
 
+from django.db import connection
 from django.utils import timezone
 
+from alerts.service import raise_flag_alert
 from audit.service import record
 from core.db_context import acting_as_system
-from oversight.models import REVIEW_PERIODS, BatchItem, OversightBatch, SuperintendentSetting
+from identity import otp
+from identity.models import OtpChallenge, OtpPurpose, User
+from oversight.models import (
+    REVIEW_PERIODS,
+    BatchFlag,
+    BatchItem,
+    BatchSignOff,
+    OversightBatch,
+    SuperintendentSetting,
+)
 from positions.models import AreaLevel, Position
-from transactions.models import Transaction, TransactionStatus
+from positions.service import positions_held
+from reasons.models import ReasonKind
+from reasons.service import resolve_reason
+from transactions.models import (
+    DecisionOutcome,
+    DecisionStep,
+    Transaction,
+    TransactionDecision,
+    TransactionStatus,
+)
 
 
 class InvalidSetting(Exception):
@@ -99,3 +119,103 @@ def create_due_batches(today: date) -> list[OversightBatch]:
             created.append(_make_batch(setting.position, start, end))
             start = end + timedelta(days=1)
     return created
+
+
+class NotAllowed(Exception):
+    pass
+
+
+ALREADY_SIGNED = "This batch is already signed off."
+
+
+def batch_status(batch: OversightBatch, today: date) -> str:
+    if BatchSignOff.objects.filter(batch=batch).exists():
+        return "SIGNED"
+    return "OVERDUE" if today > batch.due_on() else "OPEN"
+
+
+def _own_open_batch(batch_id: int, user: User) -> OversightBatch:
+    batch = OversightBatch.objects.select_related("position").filter(pk=batch_id).first()
+    if batch is None or batch.position not in positions_held(user):
+        raise NotAllowed("Only the superintendent holding this position can review this batch.")
+    if BatchSignOff.objects.filter(batch=batch).exists():
+        raise NotAllowed(ALREADY_SIGNED)
+    return batch
+
+
+def _lock_batch(batch: OversightBatch) -> None:
+    """Batches are append-only (no row lock possible), so serialise flag/sign-off per batch."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))", [f"oversight-batch:{batch.id}"]
+        )
+
+
+def flag_item(
+    *, batch_id: int, reference: str, user: User, reason_code: str, comment: str
+) -> BatchFlag:
+    batch = _own_open_batch(batch_id, user)
+    item = (
+        batch.items.select_related("transaction").filter(transaction__reference=reference).first()
+    )
+    if item is None:
+        raise NotAllowed("That transaction is not in this batch.")
+    reason = resolve_reason(ReasonKind.SUPERINTENDENT_FLAG, reason_code, comment)
+    with acting_as_system("flag_transaction"):
+        _lock_batch(batch)
+        if BatchSignOff.objects.filter(batch=batch).exists():
+            raise NotAllowed(ALREADY_SIGNED)
+        if BatchFlag.objects.filter(item=item).exists():
+            raise NotAllowed("This transaction is already flagged in this batch.")
+        flag = BatchFlag.objects.create(
+            item=item,
+            reason=reason,
+            comment=comment.strip(),
+            flagged_by=user.user_id,
+            position=batch.position,
+        )
+        approving = TransactionDecision.objects.get(
+            transaction=item.transaction, step=DecisionStep.OFFICER, outcome=DecisionOutcome.APPROVE
+        )
+        raise_flag_alert(
+            tx=item.transaction, position=approving.position, reason=reason, comment=comment.strip()
+        )
+        record(
+            action="oversight.transaction_flagged",
+            actor=user.user_id,
+            subject_type="transaction",
+            subject_id=item.transaction.reference,
+            payload={"batch_id": batch.id},
+        )
+    return flag
+
+
+def request_sign_off_code(*, batch_id: int, user: User) -> OtpChallenge:
+    _own_open_batch(batch_id, user)
+    return otp.issue(user, OtpPurpose.DECISION)
+
+
+def sign_off(*, batch_id: int, user: User, challenge_id: str, code: str) -> BatchSignOff | None:
+    batch = _own_open_batch(batch_id, user)
+    signer = otp.verify(challenge_id=challenge_id, purpose=OtpPurpose.DECISION, code=code)
+    if signer is None:
+        return None  # wrong or expired code: the attempt counts, nothing else changes
+    if signer.pk != user.pk:
+        raise NotAllowed("This code belongs to someone else.")
+    with acting_as_system("sign_off_batch"):
+        _lock_batch(batch)
+        if BatchSignOff.objects.filter(batch=batch).exists():
+            raise NotAllowed(ALREADY_SIGNED)
+        signed = BatchSignOff.objects.create(
+            batch=batch,
+            signed_by=user.user_id,
+            position=batch.position,
+            otp_verified_at=timezone.now(),
+        )
+        record(
+            action="oversight.batch_signed",
+            actor=user.user_id,
+            subject_type="batch",
+            subject_id=str(batch.id),
+        )
+    return signed

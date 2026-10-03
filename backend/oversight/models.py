@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from django.db import models
 
 from positions.models import Position
+from reasons.models import ReasonCode
 from transactions.models import Transaction
 
 REVIEW_PERIODS = (15, 30, 60)
@@ -61,3 +62,20 @@ class BatchItem(models.Model):
                 fields=["batch", "transaction"], name="one_item_per_transaction"
             )
         ]
+
+
+class BatchFlag(models.Model):
+    item = models.OneToOneField(BatchItem, on_delete=models.PROTECT, related_name="flag")
+    reason = models.ForeignKey(ReasonCode, on_delete=models.PROTECT)
+    comment = models.TextField(blank=True)
+    flagged_by = models.CharField(max_length=12)
+    position = models.ForeignKey(Position, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BatchSignOff(models.Model):
+    batch = models.OneToOneField(OversightBatch, on_delete=models.PROTECT, related_name="sign_off")
+    signed_by = models.CharField(max_length=12)
+    position = models.ForeignKey(Position, on_delete=models.PROTECT, related_name="+")
+    otp_verified_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)

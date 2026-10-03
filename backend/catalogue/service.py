@@ -1,8 +1,11 @@
-"""Look up the rule that governs a licence type for a substance or class."""
+"""Look up the rule that governs a licence type for a substance or class, and the approval
+threshold that decides who gives final approval."""
 
 from decimal import Decimal
 
 from catalogue.models import (
+    ApprovalThreshold,
+    ApprovalThresholdVersion,
     LicenceType,
     LicenceTypeRule,
     LicenceTypeRuleVersion,
@@ -70,3 +73,48 @@ def add_rule_version(
         max_per_transaction_qty=max_per_transaction_qty,
         validity_months=validity_months,
     )
+
+
+def _latest_threshold(threshold: ApprovalThreshold | None) -> ApprovalThresholdVersion | None:
+    if threshold is None:
+        return None
+    return threshold.versions.order_by("-version").first()
+
+
+def resolve_threshold(substance: Substance) -> ApprovalThresholdVersion | None:
+    """Substance threshold beats its class threshold. None means the officer alone approves."""
+    specific = _latest_threshold(ApprovalThreshold.objects.filter(substance=substance).first())
+    if specific is not None:
+        return specific
+    return _latest_threshold(
+        ApprovalThreshold.objects.filter(substance_class=substance.substance_class_id).first()
+    )
+
+
+def add_threshold_version(
+    *,
+    substance: Substance | None = None,
+    substance_class: SubstanceClass | None = None,
+    superintendent_above_qty: Decimal,
+    created_by: str,
+) -> ApprovalThresholdVersion:
+    threshold, _ = ApprovalThreshold.objects.get_or_create(
+        substance=substance, substance_class=substance_class
+    )
+    # Lock the threshold row so concurrent additions can't compute the same version number.
+    threshold = ApprovalThreshold.objects.select_for_update().get(pk=threshold.pk)
+    latest = _latest_threshold(threshold)
+    return ApprovalThresholdVersion.objects.create(
+        threshold=threshold,
+        version=(latest.version + 1) if latest else 1,
+        superintendent_above_qty=superintendent_above_qty,
+        created_by=created_by,
+    )
+
+
+def approval_chain_for(substance: Substance, quantity: Decimal) -> str:
+    """OFFICER_THEN_SUPERINTENDENT above the governing threshold, else OFFICER."""
+    threshold = resolve_threshold(substance)
+    if threshold is not None and quantity > threshold.superintendent_above_qty:
+        return "OFFICER_THEN_SUPERINTENDENT"
+    return "OFFICER"

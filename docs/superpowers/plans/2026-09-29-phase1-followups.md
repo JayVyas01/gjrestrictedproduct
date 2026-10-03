@@ -78,9 +78,10 @@ Open items from the D1 reviews. None of them block D2.
 
 # Demo D2a follow-ups (added 2026-10-01)
 
-## ⚠️ Time-sensitive
+## Fixture expiry (resolved 2026-10-03)
 
-- **The test suite will fail from 2027-01-01.** The `make_licence` fixture defaults to a validity of 2026-01-01 to 2026-12-31, and many tests use the real `timezone.localdate()`. Make the default validity relative to today, for example from today minus 30 days to today plus 335 days. Fix this in D2b.
+- `make_licence` now defaults to a validity ending **2047-12-31**, at the user's request, so tests that use the real `timezone.localdate()` keep passing until then. The tests that deliberately check expiry pass explicit 2026 dates.
+- **Before 2047:** either extend the date again or pin "today" in tests. Demo seed data (D4) uses dates relative to the day it runs.
 
 ## Hardening (Phase 2 or later)
 

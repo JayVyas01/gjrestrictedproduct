@@ -43,7 +43,7 @@ def test_licensee_sees_own_licence_card(app_db, client, catalogue, make_licence,
     assert card["unit"] == "L"
     assert card["may_sell"] is True
     assert card["max_per_transaction_qty"] == "500.000"
-    assert card["valid_from"] == "2026-01-01" and card["valid_to"] == "2026-12-31"
+    assert card["valid_from"] == "2026-01-01" and card["valid_to"] == "2047-12-31"
     assert set(card) == {
         "licence_number",
         "holder_name",

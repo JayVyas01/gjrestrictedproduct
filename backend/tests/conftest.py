@@ -147,7 +147,7 @@ def make_licence(catalogue, org):
         substance=None,
         substance_class=None,
         starts_on=date(2026, 1, 1),
-        ends_on=date(2026, 12, 31),
+        ends_on=date(2047, 12, 31),  # far future so date-sensitive tests don't expire
         contact="+919800000101",
         holder_name="Sanand Test Traders",
         area=None,

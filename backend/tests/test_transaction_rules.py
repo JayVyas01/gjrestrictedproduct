@@ -57,7 +57,7 @@ def test_expired_or_suspended_licence_is_not_selected(app_db, catalogue, trade):
     with acting_as_system("test"):
         assert (
             select_licence(
-                trade.seller_licence.gstin_index, catalogue.whisky, "sell", date(2027, 1, 1)
+                trade.seller_licence.gstin_index, catalogue.whisky, "sell", date(2048, 1, 1)
             )
             is None
         )

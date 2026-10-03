@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from audit.models import AuditEvent
 from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass, Unit
-from catalogue.service import add_rule_version
+from catalogue.service import add_rule_version, add_threshold_version
 from core.db_context import SYSTEM_ROLE, acting_as_system, current_actor, set_actor
 from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
@@ -249,10 +249,30 @@ def review_setting(org):
 
 
 @pytest.fixture
-def settle(trade, catalogue, otp_outbox):
-    """Drive a transaction through the real services (seller starts, buyer then officer decide)."""
+def threshold(catalogue):
+    """Spirits above 200 need the superintendent's final approval."""
+    with acting_as_system("test"):
+        return add_threshold_version(
+            substance_class=catalogue.spirits,
+            superintendent_above_qty=Decimal("200"),
+            created_by="test",
+        )
 
-    def _settle(qty="10", *, buyer="CONFIRM", officer="APPROVE", reason_code="", comment=""):
+
+@pytest.fixture
+def settle(trade, catalogue, otp_outbox):
+    """Drive a transaction through the real services (seller starts, buyer then officer decide,
+    then the superintendent when the officer recommended and `superintendent` is given)."""
+
+    def _settle(
+        qty="10",
+        *,
+        buyer="CONFIRM",
+        officer="APPROVE",
+        superintendent=None,
+        reason_code="",
+        comment="",
+    ):
         set_actor(user_id=trade.seller.user_id, role=trade.seller.role)
         tx = start_transaction(
             seller=trade.seller,
@@ -277,6 +297,15 @@ def settle(trade, catalogue, otp_outbox):
                 otp_outbox,
                 reason_code=reason_code if officer == "REJECT" else "",
                 comment=comment if officer == "REJECT" else "",
+            )
+        if officer == "RECOMMEND" and superintendent:
+            tx = _sign(
+                trade.superintendent,
+                tx,
+                superintendent,
+                otp_outbox,
+                reason_code=reason_code if superintendent == "REJECT" else "",
+                comment=comment if superintendent == "REJECT" else "",
             )
         return tx
 

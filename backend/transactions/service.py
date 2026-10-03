@@ -13,6 +13,7 @@ from django.utils import timezone
 from alerts.service import raise_buyer_rejection_alerts
 from audit.service import record
 from catalogue.models import Substance
+from catalogue.service import approval_chain_for
 from core import crypto
 from core.db_context import acting_as_system
 from identity import otp
@@ -26,6 +27,7 @@ from reasons.service import resolve_reason
 from stock.service import InsufficientStock, StockLimitExceeded, transfer
 from transactions.checks import eligibility_problems, transaction_problems
 from transactions.models import (
+    ApprovalChain,
     DecisionOutcome,
     DecisionStep,
     Transaction,
@@ -130,6 +132,7 @@ def start_transaction(
             route=transport.route,
             designated_position=designated,
             superintendent_position=superintendent,
+            approval_chain=approval_chain_for(substance, quantity),
             created_by=seller.user_id,
         )
         record(
@@ -177,11 +180,14 @@ def cancel_transaction(*, reference: str, seller: User) -> Transaction:
 
 
 WRONG_TURN = "This transaction is not waiting for your decision."
-_ALLOWED = {
-    "buyer": {DecisionOutcome.CONFIRM, DecisionOutcome.REJECT},
-    "officer": {DecisionOutcome.APPROVE, DecisionOutcome.REJECT},
+SAME_PERSON = (
+    "You made the officer decision on this transaction; another officer must give final approval."
+)
+_REASON_KIND = {
+    "buyer": ReasonKind.BUYER_REJECTION,
+    "officer": ReasonKind.OFFICER_REJECTION,
+    "superintendent": ReasonKind.OFFICER_REJECTION,
 }
-_REASON_KIND = {"buyer": ReasonKind.BUYER_REJECTION, "officer": ReasonKind.OFFICER_REJECTION}
 
 
 def decision_role(tx: Transaction, user: User) -> str | None:
@@ -194,7 +200,24 @@ def decision_role(tx: Transaction, user: User) -> str | None:
         user
     ):
         return "officer"
+    if (
+        tx.status == TransactionStatus.AWAITING_SUPERINTENDENT
+        and tx.superintendent_position in positions_held(user)
+    ):
+        return "superintendent"
     return None
+
+
+def allowed_outcomes(tx: Transaction, role: str) -> set[str]:
+    """What `role` may decide on `tx` now. On the two-step chain the officer recommends and
+    the superintendent gives the final approval."""
+    if role == "buyer":
+        return {DecisionOutcome.CONFIRM, DecisionOutcome.REJECT}
+    if role == "officer" and tx.approval_chain == ApprovalChain.OFFICER_THEN_SUPERINTENDENT:
+        return {DecisionOutcome.RECOMMEND, DecisionOutcome.REJECT}
+    if role in {"officer", "superintendent"}:
+        return {DecisionOutcome.APPROVE, DecisionOutcome.REJECT}
+    return set()
 
 
 def _for_decision(reference: str, user: User) -> tuple[Transaction, str]:
@@ -223,7 +246,7 @@ def decide(
     comment: str = "",
 ) -> Transaction | None:
     tx, role = _for_decision(reference, user)
-    if outcome not in _ALLOWED[role]:
+    if outcome not in allowed_outcomes(tx, role):
         raise NotAllowed("That decision is not available at this step.")
     reason = (
         resolve_reason(_REASON_KIND[role], reason_code, comment)
@@ -255,19 +278,23 @@ def _apply(
     locked = Transaction.objects.select_for_update().get(pk=tx.pk)
     if decision_role(locked, user) != role:
         raise NotAllowed(WRONG_TURN)
+    if role == "superintendent" and _made_officer_decision(locked, user):
+        raise NotAllowed(SAME_PERSON)
     now = timezone.now()
-    if role == "officer" and outcome == DecisionOutcome.APPROVE:
+    if outcome == DecisionOutcome.APPROVE:
         _approve(locked)
+    if outcome == DecisionOutcome.RECOMMEND:
+        _recheck(locked)
     locked.status = _NEXT[(role, outcome)]
-    if locked.status != TransactionStatus.AWAITING_OFFICER:
+    if locked.status not in _WAITING:
         locked.decided_at = now
     locked.save(update_fields=["status", "decided_at"])
     TransactionDecision.objects.create(
         transaction=locked,
-        step=DecisionStep.BUYER if role == "buyer" else DecisionStep.OFFICER,
+        step=_STEP[role],
         outcome=outcome,
         actor_user_id=user.user_id,
-        position=locked.designated_position if role == "officer" else None,
+        position=_position(locked, role),
         reason=reason,
         comment=comment.strip(),
         otp_verified_at=now,
@@ -286,9 +313,21 @@ def _apply(
     return locked
 
 
-def _approve(tx: Transaction) -> None:
-    """Re-check everything at approval: both licences are still eligible today, the limits,
-    and stock (again under the balance locks, with the buyer's stock cap)."""
+def _made_officer_decision(tx: Transaction, user: User) -> bool:
+    return tx.decisions.filter(step=DecisionStep.OFFICER, actor_user_id=user.user_id).exists()
+
+
+def _position(tx: Transaction, role: str) -> Position | None:
+    if role == "officer":
+        return tx.designated_position
+    if role == "superintendent":
+        return tx.superintendent_position
+    return None
+
+
+def _recheck(tx: Transaction) -> None:
+    """Both licences are still eligible today, the limits, and stock (with the buyer's stock
+    cap). Moves nothing: an officer recommendation runs this alone."""
     today = timezone.localdate()
     seller = tx.seller_licence
     buyer = tx.buyer_licence
@@ -300,6 +339,12 @@ def _approve(tx: Transaction) -> None:
     )
     if problems:
         raise TransactionRefused(problems)
+
+
+def _approve(tx: Transaction) -> None:
+    """Re-check everything at approval, then move the stock (again under the balance locks,
+    with the buyer's stock cap)."""
+    _recheck(tx)
     try:
         transfer(
             from_gstin_index=tx.seller_gstin_index,
@@ -307,21 +352,35 @@ def _approve(tx: Transaction) -> None:
             substance=tx.substance,
             quantity=tx.quantity,
             transaction_reference=tx.reference,
-            max_target=current_permissions(buyer, tx.substance).max_stock_qty,
+            max_target=current_permissions(tx.buyer_licence, tx.substance).max_stock_qty,
         )
     except (InsufficientStock, StockLimitExceeded) as exc:
         raise TransactionRefused([str(exc) + "."]) from exc
 
 
+# (role, outcome) -> the status it leads to, and the audit action it records.
 _NEXT = {
     ("buyer", DecisionOutcome.CONFIRM): TransactionStatus.AWAITING_OFFICER,
     ("buyer", DecisionOutcome.REJECT): TransactionStatus.REJECTED_BY_BUYER,
     ("officer", DecisionOutcome.APPROVE): TransactionStatus.APPROVED,
+    ("officer", DecisionOutcome.RECOMMEND): TransactionStatus.AWAITING_SUPERINTENDENT,
     ("officer", DecisionOutcome.REJECT): TransactionStatus.REJECTED_BY_OFFICER,
+    ("superintendent", DecisionOutcome.APPROVE): TransactionStatus.APPROVED,
+    ("superintendent", DecisionOutcome.REJECT): TransactionStatus.REJECTED_BY_SUPERINTENDENT,
 }
 _AUDIT = {
     ("buyer", DecisionOutcome.CONFIRM): "transaction.buyer_confirmed",
     ("buyer", DecisionOutcome.REJECT): "transaction.buyer_rejected",
     ("officer", DecisionOutcome.APPROVE): "transaction.approved",
+    ("officer", DecisionOutcome.RECOMMEND): "transaction.recommended",
     ("officer", DecisionOutcome.REJECT): "transaction.officer_rejected",
+    ("superintendent", DecisionOutcome.APPROVE): "transaction.approved",
+    ("superintendent", DecisionOutcome.REJECT): "transaction.superintendent_rejected",
 }
+_STEP = {
+    "buyer": DecisionStep.BUYER,
+    "officer": DecisionStep.OFFICER,
+    "superintendent": DecisionStep.SUPERINTENDENT,
+}
+# Statuses still waiting for someone: decided_at stays null.
+_WAITING = {TransactionStatus.AWAITING_OFFICER, TransactionStatus.AWAITING_SUPERINTENDENT}

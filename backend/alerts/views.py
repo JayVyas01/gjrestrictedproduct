@@ -30,8 +30,11 @@ class AcknowledgeView(APIView):
         data.is_valid(raise_exception=True)
         try:
             acknowledge(alert_id=alert_id, user=request.user, note=data.validated_data["note"])
-        except NotAllowed as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except NotAllowed:
+            return Response(
+                {"detail": "You are not allowed to acknowledge this alert."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         alert = AuthorityAlert.objects.select_related("transaction__substance", "reason").get(
             pk=alert_id
         )

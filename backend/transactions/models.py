@@ -83,6 +83,17 @@ class Transaction(models.Model):
                 name="transaction_not_self",
             ),
         ]
+        indexes = [
+            models.Index(
+                fields=["seller_gstin_index", "status", "decided_at"],
+                name="tx_seller_status_decided",
+            ),
+            models.Index(fields=["buyer_gstin_index"], name="tx_buyer"),
+            models.Index(
+                fields=["superintendent_position", "status", "decided_at"],
+                name="tx_super_status_decided",
+            ),
+        ]
 
     def transporter_name(self) -> str:
         return crypto.decrypt(self.transporter_name_encrypted)

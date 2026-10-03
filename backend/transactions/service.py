@@ -10,6 +10,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from alerts.service import raise_buyer_rejection_alerts
 from audit.service import record
 from catalogue.models import Substance
 from core import crypto
@@ -271,6 +272,8 @@ def _apply(
         comment=comment.strip(),
         otp_verified_at=now,
     )
+    if role == "buyer" and outcome == DecisionOutcome.REJECT:
+        raise_buyer_rejection_alerts(locked, reason, comment.strip())
     record(
         action=_AUDIT[(role, outcome)],
         actor=user.user_id,

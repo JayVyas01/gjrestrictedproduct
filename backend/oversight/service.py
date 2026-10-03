@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 
 from audit.service import record
+from core.db_context import acting_as_system
 from oversight.models import REVIEW_PERIODS, BatchItem, OversightBatch, SuperintendentSetting
 from positions.models import AreaLevel, Position
 from transactions.models import Transaction, TransactionStatus
@@ -24,6 +25,28 @@ def _next_start(position: Position, fallback: date) -> date:
     return last.period_end + timedelta(days=1) if last else fallback
 
 
+def _resolve_start(position: Position, starts_on: date | None) -> date:
+    """The start date of the new period, so that no approved transaction is ever skipped.
+
+    With batches: the day after the last batch (an explicit date must equal it). Without batches:
+    the existing setting's start (an explicit date may not be later), or today for a new setting.
+    """
+    existing = SuperintendentSetting.objects.filter(position=position).first()
+    last = position.batches.order_by("-period_end").first()
+    if last:
+        required = last.period_end + timedelta(days=1)
+        if starts_on is not None and starts_on != required:
+            raise InvalidSetting(f"The new period must start on {required.isoformat()}.")
+        return required
+    latest_allowed = existing.starts_on if existing else timezone.localdate()
+    if existing and starts_on is not None and starts_on > latest_allowed:
+        raise InvalidSetting(
+            f"The new period cannot start after {latest_allowed.isoformat()}, "
+            "or transactions in between would never be reviewed."
+        )
+    return starts_on or latest_allowed
+
+
 def set_review_period(
     *, position: Position, days: int, by: str, starts_on: date | None = None
 ) -> SuperintendentSetting:
@@ -33,17 +56,19 @@ def set_review_period(
         raise InvalidSetting(
             "Review periods can only be set for a district superintendent position."
         )
-    start = starts_on or _next_start(position, timezone.localdate())
-    setting, _ = SuperintendentSetting.objects.update_or_create(
-        position=position, defaults={"period_days": days, "starts_on": start, "updated_by": by}
-    )
-    record(
-        action="oversight.review_period_set",
-        actor=by,
-        subject_type="position",
-        subject_id=position.code,
-        payload={"period_days": days, "starts_on": start.isoformat()},
-    )
+    # Lookups and write run as SYSTEM so the caller's row-level security cannot hide batches.
+    with acting_as_system("set_review_period"):
+        start = _resolve_start(position, starts_on)
+        setting, _ = SuperintendentSetting.objects.update_or_create(
+            position=position, defaults={"period_days": days, "starts_on": start, "updated_by": by}
+        )
+        record(
+            action="oversight.review_period_set",
+            actor=by,
+            subject_type="position",
+            subject_id=position.code,
+            payload={"period_days": days, "starts_on": start.isoformat()},
+        )
     return setting
 
 

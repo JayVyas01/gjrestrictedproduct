@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-03, D2b Task 3: superintendent review periods and batch creation (283 tests).
+**Last updated:** 2026-10-03, D2b Task 3: superintendent review periods and batch creation (286 tests).
 
 ---
 
@@ -164,7 +164,7 @@ Each district superintendent position has a review period (15, 30 or 60 days). W
 | File | Responsibility | Key names | Tests |
 |---|---|---|---|
 | `oversight/models.py` | The review setting (one per district position), batches (one per position and period start) and batch items; `REVIEW_PERIODS`, `SIGN_OFF_DAYS` (30) and `due_on()` | `SuperintendentSetting`, `OversightBatch`, `BatchItem` | `test_oversight_batches.py` |
-| `oversight/service.py` | Setting the review period (district positions only, audited as `oversight.review_period_set`; a change continues after the last batch) and idempotent batch creation for every completed period (audited as `oversight.batch_created`) | `set_review_period`, `create_due_batches`, `InvalidSetting` | `test_oversight_batches.py` |
+| `oversight/service.py` | Setting the review period (district positions only; lookups and write run as SYSTEM so the caller's RLS cannot hide batches; a change continues the day after the last batch, or keeps the existing start when no batch exists; an explicit start that would skip or overlap days is refused; audited as `oversight.review_period_set`) and idempotent batch creation for every completed period (audited as `oversight.batch_created`) | `set_review_period`, `create_due_batches`, `InvalidSetting` | `test_oversight_batches.py` |
 | `oversight/management/commands/create_due_batches.py` | Daily job: `manage.py create_due_batches [--today YYYY-MM-DD]` runs `create_due_batches` as SYSTEM | `Command` | `test_oversight_batches.py::test_command_creates_due_batches` |
 | `oversight/migrations/0002_rls_and_append_only.py` | Row-level security (position-holder and authority read, SYSTEM-only write), append-only via REVOKE and triggers (reversible); the setting has no RLS | — | `test_oversight_batches.py::test_only_the_superintendent_and_authorities_see_batches`, `test_batches_are_append_only_even_for_owner` |
 
@@ -534,6 +534,9 @@ Shared fixtures (`make_user`, `make_licence`, `make_licensee`, `trade`, `org`, `
 | `test_batch_holds_approved_transactions_of_the_period` | Only approved transactions decided inside the period are listed; due date is 30 days after the period ends |
 | `test_no_batch_for_the_period_still_running` | No batch until the period has fully ended |
 | `test_batches_are_created_once_per_completed_period` | Back-to-back periods are created once each and a rerun creates none; each is audited |
+| `test_changing_the_period_before_any_batch_keeps_the_start` | With no batch yet, a new length keeps the existing start date |
+| `test_review_period_set_by_licensing_authority_sees_existing_batches` | A Licensing Authority caller still continues after the last batch (lookups run as SYSTEM) |
+| `test_review_period_cannot_skip_days` | An explicit start that would leave days unreviewed or overlap a batch is refused |
 | `test_empty_period_still_gets_a_batch` | A period with no approvals still gets an empty batch |
 | `test_changing_the_period_continues_after_the_last_batch` | A new period length starts the day after the last batch ended |
 | `test_only_the_superintendent_and_authorities_see_batches` | The superintendent and Head Authority see the batch; the officer and the seller see none |

@@ -103,3 +103,43 @@ def test_batches_are_append_only_even_for_owner(db, review_setting):
 def test_command_creates_due_batches(app_db, review_setting, capsys):
     call_command("create_due_batches", "--today", "2026-06-16")
     assert "Created 1 batch" in capsys.readouterr().out
+
+
+def test_changing_the_period_before_any_batch_keeps_the_start(
+    app_db, org, review_setting, monkeypatch
+):
+    monkeypatch.setattr("oversight.service.timezone.localdate", lambda: date(2026, 6, 10))
+    with acting_as_system("test"):
+        setting = set_review_period(position=org.district_officer, days=30, by="test")
+    assert setting.starts_on == date(2026, 6, 1)
+    [batch] = run(date(2026, 7, 2))
+    assert (batch.period_start, batch.period_end) == (date(2026, 6, 1), date(2026, 6, 30))
+
+
+def test_review_period_set_by_licensing_authority_sees_existing_batches(
+    app_db, org, review_setting, make_user
+):
+    run(date(2026, 6, 16))
+    la = make_user(role=Role.LICENSING_AUTHORITY)
+    with transaction.atomic():
+        set_actor(user_id=la.user_id, role=la.role)
+        setting = set_review_period(position=org.district_officer, days=30, by="la")
+    assert setting.starts_on == date(2026, 6, 16)
+
+
+def test_review_period_cannot_skip_days(app_db, org, review_setting):
+    with acting_as_system("test"):
+        with pytest.raises(InvalidSetting, match="cannot start after 2026-06-01"):
+            set_review_period(
+                position=org.district_officer, days=30, by="test", starts_on=date(2026, 6, 5)
+            )
+    run(date(2026, 6, 16))
+    with acting_as_system("test"):
+        with pytest.raises(InvalidSetting, match="must start on 2026-06-16"):
+            set_review_period(
+                position=org.district_officer, days=30, by="test", starts_on=date(2026, 6, 20)
+            )
+        with pytest.raises(InvalidSetting, match="must start on 2026-06-16"):
+            set_review_period(
+                position=org.district_officer, days=30, by="test", starts_on=date(2026, 6, 10)
+            )

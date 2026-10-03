@@ -108,3 +108,35 @@ Open items from the D1 reviews. None of them block D2.
   - the reject audit actions
 - **Service:** a seller without a selling licence, an outsider getting `NotAllowed`, and a refused start writing no audit event.
 - **Naming:** `test_stock_and_buyer_capacity_messages` only checks the seller's stock.
+
+---
+
+# Demo D2b follow-ups (added 2026-10-04)
+
+## Decisions to confirm
+
+| Decision | Current behaviour |
+|---|---|
+| Alert content | Alerts show registered names and the reason, not licence numbers, and have no inline timeline; the officer opens the transaction for that. Spec §5a lists licence numbers. This was minimised deliberately under DPDP; please confirm. |
+| Sign-off deadline | 30 days after the period ends, as you decided. |
+| One-time codes | Transaction decisions and batch sign-off share the `DECISION` code purpose. Codes are bound to the user, so they can't be misused, but a sign-off code would also work for a pending transaction decision of the same user. |
+
+## For D3 (screens) and D4 (demo tooling)
+
+- **Scheduling:** run `create_due_batches` around 01:00 IST, so late-evening approvals have committed before the batch is made.
+- **Demo reset:** recreate the database. The append-only tables block TRUNCATE.
+- **Seed data:** create review settings with a start date before the backdated approvals.
+- **D3 review-period screen:** check the Licensing Authority role (`set_review_period` itself has no caller check), and keep the call short, because it holds the batch-job lock until the request commits.
+- **Batch list:** paginate it. Also batch the alert, summary and item queries (they currently run several queries per row).
+
+## Test gaps
+
+- **Alerts:** a non-SYSTEM insert or delete, Head Authority unable to acknowledge, and an alert failure rolling back the decision.
+- **Oversight:**
+  - row-level-security reads of batch items, flags and sign-offs
+  - inclusive period boundaries
+  - two settings in one run
+  - another user's code at sign-off
+  - a former position holder acting after a transfer
+  - a flag racing a sign-off
+- **API:** 403 on the sign-off code and sign-off endpoints, `can_sign` for Head Authority and after signing, and throttling.

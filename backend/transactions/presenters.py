@@ -3,7 +3,8 @@ licence is hidden from the viewer by RLS) and only the registered name is shown.
 and officer's free-text comments, and who held the position when the officer
 and superintendent decided (`held_by`), are shown to officer, superintendent and authority
 viewers only. `can_decide` says whether the viewer is the one whose decision is awaited, and
-`allowed_outcomes` what they may decide."""
+`allowed_outcomes` what they may decide. `stock_limit_problem` (the buyer's own stock numbers)
+is shown to the buyer only, while the sale waits for them; the seller never sees it."""
 
 from core.db_context import acting_as_system
 from identity.models import User
@@ -11,7 +12,7 @@ from identity.roles import Role
 from positions.service import positions_held
 from transactions.checks import fmt_qty
 from transactions.models import DecisionStep, Transaction, TransactionStatus
-from transactions.service import allowed_outcomes, decision_role
+from transactions.service import allowed_outcomes, decision_role, stock_limit_problem
 
 _AUTHORITY_ROLES = {Role.HEAD_AUTHORITY, Role.SOFTWARE_OWNER}
 _NEXT_ACTION = {
@@ -118,4 +119,9 @@ def transaction_detail(tx: Transaction, viewer: User) -> dict:
         "next_action": _next_action(tx, role),
         "can_decide": deciding_as is not None,
         "allowed_outcomes": sorted(allowed_outcomes(tx, deciding_as)) if deciding_as else [],
+        "stock_limit_problem": (
+            stock_limit_problem(tx)
+            if role == "buyer" and tx.status == TransactionStatus.AWAITING_BUYER
+            else None
+        ),
     }

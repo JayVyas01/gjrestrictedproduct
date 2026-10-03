@@ -23,9 +23,9 @@ from licensing.service import GSTIN_PATTERN, current_permissions
 from positions.models import AreaLevel, Position
 from positions.service import covering_position, positions_held
 from reasons.models import ReasonKind
-from reasons.service import resolve_reason
+from reasons.service import InvalidReason, resolve_reason
 from stock.service import InsufficientStock, StockLimitExceeded, transfer
-from transactions.checks import eligibility_problems, transaction_problems
+from transactions.checks import buyer_stock_problem, eligibility_problems, transaction_problems
 from transactions.models import (
     ApprovalChain,
     DecisionOutcome,
@@ -81,7 +81,9 @@ def find_buyer(*, gstin: str, by: User) -> str | None:
     return licence.holder_name if licence else None
 
 
-def _refusals(seller_licence, buyer_licence, substance, quantity) -> list[str]:
+def _refusals(
+    seller_licence, buyer_licence, substance, quantity, include_buyer_stock=False
+) -> list[str]:
     problems = eligibility_problems(seller_licence, buyer_licence, substance)
     if problems:
         return problems
@@ -90,6 +92,7 @@ def _refusals(seller_licence, buyer_licence, substance, quantity) -> list[str]:
         buyer_licence=buyer_licence,
         substance=substance,
         quantity=quantity,
+        include_buyer_stock=include_buyer_stock,
     )
 
 
@@ -217,9 +220,28 @@ def _made_officer_decision(tx: Transaction, user: User) -> bool:
     return tx.decisions.filter(step=DecisionStep.OFFICER, actor_user_id=user.user_id).exists()
 
 
+STOCK_LIMIT = "STOCK_LIMIT"
+NO_STOCK_PROBLEM = "Your stock limit allows this sale, so choose another reason."
+
+
+def stock_limit_problem(tx: Transaction) -> str | None:
+    """The buyer's own stock-limit problem with this sale, if any. Only the buyer sees it."""
+    with acting_as_system("buyer_stock_check"):
+        return buyer_stock_problem(tx)
+
+
 def allowed_outcomes(tx: Transaction, role: str) -> set[str]:
-    """What `role` may decide on `tx` now. On the two-step chain the officer recommends and
-    the superintendent gives the final approval."""
+    """What `role` may choose on `tx` now: a buyer this sale would take over their stock
+    limit can only reject."""
+    outcomes = _step_outcomes(tx, role)
+    if role == "buyer" and stock_limit_problem(tx):
+        return {DecisionOutcome.REJECT}
+    return outcomes
+
+
+def _step_outcomes(tx: Transaction, role: str) -> set[str]:
+    """The outcomes of `role`'s step. On the two-step chain the officer recommends and the
+    superintendent gives the final approval."""
     if role == "buyer":
         return {DecisionOutcome.CONFIRM, DecisionOutcome.REJECT}
     if role == "officer" and tx.approval_chain == ApprovalChain.OFFICER_THEN_SUPERINTENDENT:
@@ -257,8 +279,12 @@ def decide(
     comment: str = "",
 ) -> Transaction | None:
     tx, role = _for_decision(reference, user)
-    if outcome not in allowed_outcomes(tx, role):
+    # A buyer CONFIRM over their stock limit passes here and is refused under the lock in
+    # _apply, with the reason (422) and an audit record.
+    if outcome not in _step_outcomes(tx, role):
         raise NotAllowed("That decision is not available at this step.")
+    if role == "buyer" and outcome == DecisionOutcome.REJECT:
+        reason_code = _buyer_reason_code(tx, reason_code)
     reason = (
         resolve_reason(_REASON_KIND[role], reason_code, comment)
         if outcome == DecisionOutcome.REJECT
@@ -275,12 +301,35 @@ def decide(
     except TransactionRefused:
         # The decision's writes rolled back with the savepoint; the refusal itself is kept.
         record(
-            action="transaction.approval_refused",
+            action=(
+                "transaction.confirm_refused" if role == "buyer" else "transaction.approval_refused"
+            ),
             actor=user.user_id,
             subject_type="transaction",
             subject_id=tx.reference,
         )
         raise
+
+
+def _buyer_reason_code(tx: Transaction, reason_code: str) -> str:
+    """STOCK_LIMIT is the default while the sale would take the buyer over their limit, and
+    is refused otherwise. Checked before the code is spent, so the code stays usable."""
+    problem = stock_limit_problem(tx)
+    if not reason_code and problem:
+        return STOCK_LIMIT
+    if reason_code == STOCK_LIMIT and not problem:
+        raise InvalidReason(NO_STOCK_PROBLEM)
+    return reason_code
+
+
+def _check_buyer_stock(tx: Transaction, outcome: str, reason) -> None:
+    """Under the transaction lock: no CONFIRM over the buyer's stock limit, and STOCK_LIMIT
+    only while that problem exists (it raises no alert, so it must be true)."""
+    problem = buyer_stock_problem(tx)
+    if outcome == DecisionOutcome.CONFIRM and problem:
+        raise TransactionRefused([problem])
+    if reason is not None and reason.code == STOCK_LIMIT and not problem:
+        raise InvalidReason(NO_STOCK_PROBLEM)
 
 
 def _apply(
@@ -292,6 +341,8 @@ def _apply(
     if decision_role(locked, user) != role:
         raise NotAllowed(WRONG_TURN)
     now = timezone.now()
+    if role == "buyer":
+        _check_buyer_stock(locked, outcome, reason)
     if outcome == DecisionOutcome.APPROVE:
         _approve(locked)
     if outcome == DecisionOutcome.RECOMMEND:
@@ -312,7 +363,12 @@ def _apply(
     )
     payload = None
     if role == "buyer" and outcome == DecisionOutcome.REJECT:
-        alerts = raise_buyer_rejection_alerts(locked, reason, comment.strip())
+        # A stock-limit rejection is the buyer protecting their own licence: no alert.
+        alerts = (
+            []
+            if reason.code == STOCK_LIMIT
+            else raise_buyer_rejection_alerts(locked, reason, comment.strip())
+        )
         payload = {"alerts_raised": len(alerts)}
     record(
         action=_AUDIT[(role, outcome)],
@@ -343,6 +399,7 @@ def _recheck(tx: Transaction) -> None:
         buyer if licence_eligible(buyer, tx.substance, "buy", today) else None,
         tx.substance,
         tx.quantity,
+        include_buyer_stock=True,
     )
     if problems:
         raise TransactionRefused(problems)

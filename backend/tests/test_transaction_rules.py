@@ -124,11 +124,29 @@ def test_buyer_stock_limit_message(app_db, catalogue, trade):
             buyer_licence=trade.buyer_licence,
             substance=catalogue.whisky,
             quantity=Decimal("200"),
+            include_buyer_stock=True,
         )
     assert problems == [
         "This sale would take the buyer's stock of Whisky to 1100 L, "
         "above their licence limit of 1000 L."
     ]
+
+
+def test_buyer_stock_not_checked_by_default(app_db, catalogue, trade):
+    with acting_as_system("test"):
+        set_opening_balance(
+            gstin_index=trade.buyer_licence.gstin_index,
+            substance=catalogue.whisky,
+            quantity=Decimal("900"),
+            by="test",
+        )
+        problems = transaction_problems(
+            seller_licence=trade.seller_licence,
+            buyer_licence=trade.buyer_licence,
+            substance=catalogue.whisky,
+            quantity=Decimal("200"),
+        )
+    assert problems == []
 
 
 def test_valid_transaction_has_no_problems(app_db, catalogue, trade):

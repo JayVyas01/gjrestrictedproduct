@@ -35,11 +35,17 @@ def pattern_text(count: int) -> str:
 
 
 def _recent_rejections(tx: Transaction) -> int:
-    return Transaction.objects.filter(
-        seller_gstin_index=tx.seller_gstin_index,
-        status=TransactionStatus.REJECTED_BY_BUYER,
-        decided_at__gte=timezone.now() - PATTERN_WINDOW,
-    ).count()
+    """Buyer rejections of this seller in the window. A STOCK_LIMIT rejection (the buyer's own
+    limit) says nothing about the seller and is not counted."""
+    return (
+        Transaction.objects.filter(
+            seller_gstin_index=tx.seller_gstin_index,
+            status=TransactionStatus.REJECTED_BY_BUYER,
+            decided_at__gte=timezone.now() - PATTERN_WINDOW,
+        )
+        .exclude(decisions__step="BUYER", decisions__reason__code="STOCK_LIMIT")
+        .count()
+    )
 
 
 def raise_buyer_rejection_alerts(

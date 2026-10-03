@@ -46,6 +46,7 @@ def test_superintendent_reviews_flags_and_signs(app_db, client, trade, batch_id,
     assert detail["can_sign"] is True
     assert detail["items"][0]["reference"] == ref
     assert detail["items"][0]["approved_by_position"] == "Area Officer, Sanand"
+    assert detail["items"][0]["approved_by_superintendent"] is False
     flagged = post(
         client,
         f"/api/oversight/batches/{bid}/flag",
@@ -114,3 +115,24 @@ def test_bad_reason_is_400_and_wrong_code_is_401(app_db, client, trade, batch_id
         client, f"/api/oversight/batches/{bid}/sign-off", {"challenge_id": challenge, "code": wrong}
     )
     assert response.status_code == 401
+
+
+def test_superintendent_approved_item_is_marked_and_cannot_be_flagged(
+    app_db, client, trade, settle, review_setting, threshold, otp_outbox
+):
+    tx = settle("300", officer="RECOMMEND", superintendent="APPROVE")
+    set_decided_on(tx, date(2026, 6, 10))
+    with acting_as_system("test"):
+        [made] = create_due_batches(date(2026, 6, 16))
+    login(client, trade.superintendent, otp_outbox)
+    detail = client.get(f"/api/oversight/batches/{made.id}").json()
+    assert detail["items"][0]["approved_by_superintendent"] is True
+    refused = post(
+        client,
+        f"/api/oversight/batches/{made.id}/flag",
+        {"reference": tx.reference, "reason_code": "PATTERN_CONCERN"},
+    )
+    assert refused.status_code == 403
+    assert refused.json() == {
+        "detail": "You approved this transaction; the Head Authority reviews it."
+    }

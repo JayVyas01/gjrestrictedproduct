@@ -27,13 +27,8 @@ from positions.models import AreaLevel, Position
 from positions.service import positions_held
 from reasons.models import ReasonKind
 from reasons.service import resolve_reason
-from transactions.models import (
-    DecisionOutcome,
-    DecisionStep,
-    Transaction,
-    TransactionDecision,
-    TransactionStatus,
-)
+from transactions.models import DecisionStep, Transaction, TransactionStatus
+from transactions.service import final_approval
 
 
 class InvalidSetting(Exception):
@@ -154,6 +149,7 @@ class NotAllowed(Exception):
 
 
 ALREADY_SIGNED = "This batch is already signed off."
+OWN_APPROVAL = "You approved this transaction; the Head Authority reviews it."
 
 
 def batch_status(batch: OversightBatch, today: date) -> str:
@@ -188,6 +184,9 @@ def flag_item(
     )
     if item is None:
         raise NotAllowed("That transaction is not in this batch.")
+    approval = final_approval(item.transaction)
+    if approval.step == DecisionStep.SUPERINTENDENT:
+        raise NotAllowed(OWN_APPROVAL)
     reason = resolve_reason(ReasonKind.SUPERINTENDENT_FLAG, reason_code, comment)
     with acting_as_system("flag_transaction"):
         _lock_batch(batch)
@@ -202,11 +201,8 @@ def flag_item(
             flagged_by=user.user_id,
             position=batch.position,
         )
-        approving = TransactionDecision.objects.get(
-            transaction=item.transaction, step=DecisionStep.OFFICER, outcome=DecisionOutcome.APPROVE
-        )
         raise_flag_alert(
-            tx=item.transaction, position=approving.position, reason=reason, comment=comment.strip()
+            tx=item.transaction, position=approval.position, reason=reason, comment=comment.strip()
         )
         record(
             action="oversight.transaction_flagged",

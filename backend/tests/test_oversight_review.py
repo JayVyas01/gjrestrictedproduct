@@ -7,6 +7,7 @@ from alerts.models import AuthorityAlert
 from core.db_context import acting_as_system, set_actor
 from identity.models import OtpChallenge
 from oversight.models import BatchFlag, BatchSignOff
+from oversight.presenters import batch_detail
 from oversight.service import (
     NotAllowed,
     batch_status,
@@ -198,3 +199,62 @@ def test_flags_and_sign_offs_are_append_only_even_for_owner(db, trade, batch, ot
         with pytest.raises(DatabaseError, match="append-only"):
             with transaction.atomic():
                 model.objects.update(created_at=None)
+
+
+@pytest.fixture
+def mixed_batch(settle, review_setting, threshold):
+    """One officer-only transaction and one the superintendent gave final approval to."""
+    officer_only = settle("10")
+    two_step = settle("300", officer="RECOMMEND", superintendent="APPROVE")
+    for tx in (officer_only, two_step):
+        set_decided_on(tx, date(2026, 6, 10))
+    with acting_as_system("test"):
+        [made] = create_due_batches(date(2026, 6, 16))
+    return made, officer_only, two_step
+
+
+def test_superintendent_approved_items_are_marked(app_db, org, trade, mixed_batch):
+    made, officer_only, two_step = mixed_batch
+    as_user(trade.superintendent)
+    items = {
+        i["reference"]: i
+        for i in batch_detail(made, date(2026, 6, 20), trade.superintendent)["items"]
+    }
+    assert items[officer_only.reference]["approved_by_superintendent"] is False
+    assert items[officer_only.reference]["approved_by_position"] == org.area_officer.title
+    assert items[two_step.reference]["approved_by_superintendent"] is True
+    assert items[two_step.reference]["approved_by_position"] == org.district_officer.title
+
+
+def test_superintendent_cannot_flag_own_approval(app_db, trade, mixed_batch, audit_actions):
+    made, _, two_step = mixed_batch
+    before = audit_actions()
+    as_user(trade.superintendent)
+    with pytest.raises(NotAllowed) as refused:
+        flag_item(
+            batch_id=made.id,
+            reference=two_step.reference,
+            user=trade.superintendent,
+            reason_code="PATTERN_CONCERN",
+            comment="",
+        )
+    assert str(refused.value) == "You approved this transaction; the Head Authority reviews it."
+    with acting_as_system("test"):
+        assert BatchFlag.objects.count() == 0
+        assert AuthorityAlert.objects.filter(kind="SUPERINTENDENT_FLAG").count() == 0
+    assert audit_actions() == before
+
+
+def test_officer_only_flag_still_alerts_officer(app_db, org, trade, mixed_batch):
+    made, officer_only, _ = mixed_batch
+    as_user(trade.superintendent)
+    flag_item(
+        batch_id=made.id,
+        reference=officer_only.reference,
+        user=trade.superintendent,
+        reason_code="PATTERN_CONCERN",
+        comment="",
+    )
+    with acting_as_system("test"):
+        alert = AuthorityAlert.objects.get(kind="SUPERINTENDENT_FLAG")
+    assert alert.position == org.area_officer and alert.transaction == officer_only

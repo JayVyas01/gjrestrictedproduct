@@ -220,6 +220,15 @@ def _made_officer_decision(tx: Transaction, user: User) -> bool:
     return tx.decisions.filter(step=DecisionStep.OFFICER, actor_user_id=user.user_id).exists()
 
 
+def final_approval(tx: Transaction) -> TransactionDecision:
+    """The decision that approved `tx`: the officer's on the OFFICER chain, the
+    superintendent's on the two-step chain. Read as SYSTEM so the caller's RLS cannot hide it."""
+    with acting_as_system("final_approval"):
+        return TransactionDecision.objects.select_related("position").get(
+            transaction=tx, outcome=DecisionOutcome.APPROVE
+        )
+
+
 STOCK_LIMIT = "STOCK_LIMIT"
 NO_STOCK_PROBLEM = "Your stock limit allows this sale, so choose another reason."
 

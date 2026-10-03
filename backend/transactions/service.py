@@ -200,12 +200,21 @@ def decision_role(tx: Transaction, user: User) -> str | None:
         user
     ):
         return "officer"
-    if (
-        tx.status == TransactionStatus.AWAITING_SUPERINTENDENT
-        and tx.superintendent_position in positions_held(user)
-    ):
+    if _may_act_as_superintendent(tx, user) and not _made_officer_decision(tx, user):
         return "superintendent"
     return None
+
+
+def _may_act_as_superintendent(tx: Transaction, user: User) -> bool:
+    return (
+        tx.status == TransactionStatus.AWAITING_SUPERINTENDENT
+        and tx.superintendent_position in positions_held(user)
+    )
+
+
+def _made_officer_decision(tx: Transaction, user: User) -> bool:
+    """Separation of duties: whoever made the officer decision never gives the final one."""
+    return tx.decisions.filter(step=DecisionStep.OFFICER, actor_user_id=user.user_id).exists()
 
 
 def allowed_outcomes(tx: Transaction, role: str) -> set[str]:
@@ -224,6 +233,8 @@ def _for_decision(reference: str, user: User) -> tuple[Transaction, str]:
     tx = load_visible(reference)
     role = decision_role(tx, user) if tx else None
     if role is None:
+        if tx and _may_act_as_superintendent(tx, user):
+            raise NotAllowed(SAME_PERSON)  # the holder made the officer decision
         raise NotAllowed(WRONG_TURN)
     return tx, role
 
@@ -276,10 +287,10 @@ def _apply(
     tx: Transaction, user: User, role: str, outcome: str, reason, comment: str
 ) -> Transaction:
     locked = Transaction.objects.select_for_update().get(pk=tx.pk)
+    if role == "superintendent" and _made_officer_decision(locked, user):
+        raise NotAllowed(SAME_PERSON)  # defence under the lock; _for_decision checked first
     if decision_role(locked, user) != role:
         raise NotAllowed(WRONG_TURN)
-    if role == "superintendent" and _made_officer_decision(locked, user):
-        raise NotAllowed(SAME_PERSON)
     now = timezone.now()
     if outcome == DecisionOutcome.APPROVE:
         _approve(locked)
@@ -311,10 +322,6 @@ def _apply(
         payload=payload,
     )
     return locked
-
-
-def _made_officer_decision(tx: Transaction, user: User) -> bool:
-    return tx.decisions.filter(step=DecisionStep.OFFICER, actor_user_id=user.user_id).exists()
 
 
 def _position(tx: Transaction, role: str) -> Position | None:

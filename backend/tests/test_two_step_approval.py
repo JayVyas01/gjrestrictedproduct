@@ -123,14 +123,22 @@ def test_only_current_superintendent_can_decide(
 
 
 def test_officer_cannot_also_give_final_approval(
-    app_db, catalogue, org, trade, threshold, otp_outbox
+    app_db, client, catalogue, org, trade, threshold, otp_outbox
 ):
     assign(org.district_officer, trade.officer, by="test")
     tx = recommended(trade, catalogue, otp_outbox)
-    for outcome, reason in (("APPROVE", ""), ("REJECT", "TRANSPORTER_INVALID")):
-        with pytest.raises(NotAllowed) as refused:
-            act(trade.officer, Role.PERSONNEL, tx, otp_outbox, outcome, reason)
-        assert str(refused.value) == SAME_PERSON
+    as_user(trade.officer, Role.PERSONNEL)
+    issued = len(otp_outbox)
+    with pytest.raises(NotAllowed) as refused:
+        request_decision_code(reference=tx.reference, user=trade.officer)
+    assert str(refused.value) == SAME_PERSON
+    assert len(otp_outbox) == issued  # no code is ever issued
+    login(client, trade.officer, otp_outbox)
+    detail = client.get(f"/api/transactions/{tx.reference}").json()
+    assert detail["can_decide"] is False and detail["allowed_outcomes"] == []
+    assert post(client, f"/api/transactions/{tx.reference}/decision-code").json() == {
+        "detail": SAME_PERSON
+    }
     with acting_as_system("test"):
         tx.refresh_from_db()
         assert tx.status == TransactionStatus.AWAITING_SUPERINTENDENT

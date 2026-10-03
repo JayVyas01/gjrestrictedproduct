@@ -147,13 +147,13 @@ def test_find_by_number_is_exact_but_forgiving_about_case_and_spaces(app_db, mak
     ],
 )
 def test_trading_permitted_follows_validity_period(app_db, make_licence, on, expected):
-    licence = make_licence()
+    licence = make_licence(ends_on=date(2026, 12, 31))
     with acting_as_system("test"):
         assert trading_permitted(licence, on) is expected
 
 
 def test_gap_between_periods_is_not_permitted(app_db, make_licence):
-    licence = make_licence()
+    licence = make_licence(ends_on=date(2026, 12, 31))
     with acting_as_system("test"):
         record_renewal(
             licence, starts_on=date(2027, 3, 1), ends_on=date(2028, 2, 29), recorded_by="test"

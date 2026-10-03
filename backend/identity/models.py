@@ -73,6 +73,7 @@ class User(AbstractBaseUser):
 class OtpPurpose(models.TextChoices):
     LOGIN = "LOGIN", "Login second factor"
     ENROL = "ENROL", "Licence-gated enrolment"
+    DECISION = "DECISION", "Signing a decision"
 
 
 class OtpChallenge(models.Model):

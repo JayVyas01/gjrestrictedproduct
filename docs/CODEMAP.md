@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-03, D2b Task 1: buyer-rejection alerts to the designated officer and superintendent positions, acknowledgement, 30-day pattern count, transaction indexes (268 tests).
+**Last updated:** 2026-10-03, D2b Task 2: alerts API (list, acknowledge), duplicate-acknowledgement race reported plainly (273 tests).
 
 ---
 
@@ -35,7 +35,7 @@ Paths are relative to `backend/`.
 |---|---|---|---|
 | `config/env.py` | Reading environment variables; stops at startup if a required one is missing | `required`, `optional`, `flag`, `listed`, `MissingSetting` | `test_env.py` |
 | `config/settings.py` | All settings: database, security headers, sessions (15-minute idle timeout), rate limits (`login`, `otp`, `enrolment` 10/min, `lookup` 30/min, `NUM_PROXIES: 0`), encryption keys, OTP sender, exception handler | `REST_FRAMEWORK`, `CACHES`, `MIDDLEWARE` | Covered indirectly by all API tests; `check --deploy` in CI |
-| `config/urls.py` | URL routing: `/api/health`, `/api/auth/*`, and the licensing routes under `/api/` (`enrolment/start`, `enrolment/complete`, `licences/mine`, `catalogue/substances`), the stock route, and the transaction routes (`transactions`, `transactions/buyer-lookup`, `transactions/<ref>`, `.../decision-code`, `.../decide`, `.../cancel`) | — | `test_health.py`, `test_login_api.py`, `test_enrolment.py`, `test_licence_api.py`, `test_stock.py::test_my_stock_api`, `test_transaction_api.py` |
+| `config/urls.py` | URL routing: `/api/health`, `/api/auth/*`, and the licensing routes under `/api/` (`enrolment/start`, `enrolment/complete`, `licences/mine`, `catalogue/substances`), the stock route, the transaction routes (`transactions`, `transactions/buyer-lookup`, `transactions/<ref>`, `.../decision-code`, `.../decide`, `.../cancel`), and the alert routes (`alerts`, `alerts/<id>/acknowledge`) | — | `test_health.py`, `test_login_api.py`, `test_enrolment.py`, `test_licence_api.py`, `test_stock.py::test_my_stock_api`, `test_transaction_api.py`, `test_alerts_api.py` |
 | `.env.test` | Test-only settings (never real secrets) | — | — |
 
 ### core: shared building blocks
@@ -152,7 +152,9 @@ In-app alerts addressed to positions, not people: whoever currently holds the po
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `alerts/models.py` | An alert (kind, addressed position, transaction, reason, comment, pattern count) and its at-most-one acknowledgement | `AuthorityAlert`, `AlertAcknowledgement`, `AlertKind` | `test_alerts.py` |
-| `alerts/service.py` | Raising alerts inside the decision's SYSTEM block (buyer rejection: one to the designated officer's position, one to the superintendent's, with the seller's 30-day buyer-rejection count); acknowledging (the user must currently hold the position; once only; audited as `alert.acknowledged`); ordinal and pattern wording | `raise_buyer_rejection_alerts`, `raise_flag_alert`, `acknowledge`, `NotAllowed`, `PATTERN_WINDOW`, `ordinal`, `pattern_text` | `test_alerts.py` |
+| `alerts/service.py` | Raising alerts inside the decision's SYSTEM block (buyer rejection: one to the designated officer's position, one to the superintendent's, with the seller's 30-day buyer-rejection count); acknowledging (the user must currently hold the position; once only, including when two requests race and the unique constraint fires; audited as `alert.acknowledged`); ordinal and pattern wording | `raise_buyer_rejection_alerts`, `raise_flag_alert`, `acknowledge`, `NotAllowed`, `PATTERN_WINDOW`, `ordinal`, `pattern_text` | `test_alerts.py` |
+| `alerts/presenters.py` | What an authority sees for an alert: kind, transaction reference, substance, quantity, registered party names (read as SYSTEM; never licence numbers, GSTINs or contacts), reason, comment, pattern wording (buyer rejections), acknowledgement details | `alert_view` | `test_alerts_api.py` |
+| `alerts/views.py`, `alerts/urls.py` | Thin HTTP layer: list (any logged-in user; RLS scopes rows to held positions; unacknowledged first, then newest, at most 100) and acknowledge (note capped at 500 characters; not allowed returns 403) | `AlertListView`, `AcknowledgeView` | `test_alerts_api.py` |
 | `alerts/migrations/0002_rls_and_append_only.py` | Row-level security (position-holder and authority read, SYSTEM-only write), append-only via REVOKE and triggers (reversible) | — | `test_alerts.py::test_only_position_holders_and_authorities_see_alerts`, `test_alerts.py::test_alerts_and_acknowledgements_are_append_only_even_for_owner` |
 
 ### audit: tamper-evident audit log
@@ -501,6 +503,16 @@ Shared fixtures (`make_user`, `make_licence`, `make_licensee`, `trade`, `org`, `
 | `test_alert_follows_the_position_after_transfer` | After a transfer the old holder sees nothing and the new holder sees and acknowledges the alert (audited) |
 | `test_acknowledge_rules` | Only the current holder of the addressed position can acknowledge; a second acknowledgement is refused |
 | `test_alerts_and_acknowledgements_are_append_only_even_for_owner` | The schema owner cannot update alerts or acknowledgements |
+| `test_duplicate_acknowledgement_race_is_reported_plainly` | When another request wins the race past the exists check, the unique constraint is reported as "already acknowledged" |
+
+### `test_alerts_api.py`: alerts API
+
+| Test | Proves |
+|---|---|
+| `test_officer_sees_alert_with_pattern` | The officer lists the alert with reason, pattern wording and registered names, and no licence numbers |
+| `test_acknowledge_over_http` | Acknowledging with a note returns the updated alert and the unacknowledged count drops to 0 |
+| `test_licensees_see_no_alerts` | A licensee gets an empty list |
+| `test_cannot_acknowledge_someone_elses_alert` | The superintendent cannot acknowledge the officer's alert (403) |
 
 ### `test_transaction_api.py`: transaction API
 

@@ -6,6 +6,7 @@ acknowledge checks in plain Python that the user currently holds the addressed p
 
 from datetime import timedelta
 
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from alerts.models import AlertAcknowledgement, AlertKind, AuthorityAlert
@@ -70,16 +71,24 @@ def raise_flag_alert(
     )
 
 
+def _already_acknowledged(alert: AuthorityAlert) -> bool:
+    return AlertAcknowledgement.objects.filter(alert=alert).exists()
+
+
 def acknowledge(*, alert_id: int, user: User, note: str = "") -> AlertAcknowledgement:
     alert = AuthorityAlert.objects.select_related("position").filter(pk=alert_id).first()
     if alert is None or alert.position not in positions_held(user):
         raise NotAllowed("Only the officer holding this position can acknowledge this alert.")
     with acting_as_system("acknowledge_alert"):
-        if AlertAcknowledgement.objects.filter(alert=alert).exists():
+        if _already_acknowledged(alert):
             raise NotAllowed("This alert is already acknowledged.")
-        ack = AlertAcknowledgement.objects.create(
-            alert=alert, user_id=user.user_id, note=note.strip()
-        )
+        try:
+            with transaction.atomic():
+                ack = AlertAcknowledgement.objects.create(
+                    alert=alert, user_id=user.user_id, note=note.strip()
+                )
+        except IntegrityError:
+            raise NotAllowed("This alert is already acknowledged.") from None
         record(
             action="alert.acknowledged",
             actor=user.user_id,

@@ -139,3 +139,14 @@ def test_alerts_and_acknowledgements_are_append_only_even_for_owner(db, trade, s
     with pytest.raises(DatabaseError, match="append-only"):
         with transaction.atomic():
             AlertAcknowledgement.objects.update(note="edited")
+
+
+def test_duplicate_acknowledgement_race_is_reported_plainly(app_db, trade, settle, monkeypatch):
+    settle(buyer="REJECT", reason_code="NOT_ORDERED")
+    [alert] = visible_alerts(trade.officer)
+    with acting_as_system("test"):
+        AlertAcknowledgement.objects.create(alert=alert, user_id="someone-else")
+    monkeypatch.setattr("alerts.service._already_acknowledged", lambda alert: False)
+    set_actor(user_id=trade.officer.user_id, role=trade.officer.role)
+    with pytest.raises(NotAllowed, match="already acknowledged"):
+        acknowledge(alert_id=alert.id, user=trade.officer)

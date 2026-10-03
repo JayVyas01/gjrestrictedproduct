@@ -140,3 +140,31 @@ Open items from the D1 reviews. None of them block D2.
   - a former position holder acting after a transfer
   - a flag racing a sign-off
 - **API:** 403 on the sign-off code and sign-off endpoints, `can_sign` for Head Authority and after signing, and throttling.
+
+---
+
+# Demo D2c follow-ups (added 2026-10-04)
+
+## For D2d (Licensing Authority APIs)
+
+- **Rule-change proposals:** the flow for proposing and approving rule and threshold changes.
+- **Licence register APIs:** recording, renewing, suspending and revoking licences over HTTP.
+- **Review-settings API:** restricted to the Licensing Authority with `role_required`. This closes the CODEMAP note "the service trusts its caller" (`set_review_period` has no caller check).
+
+## For D3 (screens) and D4 (demo tooling)
+
+- **D4 seed data:** seed a Whisky threshold above 200 L, so the demo shows both chains, and the Head Authority persona.
+- **D3 buyer reject dropdown:** hide the `STOCK_LIMIT` reason unless `stock_limit_problem` is set. The backend refuses it otherwise, but the buyer should not be offered it.
+- **D3 home screen:** `next_due` is the earliest due date of an OPEN batch only. Overdue batches are counted separately (`overdue_batches`), so the screen must show both.
+
+## Hardening (later)
+
+| Item | Note |
+|---|---|
+| `/me` queries the area level once per held position | Fine for the demo (a person holds one or two positions); add `select_related` later. |
+| Alert pattern count uses `.exclude(decisions__step="BUYER", decisions__reason__code="STOCK_LIMIT")` across the decisions join | Correct only because a `REJECTED_BY_BUYER` transaction has just the buyer decision. Revisit if a rejected transaction can ever carry more decisions. |
+| Gujarati | Backend messages are English sentences. They need stable message codes so the web app can translate them (W6). |
+
+## Test gaps
+
+- **Defence-in-depth paths with no test:** the `STOCK_LIMIT` re-check under the transaction lock (a race where the buyer's stock changes between the pre-code check and the lock), and the superintendent separation-of-duties check under the lock (`_apply`). Both are covered earlier in the flow by tested checks; the in-lock copies only matter in a race.

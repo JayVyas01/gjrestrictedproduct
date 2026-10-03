@@ -58,8 +58,7 @@ def transaction_summary(tx: Transaction, viewer: User) -> dict:
 
 
 def _next_action(tx: Transaction, deciding_as: str | None) -> str | None:
-    """Your turn exactly when you are the decider (decision_role), so a holder who made the
-    officer decision is told to wait for the superintendent like everyone else."""
+    """Your turn exactly when you are the decider (decision_role)."""
     if deciding_as is not None:
         return "Your decision is needed."
     return _NEXT_ACTION.get(tx.status)
@@ -115,7 +114,9 @@ def transaction_detail(tx: Transaction, viewer: User) -> dict:
         "timeline": _timeline(tx, for_authority),
         "next_action": _next_action(tx, deciding_as),
         "can_decide": deciding_as is not None,
-        "allowed_outcomes": sorted(allowed_outcomes(tx, deciding_as)) if deciding_as else [],
+        "allowed_outcomes": (
+            sorted(allowed_outcomes(tx, deciding_as, viewer)) if deciding_as else []
+        ),
         "stock_limit_problem": (
             stock_limit_problem(tx)
             if role == "buyer" and tx.status == TransactionStatus.AWAITING_BUYER

@@ -166,4 +166,4 @@ Open items from the D1 reviews. None of them block D2.
 
 ## Test gaps
 
-- **Defence-in-depth path with no test:** the superintendent separation-of-duties check under the transaction lock (`_apply`). `test_dual_holder_cannot_spend_another_code_on_final_approval` covers the code-reuse attack, but it is refused earlier by `_for_decision`, so the in-lock copy is never reached. No known sequence reaches it (the officer decision always exists before a transaction waits for the superintendent, and decision rows are append-only); it is kept as a guard and could only be tested by mocking `_for_decision`. The `STOCK_LIMIT` in-lock re-check is now covered (`test_stock_limit_reason_refused_under_lock_is_audited`).
+- None open. The `STOCK_LIMIT` in-lock re-check is covered (`test_stock_limit_reason_refused_under_lock_is_audited`).

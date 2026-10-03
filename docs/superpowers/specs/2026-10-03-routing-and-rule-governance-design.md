@@ -47,6 +47,7 @@ AWAITING_BUYER → CANCELLED (seller)
 - An officer decision on a two-step chain is "Recommend approval" or "Reject": the officer's approval moves no stock and sets `AWAITING_SUPERINTENDENT`. Only the **final** approval re-runs every check and moves stock, using the same rules as today (eligibility, limits, seller stock, buyer cap under lock).
 - A superintendent rejection needs an officer-kind reason, and "Other" needs text.
 - The timeline shows both approvals: each position and who held it.
+- Owner decision (2026-10-04, replaces the separation-of-duties rulings C-R2/C-R5): a superintendent's approval is enough. An officer who also holds the transaction's superintendent position approves both levels in one signed step (APPROVE or REJECT at the officer step; APPROVE writes an officer RECOMMEND and a superintendent APPROVE with the same code and moves stock). An officer who recommended and is then given the superintendent position may give the final approval. The Head Authority reviews superintendent-approved items in oversight.
 
 ### Oversight (R5)
 - The batch keeps all approved transactions.

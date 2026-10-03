@@ -79,8 +79,8 @@ def test_awaiting_me_filter_matches_home_count(
 
     login(client, trade.officer, otp_outbox)
     home = client.get("/api/home").json()["counts"]["awaiting_your_decision"]
-    assert references(client, "awaiting=me") == {waiting.reference}
-    assert home == 1
+    assert references(client, "awaiting=me") == {recommended.reference, waiting.reference}
+    assert home == 2
 
     login(client, trade.buyer, otp_outbox)
     home = client.get("/api/home").json()["counts"]["awaiting_your_decision"]

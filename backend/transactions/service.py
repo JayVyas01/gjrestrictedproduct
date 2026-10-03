@@ -8,7 +8,7 @@ stock balance rows (sorted) -> alert inserts -> audit (record() last).
 from dataclasses import dataclass
 from decimal import Decimal
 
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from alerts.service import raise_buyer_rejection_alerts
@@ -220,9 +220,7 @@ def cancel_transaction(*, reference: str, seller: User) -> Transaction:
 
 
 WRONG_TURN = "This transaction is not waiting for your decision."
-SAME_PERSON = (
-    "You made the officer decision on this transaction; another officer must give final approval."
-)
+NOT_AVAILABLE = "That decision is not available at this step."
 _REASON_KIND = {
     "buyer": ReasonKind.BUYER_REJECTION,
     "officer": ReasonKind.OFFICER_REJECTION,
@@ -240,7 +238,10 @@ def decision_role(tx: Transaction, user: User) -> str | None:
         user
     ):
         return "officer"
-    if _may_act_as_superintendent(tx, user) and not _made_officer_decision(tx, user):
+    if (
+        tx.status == TransactionStatus.AWAITING_SUPERINTENDENT
+        and tx.superintendent_position in positions_held(user)
+    ):
         return "superintendent"
     return None
 
@@ -249,9 +250,6 @@ def awaiting_decision_for(user: User) -> QuerySet[Transaction]:
     """The transactions waiting for `user`'s decision: exactly those where decision_role is
     not None. Read under the caller's own RLS."""
     held = [position.id for position in positions_held(user)]
-    own_officer_decision = TransactionDecision.objects.filter(
-        transaction=OuterRef("pk"), step=DecisionStep.OFFICER, actor_user_id=user.user_id
-    )
     # A buyer over their stock limit still decides (they can only reject). Personnel have no
     # GSTIN index, and "" never matches a transaction's.
     as_buyer = Q(
@@ -259,8 +257,7 @@ def awaiting_decision_for(user: User) -> QuerySet[Transaction]:
     )
     as_officer = Q(status=TransactionStatus.AWAITING_OFFICER, designated_position__in=held)
     as_superintendent = Q(
-        Q(status=TransactionStatus.AWAITING_SUPERINTENDENT, superintendent_position__in=held),
-        ~Exists(own_officer_decision),  # separation of duties (ruling C-R5)
+        status=TransactionStatus.AWAITING_SUPERINTENDENT, superintendent_position__in=held
     )
     return Transaction.objects.filter(as_buyer | as_officer | as_superintendent)
 
@@ -282,16 +279,11 @@ def filter_transactions(
     return rows
 
 
-def _may_act_as_superintendent(tx: Transaction, user: User) -> bool:
-    return (
-        tx.status == TransactionStatus.AWAITING_SUPERINTENDENT
-        and tx.superintendent_position in positions_held(user)
-    )
-
-
-def _made_officer_decision(tx: Transaction, user: User) -> bool:
-    """Separation of duties: whoever made the officer decision never gives the final one."""
-    return tx.decisions.filter(step=DecisionStep.OFFICER, actor_user_id=user.user_id).exists()
+def _holds_both(tx: Transaction, user: User) -> bool:
+    """A superintendent's approval is enough: whoever holds both the designated and the
+    superintendent position approves both levels of the two-step chain at once."""
+    held = positions_held(user)
+    return tx.designated_position in held and tx.superintendent_position in held
 
 
 def final_approval(tx: Transaction) -> TransactionDecision:
@@ -313,21 +305,23 @@ def stock_limit_problem(tx: Transaction) -> str | None:
         return buyer_stock_problem(tx)
 
 
-def allowed_outcomes(tx: Transaction, role: str) -> set[str]:
-    """What `role` may choose on `tx` now: a buyer this sale would take over their stock
-    limit can only reject."""
-    outcomes = _step_outcomes(tx, role)
+def allowed_outcomes(tx: Transaction, role: str, user: User) -> set[str]:
+    """What `user`, deciding as `role`, may choose on `tx` now: a buyer this sale would take
+    over their stock limit can only reject."""
+    outcomes = _step_outcomes(tx, role, user)
     if role == "buyer" and stock_limit_problem(tx):
         return {DecisionOutcome.REJECT}
     return outcomes
 
 
-def _step_outcomes(tx: Transaction, role: str) -> set[str]:
+def _step_outcomes(tx: Transaction, role: str, user: User) -> set[str]:
     """The outcomes of `role`'s step. On the two-step chain the officer recommends and the
-    superintendent gives the final approval."""
+    superintendent gives the final approval; an officer who also holds the superintendent
+    position approves both levels at once (_both_levels)."""
     if role == "buyer":
         return {DecisionOutcome.CONFIRM, DecisionOutcome.REJECT}
-    if role == "officer" and tx.approval_chain == ApprovalChain.OFFICER_THEN_SUPERINTENDENT:
+    two_step = tx.approval_chain == ApprovalChain.OFFICER_THEN_SUPERINTENDENT
+    if role == "officer" and two_step and not _holds_both(tx, user):
         return {DecisionOutcome.RECOMMEND, DecisionOutcome.REJECT}
     if role in {"officer", "superintendent"}:
         return {DecisionOutcome.APPROVE, DecisionOutcome.REJECT}
@@ -338,8 +332,6 @@ def _for_decision(reference: str, user: User) -> tuple[Transaction, str]:
     tx = load_visible(reference)
     role = decision_role(tx, user) if tx else None
     if role is None:
-        if tx and _may_act_as_superintendent(tx, user):
-            raise NotAllowed(SAME_PERSON)  # the holder made the officer decision
         raise NotAllowed(WRONG_TURN)
     return tx, role
 
@@ -364,8 +356,8 @@ def decide(
     tx, role = _for_decision(reference, user)
     # A buyer CONFIRM over their stock limit passes here and is refused under the lock in
     # _apply, with the reason (422) and an audit record.
-    if outcome not in _step_outcomes(tx, role):
-        raise NotAllowed("That decision is not available at this step.")
+    if outcome not in _step_outcomes(tx, role, user):
+        raise NotAllowed(NOT_AVAILABLE)
     if role == "buyer" and outcome == DecisionOutcome.REJECT:
         reason_code = _buyer_reason_code(tx, reason_code)
     reason = (
@@ -429,10 +421,22 @@ def _apply(
     tx: Transaction, user: User, role: str, outcome: str, reason, comment: str
 ) -> Transaction:
     locked = Transaction.objects.select_for_update().get(pk=tx.pk)
-    if role == "superintendent" and _made_officer_decision(locked, user):
-        raise NotAllowed(SAME_PERSON)  # defence under the lock; _for_decision checked first
     if decision_role(locked, user) != role:
         raise NotAllowed(WRONG_TURN)
+    if outcome not in _step_outcomes(locked, role, user):
+        raise NotAllowed(NOT_AVAILABLE)  # a position changed hands since the first check
+    # An officer APPROVE on the two-step chain (offered only to a holder of both positions)
+    # signs both levels with the one code: a RECOMMEND row, then the superintendent APPROVE.
+    both_levels = (
+        role == "officer"
+        and outcome == DecisionOutcome.APPROVE
+        and locked.approval_chain == ApprovalChain.OFFICER_THEN_SUPERINTENDENT
+    )
+    steps = (
+        [("officer", DecisionOutcome.RECOMMEND), ("superintendent", DecisionOutcome.APPROVE)]
+        if both_levels
+        else [(role, outcome)]
+    )
     now = timezone.now()
     if role == "buyer":
         _check_buyer_stock(locked, outcome, reason)
@@ -440,21 +444,22 @@ def _apply(
         _approve(locked)
     if outcome == DecisionOutcome.RECOMMEND:
         _recheck(locked)
-    locked.status = _NEXT[(role, outcome)]
+    locked.status = _NEXT[steps[-1]]
     if locked.status not in _WAITING:
         locked.decided_at = now
     locked.save(update_fields=["status", "decided_at"])
-    TransactionDecision.objects.create(
-        transaction=locked,
-        step=_STEP[role],
-        outcome=outcome,
-        actor_user_id=user.user_id,
-        position=_position(locked, role),
-        reason=reason,
-        comment=comment.strip(),
-        otp_verified_at=now,
-    )
-    payload = None
+    for step_role, step_outcome in steps:
+        TransactionDecision.objects.create(
+            transaction=locked,
+            step=_STEP[step_role],
+            outcome=step_outcome,
+            actor_user_id=user.user_id,
+            position=_position(locked, step_role),
+            reason=reason,
+            comment=comment.strip(),
+            otp_verified_at=now,
+        )
+    payload = {"both_levels": True} if both_levels else None
     if role == "buyer" and outcome == DecisionOutcome.REJECT:
         # A stock-limit rejection is the buyer protecting their own licence: no alert.
         alerts = (
@@ -464,7 +469,7 @@ def _apply(
         )
         payload = {"alerts_raised": len(alerts)}
     record(
-        action=_AUDIT[(role, outcome)],
+        action=_AUDIT[steps[-1]],
         actor=user.user_id,
         subject_type="transaction",
         subject_id=locked.reference,

@@ -16,6 +16,7 @@ from oversight.service import (
     request_sign_off_code,
     sign_off,
 )
+from positions.service import assign
 from reasons.service import InvalidReason
 from tests.conftest import set_decided_on
 
@@ -258,3 +259,32 @@ def test_officer_only_flag_still_alerts_officer(app_db, org, trade, mixed_batch)
     with acting_as_system("test"):
         alert = AuthorityAlert.objects.get(kind="SUPERINTENDENT_FLAG")
     assert alert.position == org.area_officer and alert.transaction == officer_only
+
+
+def test_dual_holder_approval_is_marked_in_oversight_and_cannot_be_self_flagged(
+    app_db, org, trade, settle, review_setting, threshold, audit_actions
+):
+    """A holder of both positions approves both levels at once: the batch marks it
+    superintendent-approved, and they cannot flag their own approval."""
+    assign(org.district_officer, trade.officer, by="test")
+    dual = settle("300", officer="APPROVE")
+    set_decided_on(dual, date(2026, 6, 10))
+    with acting_as_system("test"):
+        [made] = create_due_batches(date(2026, 6, 16))
+    as_user(trade.officer)
+    [item] = batch_detail(made, date(2026, 6, 20), trade.officer)["items"]
+    assert item["approved_by_superintendent"] is True
+    assert item["approved_by_position"] == org.district_officer.title
+    before = audit_actions()
+    with pytest.raises(NotAllowed) as refused:
+        flag_item(
+            batch_id=made.id,
+            reference=dual.reference,
+            user=trade.officer,
+            reason_code="PATTERN_CONCERN",
+            comment="",
+        )
+    assert str(refused.value) == "You approved this transaction; the Head Authority reviews it."
+    with acting_as_system("test"):
+        assert BatchFlag.objects.count() == 0
+    assert audit_actions() == before

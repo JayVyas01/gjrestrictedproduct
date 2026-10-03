@@ -62,7 +62,7 @@ def test_sales_in_progress_counts_every_waiting_status(
     assert counts_for(trade.seller, date(2026, 10, 4))["sales_in_progress"] == 3
 
 
-def test_personnel_awaiting_excludes_own_officer_decision(
+def test_personnel_awaiting_includes_promoted_recommender(
     app_db, catalogue, org, trade, threshold, otp_outbox
 ):
     recommended = new_tx(trade, catalogue, qty="250")
@@ -75,10 +75,10 @@ def test_personnel_awaiting_excludes_own_officer_decision(
     assert counts_for(trade.superintendent, today)["awaiting_your_decision"] == 1
     assert counts_for(trade.officer, today)["awaiting_your_decision"] == 1
 
-    # The officer now also holds the district position, but made the officer decision on
-    # `recommended`, so only `waiting` is theirs to decide (ruling C-R5).
+    # The officer now also holds the district position: a superintendent's approval is enough,
+    # so `recommended` is theirs to decide too, even though they recommended it.
     assign(org.district_officer, trade.officer, by="test")
-    assert counts_for(trade.officer, today)["awaiting_your_decision"] == 1
+    assert counts_for(trade.officer, today)["awaiting_your_decision"] == 2
 
 
 def test_personnel_alerts_and_batches(app_db, client, trade, settle, review_setting, otp_outbox):

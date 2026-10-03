@@ -1,0 +1,39 @@
+[project]
+name = "gjrp-backend"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "django>=5.2,<5.3",
+    "djangorestframework>=3.17.2,<3.18",
+    "psycopg[binary]>=3.2,<3.3",
+    "argon2-cffi>=23.1",
+    "cryptography>=43",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-django>=4.9",
+    "ruff>=0.6",
+    "pip-audit>=2.7",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F: errors, I: import order, B: likely bugs, S: security (bandit rules), UP: modern syntax
+select = ["E", "F", "I", "B", "S", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S107"]

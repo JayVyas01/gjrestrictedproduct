@@ -1,17 +1,33 @@
-"""Draft and withdraw rule-change proposals.
+"""Draft, withdraw and decide rule-change proposals.
 
 Who may act is checked in plain Python first; writes then run as SYSTEM (the only role
 row-level security lets write proposals), and the audit record() is always last. Audit
-payloads hold only the proposal id and kind, never the payload values or the justification.
+payloads hold only the proposal id and kind (plus applied_ref on approval), never the
+payload values, the justification or the decision note.
+
+Deciding (maker-checker): a Head Authority officer other than the drafter approves or
+rejects with a one-time DECISION code. An approval applies the change to the catalogue in
+the same SYSTEM block, so it is all or nothing. Lock order: user row -> OTP challenge ->
+proposal row -> catalogue row (rule or threshold) -> audit.
 """
+
+from decimal import Decimal
 
 from django.utils import timezone
 
 from audit.service import record
+from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass
+from catalogue.service import (
+    LicenceTypeExists,
+    add_licence_type,
+    add_rule_version,
+    add_threshold_version,
+)
 from core.db_context import acting_as_system
-from governance.models import ProposalStatus, RuleChangeProposal
+from governance.models import ProposalKind, ProposalStatus, RuleChangeProposal
 from governance.payloads import ProposalInvalid, validate_payload
-from identity.models import User
+from identity import otp
+from identity.models import OtpChallenge, OtpPurpose, User
 from identity.roles import Role
 from positions.models import AreaLevel, Position
 
@@ -22,6 +38,15 @@ NOT_A_DRAFTER = (
 ALREADY_DECIDED = "This change has already been decided."
 NOT_THE_DRAFTER = "Only the officer who drafted this change can withdraw it."
 BAD_JUSTIFICATION = "Explain the change in 10 to 1000 characters."
+NOT_HEAD = "Only the Head Authority can approve or reject rule changes."
+OWN_CHANGE = "You drafted this change, so another Head Authority officer must decide it."
+NOTE_REQUIRED = "Say why you are rejecting this change."
+NOTE_TOO_LONG = "Keep the decision note to 500 characters or fewer."
+UNKNOWN_OUTCOME = "Approve or reject the change."
+SOMEONE_ELSES_CODE = "This code belongs to someone else."
+
+APPROVE = "APPROVE"
+REJECT = "REJECT"
 
 
 class NotAllowed(Exception):
@@ -47,13 +72,13 @@ def may_draft(user: User) -> bool:
     )
 
 
-def _audit(action: str, proposal: RuleChangeProposal, actor: str) -> None:
+def _audit(action: str, proposal: RuleChangeProposal, actor: str, **extra) -> None:
     record(
         action=action,
         actor=actor,
         subject_type="rule_change",
         subject_id=str(proposal.id),
-        payload={"proposal_id": proposal.id, "kind": proposal.kind},
+        payload={"proposal_id": proposal.id, "kind": proposal.kind, **extra},
     )
 
 
@@ -93,3 +118,152 @@ def withdraw(*, proposal_id: int, user: User) -> RuleChangeProposal:
         locked.save(update_fields=["status", "decided_by", "decided_at"])
         _audit("rule_change.withdrawn", locked, user.user_id)
     return locked
+
+
+def _check_decider(proposal: RuleChangeProposal, user: User) -> None:
+    if user.role != Role.HEAD_AUTHORITY:
+        raise NotAllowed(NOT_HEAD)
+    if proposal.drafted_by == user.user_id:
+        raise NotAllowed(OWN_CHANGE)
+    if proposal.status != ProposalStatus.SUBMITTED:
+        raise NotAllowed(ALREADY_DECIDED)
+
+
+def _for_decision(proposal_id: int, user: User) -> RuleChangeProposal:
+    if user.role != Role.HEAD_AUTHORITY:
+        raise NotAllowed(NOT_HEAD)
+    # Read under the caller's own RLS: None means not found OR not theirs to see.
+    proposal = RuleChangeProposal.objects.filter(pk=proposal_id).first()
+    if proposal is None:
+        raise ProposalNotFound()
+    _check_decider(proposal, user)
+    return proposal
+
+
+def request_decision_code(*, proposal_id: int, user: User) -> OtpChallenge:
+    # The code is bound to its USER, not to one proposal: decide() checks the decider rule
+    # again for the proposal it is spent on (before and under the lock).
+    _for_decision(proposal_id, user)
+    return otp.issue(user, OtpPurpose.DECISION)
+
+
+def _clean_note(outcome: str, note: str) -> str:
+    note = note.strip()
+    if outcome == REJECT and len(note) < 10:
+        raise ProposalInvalid([NOTE_REQUIRED])
+    if len(note) > 500:
+        raise ProposalInvalid([NOTE_TOO_LONG])
+    return note
+
+
+def decide(
+    *,
+    proposal_id: int,
+    user: User,
+    challenge_id: str,
+    code: str,
+    outcome: str,
+    note: str = "",
+) -> RuleChangeProposal | None:
+    if outcome not in (APPROVE, REJECT):
+        raise NotAllowed(UNKNOWN_OUTCOME)
+    # Every check that can fail before the code is spent, so a refusal keeps the code usable.
+    note = _clean_note(outcome, note)
+    proposal = _for_decision(proposal_id, user)
+    signer = otp.verify(challenge_id=challenge_id, purpose=OtpPurpose.DECISION, code=code)
+    if signer is None:
+        return None  # wrong or expired code: the attempt counts, nothing else changes
+    if signer.pk != user.pk:
+        raise NotAllowed(SOMEONE_ELSES_CODE)
+    try:
+        with acting_as_system("decide_rule_change"):
+            return _decide_locked(proposal.pk, user, outcome, note)
+    except ProposalInvalid:
+        # The decision and any catalogue rows rolled back with the SYSTEM block's savepoint
+        # (the proposal stays SUBMITTED); the failed attempt itself is kept.
+        _audit("rule_change.apply_failed", proposal, user.user_id)
+        raise
+
+
+def _decide_locked(pk: int, user: User, outcome: str, note: str) -> RuleChangeProposal:
+    locked = RuleChangeProposal.objects.select_for_update().get(pk=pk)
+    _check_decider(locked, user)  # it may have been withdrawn or decided since the first check
+    if outcome == APPROVE:
+        locked.applied_ref = apply_change(locked, by=user.user_id)
+        locked.status = ProposalStatus.APPROVED
+    else:
+        locked.status = ProposalStatus.REJECTED
+    locked.decided_by = user.user_id
+    locked.decided_at = timezone.now()
+    locked.decision_note = note
+    locked.save(
+        update_fields=["status", "decided_by", "decided_at", "decision_note", "applied_ref"]
+    )
+    if outcome == APPROVE:
+        _audit("rule_change.approved", locked, user.user_id, applied_ref=locked.applied_ref)
+    else:
+        _audit("rule_change.rejected", locked, user.user_id)
+    return locked
+
+
+def _scope(cleaned: dict) -> dict:
+    if cleaned.get("substance_code"):
+        return {"substance": Substance.objects.get(code=cleaned["substance_code"])}
+    return {"substance_class": SubstanceClass.objects.get(code=cleaned["class_code"])}
+
+
+def _catalogue_audit(action: str, proposal: RuleChangeProposal, by: str, **ids) -> None:
+    record(
+        action=action,
+        actor=by,
+        subject_type="rule_change",
+        subject_id=str(proposal.id),
+        payload={"proposal_id": proposal.id, **ids},
+    )
+
+
+def apply_change(proposal: RuleChangeProposal, *, by: str) -> str:
+    """Apply an approved proposal to the catalogue and return its applied_ref. Must run inside
+    the decision's SYSTEM block: re-validates the payload (the catalogue may have changed since
+    drafting) and raises ProposalInvalid, which rolls the whole decision back."""
+    cleaned = validate_payload(proposal.kind, proposal.payload)
+    if proposal.kind == ProposalKind.NEW_LICENCE_TYPE:
+        try:
+            licence_type = add_licence_type(
+                code=cleaned["code"],
+                name=cleaned["name"],
+                description=cleaned["description"],
+                created_by=by,
+            )
+        except LicenceTypeExists as exists:
+            raise ProposalInvalid([str(exists)]) from None
+        _catalogue_audit(
+            "catalogue.licence_type_added", proposal, by, licence_type_id=licence_type.id
+        )
+        return f"licence_type:{licence_type.id}"
+    if proposal.kind == ProposalKind.RULE_VERSION:
+        rule, _ = LicenceTypeRule.objects.get_or_create(
+            licence_type=LicenceType.objects.get(code=cleaned["licence_type_code"]),
+            **_scope(cleaned),
+        )
+        version = add_rule_version(
+            rule,
+            created_by=by,
+            may_buy=cleaned["may_buy"],
+            may_sell=cleaned["may_sell"],
+            may_transport=cleaned["may_transport"],
+            max_stock_qty=Decimal(cleaned["max_stock_qty"]),
+            max_per_transaction_qty=Decimal(cleaned["max_per_transaction_qty"]),
+            validity_months=cleaned["validity_months"],
+        )
+        _catalogue_audit("catalogue.rule_version_added", proposal, by, rule_version_id=version.id)
+        return f"rule_version:{version.id}"
+    version = add_threshold_version(
+        **_scope(cleaned),
+        superintendent_above_qty=Decimal(cleaned["superintendent_above_qty"]),
+        created_by=by,
+    )
+    _catalogue_audit(
+        "catalogue.threshold_version_added", proposal, by, threshold_version_id=version.id
+    )
+    return f"threshold_version:{version.id}"

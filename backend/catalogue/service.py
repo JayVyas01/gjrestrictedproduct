@@ -3,6 +3,8 @@ threshold that decides who gives final approval."""
 
 from decimal import Decimal
 
+from django.db import IntegrityError, transaction
+
 from catalogue.models import (
     ApprovalThreshold,
     ApprovalThresholdVersion,
@@ -12,6 +14,26 @@ from catalogue.models import (
     Substance,
     SubstanceClass,
 )
+
+
+class LicenceTypeExists(Exception):
+    def __init__(self, code: str):
+        super().__init__(f"A licence type with code {code} already exists.")
+        self.code = code
+
+
+def add_licence_type(*, code: str, name: str, description: str, created_by: str) -> LicenceType:
+    """A new licence type, refused when the code is taken (also by a concurrent insert).
+
+    created_by is accepted for symmetry with the versioned additions; the decision that
+    applied it records who did."""
+    if LicenceType.objects.filter(code=code).exists():
+        raise LicenceTypeExists(code)
+    try:
+        with transaction.atomic():
+            return LicenceType.objects.create(code=code, name=name, description=description)
+    except IntegrityError:
+        raise LicenceTypeExists(code) from None
 
 
 def _latest(rule: LicenceTypeRule | None) -> LicenceTypeRuleVersion | None:

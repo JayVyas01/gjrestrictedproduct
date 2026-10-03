@@ -41,7 +41,7 @@
   - **Periods:** they start at the setting's `starts_on` and run back to back.
   - **When a batch is created:** only once its period has fully ended, meaning `period_end < today`.
   - **What a batch contains:** every transaction whose stored `superintendent_position` is that position, with status `APPROVED` and `decided_at` (local date, Asia/Kolkata) within the period.
-- **Sign-off deadline:** `due_on = period_end + 7 days`.
+- **Sign-off deadline:** `due_on = period_end + 30 days`.
   - **Status:** `SIGNED` once signed; `OVERDUE` when unsigned and today is after `due_on`; otherwise `OPEN`.
 - **Sign-off** requires a fresh one-time code (purpose `DECISION`) from the superintendent who currently holds the position.
   - **Flagging:** only allowed while the batch is unsigned. A flag needs a `SUPERINTENDENT_FLAG` reason code ("Other" needs text), and a transaction can be flagged at most once per batch.
@@ -717,7 +717,7 @@ git commit -m "feat: alerts API with pattern signal and acknowledgement"
   - `acting_as_system`, `record`
   - the `settle` and `set_decided_on` fixtures
 - Produces:
-  - Constants: `oversight.models.REVIEW_PERIODS = (15, 30, 60)` and `SIGN_OFF_DAYS = 7`
+  - Constants: `oversight.models.REVIEW_PERIODS = (15, 30, 60)` and `SIGN_OFF_DAYS = 30`
   - `SuperintendentSetting(position one-to-one, period_days, starts_on, updated_at, updated_by)`
   - `OversightBatch(position, period_start, period_end, created_at)` with method `due_on() -> date`
   - `BatchItem(batch, transaction)`
@@ -784,7 +784,7 @@ def test_batch_holds_approved_transactions_of_the_period(app_db, org, settle, re
     [batch] = run(date(2026, 6, 16))
     assert (batch.period_start, batch.period_end) == (date(2026, 6, 1), date(2026, 6, 15))
     assert batch.position == org.district_officer
-    assert batch.due_on() == date(2026, 6, 22)
+    assert batch.due_on() == date(2026, 7, 15)
     with acting_as_system("test"):
         assert [i.transaction_id for i in BatchItem.objects.filter(batch=batch)] == [inside.id]
 
@@ -875,7 +875,7 @@ from positions.models import Position
 from transactions.models import Transaction
 
 REVIEW_PERIODS = (15, 30, 60)
-SIGN_OFF_DAYS = 7
+SIGN_OFF_DAYS = 30
 
 
 class SuperintendentSetting(models.Model):
@@ -1091,7 +1091,7 @@ Expected: all pass. `decided_at__date` uses the current time zone, Asia/Kolkata,
   - Head Authority and Software Owner: read all batches.
   - Licensing Authority: sets review periods through the service; the screen comes in D3.
 - Conventions:
-  - "Periods run back to back from `starts_on`; a batch is created only after its period ends; sign-off is due 7 days later."
+  - "Periods run back to back from `starts_on`; a batch is created only after its period ends; sign-off is due 30 days later."
   - "The review setting has no row-level security (configuration, ruling D-R6 style)."
 - Add the new tests and update the count.
 
@@ -1251,8 +1251,8 @@ def test_signed_batch_cannot_be_flagged_or_signed_again(app_db, trade, batch, ot
 
 def test_batch_status_open_then_overdue(app_db, batch):
     made, _ = batch
-    assert batch_status(made, date(2026, 6, 22)) == "OPEN"
-    assert batch_status(made, date(2026, 6, 23)) == "OVERDUE"
+    assert batch_status(made, date(2026, 7, 15)) == "OPEN"
+    assert batch_status(made, date(2026, 7, 16)) == "OVERDUE"
 
 
 def test_flags_and_sign_offs_are_append_only_even_for_owner(db, trade, batch, otp_outbox):

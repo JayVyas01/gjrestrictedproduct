@@ -15,7 +15,10 @@ from core.db_context import set_actor
 from identity import otp
 from identity.login import start_login
 from identity.models import OtpPurpose
+from identity.roles import Role
 from identity.serializers import LoginSerializer, OtpVerifySerializer
+from licensing.models import Licence
+from positions.service import positions_held
 
 
 def _invalid() -> Response:
@@ -79,4 +82,27 @@ class LogoutView(APIView):
 
 class MeView(APIView):
     def get(self, request):
-        return Response({"user_id": request.user.user_id, "role": request.user.role})
+        user = request.user
+        positions = sorted(positions_held(user), key=lambda position: position.id)
+        return Response(
+            {
+                "user_id": user.user_id,
+                "role": user.role,
+                "display_name": _display_name(user, positions),
+                "positions": [
+                    {"id": p.id, "title": p.title, "level": p.area.level} for p in positions
+                ],
+            }
+        )
+
+
+def _display_name(user, positions) -> str:
+    if user.role == Role.LICENSEE:
+        # Read under the licensee's own RLS, which also limits it to their business.
+        licence = (
+            Licence.objects.filter(gstin_index=user.licensee_gstin_index).order_by("id").first()
+        )
+        return licence.holder_name if licence else user.get_role_display()
+    if user.role == Role.PERSONNEL:
+        return ", ".join(p.title for p in positions) or "Unassigned officer"
+    return user.get_role_display()

@@ -25,6 +25,10 @@ class NotAllowed(Exception):
     pass
 
 
+class AlreadyAcknowledged(NotAllowed):
+    pass
+
+
 def ordinal(n: int) -> str:
     suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suffix}"
@@ -87,14 +91,14 @@ def acknowledge(*, alert_id: int, user: User, note: str = "") -> AlertAcknowledg
         raise NotAllowed("Only the officer holding this position can acknowledge this alert.")
     with acting_as_system("acknowledge_alert"):
         if _already_acknowledged(alert):
-            raise NotAllowed("This alert is already acknowledged.")
+            raise AlreadyAcknowledged("This alert is already acknowledged.")
         try:
             with transaction.atomic():
                 ack = AlertAcknowledgement.objects.create(
                     alert=alert, user_id=user.user_id, note=note.strip()
                 )
         except IntegrityError:
-            raise NotAllowed("This alert is already acknowledged.") from None
+            raise AlreadyAcknowledged("This alert is already acknowledged.") from None
         record(
             action="alert.acknowledged",
             actor=user.user_id,

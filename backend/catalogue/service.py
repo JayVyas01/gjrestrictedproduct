@@ -75,7 +75,7 @@ def add_rule_version(
     )
 
 
-def _latest_threshold(threshold: ApprovalThreshold | None) -> ApprovalThresholdVersion | None:
+def latest_threshold(threshold: ApprovalThreshold | None) -> ApprovalThresholdVersion | None:
     if threshold is None:
         return None
     return threshold.versions.order_by("-version").first()
@@ -83,10 +83,10 @@ def _latest_threshold(threshold: ApprovalThreshold | None) -> ApprovalThresholdV
 
 def resolve_threshold(substance: Substance) -> ApprovalThresholdVersion | None:
     """Substance threshold beats its class threshold. None means the officer alone approves."""
-    specific = _latest_threshold(ApprovalThreshold.objects.filter(substance=substance).first())
+    specific = latest_threshold(ApprovalThreshold.objects.filter(substance=substance).first())
     if specific is not None:
         return specific
-    return _latest_threshold(
+    return latest_threshold(
         ApprovalThreshold.objects.filter(substance_class=substance.substance_class_id).first()
     )
 
@@ -103,7 +103,7 @@ def add_threshold_version(
     )
     # Lock the threshold row so concurrent additions can't compute the same version number.
     threshold = ApprovalThreshold.objects.select_for_update().get(pk=threshold.pk)
-    latest = _latest_threshold(threshold)
+    latest = latest_threshold(threshold)
     return ApprovalThresholdVersion.objects.create(
         threshold=threshold,
         version=(latest.version + 1) if latest else 1,

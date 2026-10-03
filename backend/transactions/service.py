@@ -8,6 +8,7 @@ stock balance rows (sorted) -> alert inserts -> audit (record() last).
 from dataclasses import dataclass
 from decimal import Decimal
 
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
 from alerts.service import raise_buyer_rejection_alerts
@@ -36,6 +37,7 @@ from transactions.models import (
 )
 from transactions.selection import licence_eligible, select_licence
 
+SELF_SALE = "You cannot sell to your own business."
 NO_OFFICER = "No officer is responsible for your area yet. Please contact the Licensing Authority."
 NO_SUPERINTENDENT = (
     "No superintendent is responsible for your district yet. "
@@ -112,7 +114,7 @@ def start_transaction(
 ) -> Transaction:
     buyer_index = crypto.blind_index("gstin", buyer_gstin.strip().upper())
     if buyer_index == seller.licensee_gstin_index:
-        raise TransactionRefused(["You cannot sell to your own business."])
+        raise TransactionRefused([SELF_SALE])
     today = timezone.localdate()
     with acting_as_system("start_transaction"):
         seller_licence = select_licence(seller.licensee_gstin_index, substance, "sell", today)
@@ -145,6 +147,41 @@ def start_transaction(
             subject_id=tx.reference,
         )
     return tx
+
+
+def check_transaction(
+    *, seller: User, buyer_gstin: str, substance: Substance, quantity: Decimal
+) -> tuple[list[str], str | None]:
+    """Dry run of start_transaction: the reasons it would be refused, and the approval chain
+    when it would go ahead. The buyer's stock cap is not checked (the seller never learns the
+    buyer's stock). Writes nothing but the audit record, which holds no GSTIN."""
+    buyer_index = crypto.blind_index("gstin", buyer_gstin.strip().upper())
+    with acting_as_system("check_transaction"):
+        reasons, chain = _dry_run(seller, buyer_index, substance, quantity)
+        record(
+            action="transaction.checked",
+            actor=seller.user_id,
+            payload={"gstin_index": buyer_index, "ok": not reasons},
+        )
+    return reasons, chain
+
+
+def _dry_run(
+    seller: User, buyer_index: str, substance: Substance, quantity: Decimal
+) -> tuple[list[str], str | None]:
+    if buyer_index == seller.licensee_gstin_index:
+        return [SELF_SALE], None
+    today = timezone.localdate()
+    seller_licence = select_licence(seller.licensee_gstin_index, substance, "sell", today)
+    buyer_licence = select_licence(buyer_index, substance, "buy", today)
+    problems = _refusals(seller_licence, buyer_licence, substance, quantity)
+    if problems:
+        return problems, None
+    try:
+        _route(seller_licence)
+    except TransactionRefused as exc:
+        return exc.reasons, None
+    return [], approval_chain_for(substance, quantity)
 
 
 def load_visible(reference: str) -> Transaction | None:
@@ -206,6 +243,43 @@ def decision_role(tx: Transaction, user: User) -> str | None:
     if _may_act_as_superintendent(tx, user) and not _made_officer_decision(tx, user):
         return "superintendent"
     return None
+
+
+def awaiting_decision_for(user: User) -> QuerySet[Transaction]:
+    """The transactions waiting for `user`'s decision: exactly those where decision_role is
+    not None. Read under the caller's own RLS."""
+    held = [position.id for position in positions_held(user)]
+    own_officer_decision = TransactionDecision.objects.filter(
+        transaction=OuterRef("pk"), step=DecisionStep.OFFICER, actor_user_id=user.user_id
+    )
+    # A buyer over their stock limit still decides (they can only reject). Personnel have no
+    # GSTIN index, and "" never matches a transaction's.
+    as_buyer = Q(
+        status=TransactionStatus.AWAITING_BUYER, buyer_gstin_index=user.licensee_gstin_index
+    )
+    as_officer = Q(status=TransactionStatus.AWAITING_OFFICER, designated_position__in=held)
+    as_superintendent = Q(
+        Q(status=TransactionStatus.AWAITING_SUPERINTENDENT, superintendent_position__in=held),
+        ~Exists(own_officer_decision),  # separation of duties (ruling C-R5)
+    )
+    return Transaction.objects.filter(as_buyer | as_officer | as_superintendent)
+
+
+def filter_transactions(
+    rows: QuerySet[Transaction], user: User, *, awaiting: str, side: str, approved_by: str
+) -> QuerySet[Transaction]:
+    """List filters (combined with AND); an empty value means no filter on that field."""
+    if awaiting == "me":
+        rows = rows.filter(pk__in=awaiting_decision_for(user).values("pk"))
+    if side == "sales":
+        rows = rows.filter(seller_gstin_index=user.licensee_gstin_index)
+    if side == "purchases":
+        rows = rows.filter(buyer_gstin_index=user.licensee_gstin_index)
+    if approved_by == "superintendent":
+        rows = rows.filter(
+            decisions__step=DecisionStep.SUPERINTENDENT, decisions__outcome=DecisionOutcome.APPROVE
+        )
+    return rows
 
 
 def _may_act_as_superintendent(tx: Transaction, user: User) -> bool:

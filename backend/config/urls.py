@@ -10,4 +10,5 @@ urlpatterns = [
     path("api/", include("stock.urls")),
     path("api/", include("transactions.urls")),
     path("api/", include("alerts.urls")),
+    path("api/", include("oversight.urls")),
 ]

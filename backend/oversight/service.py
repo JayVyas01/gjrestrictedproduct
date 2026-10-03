@@ -45,11 +45,24 @@ def _next_start(position: Position, fallback: date) -> date:
     return last.period_end + timedelta(days=1) if last else fallback
 
 
+def _earliest_approval(position: Position) -> date | None:
+    first = (
+        Transaction.objects.filter(
+            superintendent_position=position, status=TransactionStatus.APPROVED
+        )
+        .order_by("decided_at")
+        .values_list("decided_at", flat=True)
+        .first()
+    )
+    return timezone.localtime(first).date() if first else None
+
+
 def _resolve_start(position: Position, starts_on: date | None) -> date:
     """The start date of the new period, so that no approved transaction is ever skipped.
 
     With batches: the day after the last batch (an explicit date must equal it). Without batches:
-    the existing setting's start (an explicit date may not be later), or today for a new setting.
+    an explicit date may not be later than the existing setting's start or, for a new setting,
+    the earliest approval for this position (today if none); that date is also the default.
     """
     existing = SuperintendentSetting.objects.filter(position=position).first()
     last = position.batches.order_by("-period_end").first()
@@ -58,13 +71,22 @@ def _resolve_start(position: Position, starts_on: date | None) -> date:
         if starts_on is not None and starts_on != required:
             raise InvalidSetting(f"The new period must start on {required.isoformat()}.")
         return required
-    latest_allowed = existing.starts_on if existing else timezone.localdate()
-    if existing and starts_on is not None and starts_on > latest_allowed:
+    if existing:
+        latest_allowed = existing.starts_on
+    else:
+        latest_allowed = _earliest_approval(position) or timezone.localdate()
+    if starts_on is not None and starts_on > latest_allowed:
         raise InvalidSetting(
             f"The new period cannot start after {latest_allowed.isoformat()}, "
             "or transactions in between would never be reviewed."
         )
     return starts_on or latest_allowed
+
+
+def _lock_batch_job() -> None:
+    """Serialise batch creation and review-period changes (job-level advisory lock)."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext('oversight-batches'))")
 
 
 def set_review_period(
@@ -78,6 +100,7 @@ def set_review_period(
         )
     # Lookups and write run as SYSTEM so the caller's row-level security cannot hide batches.
     with acting_as_system("set_review_period"):
+        _lock_batch_job()
         start = _resolve_start(position, starts_on)
         setting, _ = SuperintendentSetting.objects.update_or_create(
             position=position, defaults={"period_days": days, "starts_on": start, "updated_by": by}
@@ -92,7 +115,7 @@ def set_review_period(
     return setting
 
 
-def _make_batch(position: Position, start: date, end: date) -> OversightBatch:
+def _make_batch(position: Position, start: date, end: date) -> tuple[OversightBatch, int]:
     batch = OversightBatch.objects.create(position=position, period_start=start, period_end=end)
     approved = Transaction.objects.filter(
         superintendent_position=position,
@@ -100,25 +123,30 @@ def _make_batch(position: Position, start: date, end: date) -> OversightBatch:
         decided_at__date__gte=start,
         decided_at__date__lte=end,
     ).order_by("id")
-    BatchItem.objects.bulk_create([BatchItem(batch=batch, transaction=tx) for tx in approved])
-    record(
-        action="oversight.batch_created",
-        actor="create_due_batches",
-        subject_type="batch",
-        subject_id=str(batch.id),
-        payload={"items": len(approved)},
+    items = BatchItem.objects.bulk_create(
+        [BatchItem(batch=batch, transaction=tx) for tx in approved]
     )
-    return batch
+    return batch, len(items)
 
 
 def create_due_batches(today: date) -> list[OversightBatch]:
+    # lock order: job lock → batch/item inserts → audit
+    _lock_batch_job()
     created = []
     for setting in SuperintendentSetting.objects.select_related("position").order_by("id"):
         start = max(_next_start(setting.position, setting.starts_on), setting.starts_on)
         while (end := start + timedelta(days=setting.period_days - 1)) < today:
             created.append(_make_batch(setting.position, start, end))
             start = end + timedelta(days=1)
-    return created
+    for batch, item_count in created:
+        record(
+            action="oversight.batch_created",
+            actor="create_due_batches",
+            subject_type="batch",
+            subject_id=str(batch.id),
+            payload={"items": item_count},
+        )
+    return [batch for batch, _ in created]
 
 
 class NotAllowed(Exception):

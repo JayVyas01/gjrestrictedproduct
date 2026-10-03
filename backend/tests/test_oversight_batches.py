@@ -1,7 +1,7 @@
 from datetime import date
 
 import pytest
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
 
 from core.db_context import acting_as_system, set_actor
@@ -143,3 +143,42 @@ def test_review_period_cannot_skip_days(app_db, org, review_setting):
             set_review_period(
                 position=org.district_officer, days=30, by="test", starts_on=date(2026, 6, 10)
             )
+
+
+def test_batch_audits_are_written_after_all_batches(
+    app_db, review_setting, audit_actions, monkeypatch
+):
+    import oversight.service as service
+
+    batches_seen_at_audit = []
+    real_record = service.record
+
+    def spy(**kwargs):
+        if kwargs["action"] == "oversight.batch_created":
+            batches_seen_at_audit.append(OversightBatch.objects.count())
+        return real_record(**kwargs)
+
+    monkeypatch.setattr(service, "record", spy)
+    created = run(date(2026, 7, 1))
+    assert len(created) == 2
+    # lock order: every batch insert happens before the first audit write
+    assert batches_seen_at_audit == [2, 2]
+    assert audit_actions()[-2:] == ["oversight.batch_created", "oversight.batch_created"]
+
+
+def test_command_refuses_a_future_today(app_db, review_setting):
+    with pytest.raises(CommandError, match="--today cannot be in the future"):
+        call_command("create_due_batches", "--today", "2099-01-01")
+
+
+def test_new_setting_starts_no_later_than_the_earliest_approval(app_db, org, settle):
+    tx = settle()
+    set_decided_on(tx, date(2026, 5, 20))
+    with acting_as_system("test"):
+        with pytest.raises(InvalidSetting, match="cannot start after 2026-05-20"):
+            set_review_period(
+                position=org.district_officer, days=15, by="test", starts_on=date(2026, 6, 1)
+            )
+    with acting_as_system("test"):
+        setting = set_review_period(position=org.district_officer, days=15, by="test")
+    assert setting.starts_on == date(2026, 5, 20)

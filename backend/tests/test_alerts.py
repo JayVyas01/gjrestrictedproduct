@@ -6,7 +6,8 @@ from django.utils import timezone
 
 from alerts.models import AlertAcknowledgement, AuthorityAlert
 from alerts.service import NotAllowed, acknowledge, ordinal, pattern_text
-from core.db_context import acting_as_system, set_actor
+from audit.models import AuditEvent
+from core.db_context import SYSTEM_ROLE, acting_as_system, set_actor
 from identity.roles import Role
 from positions.service import assign
 from transactions.models import Transaction
@@ -53,6 +54,14 @@ def test_buyer_rejection_alerts_officer_and_superintendent(
     assert {a.kind for a in alerts} == {"BUYER_REJECTION"}
     assert alerts[0].reason.code == "NOT_ORDERED" and alerts[0].pattern_count == 1
     assert audit_actions()[-1] == "transaction.buyer_rejected"
+
+
+def test_buyer_rejection_audit_counts_alerts_raised(app_db, trade, settle):
+    settle(buyer="REJECT", reason_code="NOT_ORDERED")
+    with transaction.atomic():
+        set_actor(user_id="test", role=SYSTEM_ROLE)
+        payload = AuditEvent.objects.order_by("-id").values_list("payload", flat=True).first()
+    assert payload == {"alerts_raised": 2}
 
 
 def test_buyer_comment_is_kept_on_the_alert(app_db, trade, settle):

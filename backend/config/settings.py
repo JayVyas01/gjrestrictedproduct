@@ -28,6 +28,8 @@ INSTALLED_APPS = [
     "reasons",
     "stock",
     "transactions",
+    "alerts",
+    "oversight",
 ]
 
 AUTH_USER_MODEL = "identity.User"

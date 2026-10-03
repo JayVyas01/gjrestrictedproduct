@@ -6,13 +6,14 @@ the schema owner, for example to simulate an attacker tampering with the audit t
 Never use `transactional_db`: its TRUNCATE-based teardown is blocked by the audit trigger.
 """
 
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 from itertools import count
 from types import SimpleNamespace
 
 import pytest
 from django.db import connection, transaction
+from django.utils import timezone
 
 from audit.models import AuditEvent
 from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass, Unit
@@ -22,13 +23,22 @@ from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
 from licensing.service import record_licence
+from oversight.service import set_review_period
 from positions.models import Area, AreaLevel, Position
 from positions.service import assign
 from stock.service import set_opening_balance
+from transactions.models import Transaction
+from transactions.service import Transport, decide, request_decision_code, start_transaction
 
 TEST_PASSWORD = "correct-horse-battery-9"
 DEMO_GSTIN = "99AAAAA0000A1Z5"  # state code 99 does not exist: can never match a real business
 BUYER_GSTIN = "99BBBBB1111B1Z5"
+TEST_TRANSPORT = Transport(
+    name="Ravi Transport Co",
+    id_number="GJ-TR-4411",
+    vehicle_number="GJ01AB1234",
+    route="Sanand to Bopal",
+)
 
 
 @pytest.fixture
@@ -214,3 +224,67 @@ def trade(catalogue, org, make_licence, make_licensee, make_user):
         officer=officer,
         superintendent=superintendent,
     )
+
+
+def _sign(user, tx, outcome, otp_outbox, reason_code="", comment=""):
+    set_actor(user_id=user.user_id, role=user.role)
+    challenge = request_decision_code(reference=tx.reference, user=user)
+    return decide(
+        reference=tx.reference,
+        user=user,
+        challenge_id=str(challenge.public_id),
+        code=otp_outbox[-1][1],
+        outcome=outcome,
+        reason_code=reason_code,
+        comment=comment,
+    )
+
+
+@pytest.fixture
+def review_setting(org):
+    with acting_as_system("test"):
+        return set_review_period(
+            position=org.district_officer, days=15, by="test", starts_on=date(2026, 6, 1)
+        )
+
+
+@pytest.fixture
+def settle(trade, catalogue, otp_outbox):
+    """Drive a transaction through the real services (seller starts, buyer then officer decide)."""
+
+    def _settle(qty="10", *, buyer="CONFIRM", officer="APPROVE", reason_code="", comment=""):
+        set_actor(user_id=trade.seller.user_id, role=trade.seller.role)
+        tx = start_transaction(
+            seller=trade.seller,
+            buyer_gstin=BUYER_GSTIN,
+            substance=catalogue.whisky,
+            quantity=Decimal(qty),
+            transport=TEST_TRANSPORT,
+        )
+        tx = _sign(
+            trade.buyer,
+            tx,
+            buyer,
+            otp_outbox,
+            reason_code=reason_code if buyer == "REJECT" else "",
+            comment=comment if buyer == "REJECT" else "",
+        )
+        if buyer == "CONFIRM" and officer:
+            tx = _sign(
+                trade.officer,
+                tx,
+                officer,
+                otp_outbox,
+                reason_code=reason_code if officer == "REJECT" else "",
+                comment=comment if officer == "REJECT" else "",
+            )
+        return tx
+
+    return _settle
+
+
+def set_decided_on(tx, day):
+    """Move a settled transaction's decision time to noon (local) on `day` - for period tests."""
+    moment = timezone.make_aware(datetime.combine(day, time(12, 0)))
+    with acting_as_system("test"):
+        Transaction.objects.filter(pk=tx.pk).update(decided_at=moment)

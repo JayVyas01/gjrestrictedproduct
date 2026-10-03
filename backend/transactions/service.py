@@ -2,7 +2,7 @@
 plain Python who may act; row-level security only lets SYSTEM write.
 
 Lock order (never reverse it): user row -> OTP challenge rows -> transaction row ->
-stock balance rows (sorted) -> audit (record() last).
+stock balance rows (sorted) -> alert inserts -> audit (record() last).
 """
 
 from dataclasses import dataclass
@@ -10,6 +10,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from alerts.service import raise_buyer_rejection_alerts
 from audit.service import record
 from catalogue.models import Substance
 from core import crypto
@@ -271,11 +272,16 @@ def _apply(
         comment=comment.strip(),
         otp_verified_at=now,
     )
+    payload = None
+    if role == "buyer" and outcome == DecisionOutcome.REJECT:
+        alerts = raise_buyer_rejection_alerts(locked, reason, comment.strip())
+        payload = {"alerts_raised": len(alerts)}
     record(
         action=_AUDIT[(role, outcome)],
         actor=user.user_id,
         subject_type="transaction",
         subject_id=locked.reference,
+        payload=payload,
     )
     return locked
 

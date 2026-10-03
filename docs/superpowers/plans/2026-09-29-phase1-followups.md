@@ -140,3 +140,30 @@ Open items from the D1 reviews. None of them block D2.
   - a former position holder acting after a transfer
   - a flag racing a sign-off
 - **API:** 403 on the sign-off code and sign-off endpoints, `can_sign` for Head Authority and after signing, and throttling.
+
+---
+
+# Demo D2c follow-ups (added 2026-10-04)
+
+## For D2d (Licensing Authority APIs)
+
+- **Rule-change proposals:** the flow for proposing and approving rule and threshold changes.
+- **Licence register APIs:** recording, renewing, suspending and revoking licences over HTTP.
+- **Review-settings API:** restricted to the Licensing Authority with `role_required`. This closes the CODEMAP note "the service trusts its caller" (`set_review_period` has no caller check).
+
+## For D3 (screens) and D4 (demo tooling)
+
+- **D4 seed data:** seed a Whisky threshold above 200 L, so the demo shows both chains, and the Head Authority persona.
+- **D3 buyer reject dropdown:** hide the `STOCK_LIMIT` reason unless `stock_limit_problem` is set. The backend refuses it otherwise, but the buyer should not be offered it.
+- **D3 home screen:** `next_due` is the earliest due date of an OPEN batch only. Overdue batches are counted separately (`overdue_batches`), so the screen must show both.
+
+## Hardening (later)
+
+| Item | Note |
+|---|---|
+| `/me` queries the area level once per held position | Fine for the demo (a person holds one or two positions); add `select_related` later. |
+| Gujarati | Backend messages are English sentences. They need stable message codes so the web app can translate them (W6). |
+
+## Test gaps
+
+- None open. The `STOCK_LIMIT` in-lock re-check is covered (`test_stock_limit_reason_refused_under_lock_is_audited`).

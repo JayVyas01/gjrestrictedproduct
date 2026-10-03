@@ -43,7 +43,8 @@ def test_full_login_requires_password_and_otp(app_db, client, make_user, otp_out
 
     second = verify(client, first.json()["challenge_id"], otp_outbox[-1][1])
     assert second.status_code == 200
-    assert client.get("/api/auth/me").json() == {"user_id": user.user_id, "role": "LICENSEE"}
+    me = client.get("/api/auth/me").json()
+    assert (me["user_id"], me["role"]) == (user.user_id, "LICENSEE")
 
 
 def test_user_id_is_case_insensitive(app_db, client, make_user, otp_outbox):

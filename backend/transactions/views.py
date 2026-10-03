@@ -17,15 +17,19 @@ from transactions.models import Transaction
 from transactions.presenters import transaction_detail, transaction_summary
 from transactions.serializers import (
     BuyerLookupSerializer,
+    CheckTransactionSerializer,
     DecideSerializer,
     NewTransactionSerializer,
+    TransactionFilterSerializer,
 )
 from transactions.service import (
     NotAllowed,
     TransactionRefused,
     Transport,
     cancel_transaction,
+    check_transaction,
     decide,
+    filter_transactions,
     find_buyer,
     load_visible,
     request_decision_code,
@@ -34,6 +38,7 @@ from transactions.service import (
 
 NO_BUYER = "No licensed business was found for this GSTIN. Check all 15 characters."
 NOT_FOUND = {"detail": "Transaction not found."}
+UNKNOWN_FILTER = {"detail": "Unknown filter value."}
 WRONG_CODE = {"detail": "The code is wrong or has expired. Request a new code."}
 
 
@@ -66,6 +71,27 @@ class BuyerLookupView(APIView):
         return Response({"holder_name": name})
 
 
+@method_decorator(csrf_protect, name="dispatch")
+class CheckView(APIView):
+    """Dry run before starting a sale: would it go ahead, and who would approve it."""
+
+    permission_classes = [role_required(Role.LICENSEE)]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "lookup"
+
+    def post(self, request):
+        data = CheckTransactionSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        reasons, chain = check_transaction(
+            seller=request.user,
+            buyer_gstin=v["buyer_gstin"],
+            substance=v["substance"],
+            quantity=v["quantity"],
+        )
+        return Response({"ok": not reasons, "reasons": reasons, "approval_chain": chain})
+
+
 class TransactionListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -75,7 +101,14 @@ class TransactionListView(APIView):
         return super().get_permissions()
 
     def get(self, request):
-        rows = Transaction.objects.select_related("substance").order_by("-created_at")[:50]
+        filters = TransactionFilterSerializer(data=request.query_params)
+        if not filters.is_valid():
+            return Response(UNKNOWN_FILTER, status=status.HTTP_400_BAD_REQUEST)
+        rows = filter_transactions(
+            Transaction.objects.select_related("substance"),
+            request.user,
+            **filters.validated_data,
+        ).order_by("-created_at")[:50]
         return Response([transaction_summary(tx, request.user) for tx in rows])
 
     def post(self, request):

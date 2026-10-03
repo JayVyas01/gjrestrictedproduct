@@ -11,12 +11,15 @@ class BuyerLookupSerializer(serializers.Serializer):
     gstin = serializers.CharField(max_length=20)
 
 
-class NewTransactionSerializer(serializers.Serializer):
+class CheckTransactionSerializer(serializers.Serializer):
     buyer_gstin = serializers.CharField(max_length=20)
     substance_code = serializers.SlugRelatedField(
         slug_field="code", queryset=Substance.objects.all(), source="substance"
     )
     quantity = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0.001"))
+
+
+class NewTransactionSerializer(CheckTransactionSerializer):
     transporter_name = serializers.CharField(max_length=120)
     transporter_id_number = serializers.CharField(max_length=40)
     vehicle_number = serializers.RegexField(
@@ -30,6 +33,18 @@ class NewTransactionSerializer(serializers.Serializer):
 class DecideSerializer(serializers.Serializer):
     challenge_id = serializers.UUIDField()
     code = serializers.RegexField(r"^\d{6}$")
-    outcome = serializers.ChoiceField(choices=["CONFIRM", "APPROVE", "REJECT"])
+    outcome = serializers.ChoiceField(choices=["CONFIRM", "APPROVE", "RECOMMEND", "REJECT"])
     reason_code = serializers.CharField(max_length=40, required=False, default="", allow_blank=True)
     comment = serializers.CharField(max_length=500, required=False, default="", allow_blank=True)
+
+
+class TransactionFilterSerializer(serializers.Serializer):
+    """List filters. Blank means no filter; any other unknown value is refused."""
+
+    awaiting = serializers.ChoiceField(choices=["me"], required=False, default="", allow_blank=True)
+    side = serializers.ChoiceField(
+        choices=["sales", "purchases"], required=False, default="", allow_blank=True
+    )
+    approved_by = serializers.ChoiceField(
+        choices=["superintendent"], required=False, default="", allow_blank=True
+    )

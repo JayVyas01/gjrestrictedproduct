@@ -8,7 +8,11 @@ from rest_framework.views import APIView
 from alerts.models import AlertAcknowledgement, AuthorityAlert
 from alerts.presenters import alert_view
 from alerts.serializers import AcknowledgeSerializer
-from alerts.service import NotAllowed, acknowledge
+from alerts.service import AlreadyAcknowledged, NotAllowed, acknowledge
+
+# Fixed messages: the view never echoes an exception's text (keeps CodeQL clean).
+ALREADY_ACKNOWLEDGED = {"detail": "This alert is already acknowledged."}
+NOT_HOLDER = {"detail": "Only the officer holding this position can acknowledge this alert."}
 
 
 class AlertListView(APIView):
@@ -30,11 +34,10 @@ class AcknowledgeView(APIView):
         data.is_valid(raise_exception=True)
         try:
             acknowledge(alert_id=alert_id, user=request.user, note=data.validated_data["note"])
+        except AlreadyAcknowledged:
+            return Response(ALREADY_ACKNOWLEDGED, status=status.HTTP_409_CONFLICT)
         except NotAllowed:
-            return Response(
-                {"detail": "You are not allowed to acknowledge this alert."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            return Response(NOT_HOLDER, status=status.HTTP_403_FORBIDDEN)
         alert = AuthorityAlert.objects.select_related("transaction__substance", "reason").get(
             pk=alert_id
         )

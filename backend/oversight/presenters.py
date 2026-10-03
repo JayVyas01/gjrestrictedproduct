@@ -9,7 +9,8 @@ from oversight.models import BatchSignOff, OversightBatch
 from oversight.service import batch_status
 from positions.service import positions_held
 from transactions.checks import fmt_qty
-from transactions.models import DecisionOutcome, DecisionStep, TransactionDecision
+from transactions.models import DecisionStep
+from transactions.service import final_approval
 
 
 def batch_summary(batch: OversightBatch, today: date) -> dict:
@@ -32,9 +33,7 @@ def _item(item) -> dict:
     tx = item.transaction
     with acting_as_system("batch_view"):
         names = (tx.seller_licence.holder_name, tx.buyer_licence.holder_name)
-        approval = TransactionDecision.objects.select_related("position").get(
-            transaction=tx, step=DecisionStep.OFFICER, outcome=DecisionOutcome.APPROVE
-        )
+    approval = final_approval(tx)
     flag = getattr(item, "flag", None)
     return {
         "reference": tx.reference,
@@ -45,6 +44,7 @@ def _item(item) -> dict:
         "buyer_name": names[1],
         "approved_at": approval.created_at.isoformat(),
         "approved_by_position": approval.position.title,
+        "approved_by_superintendent": approval.step == DecisionStep.SUPERINTENDENT,
         "flag": {
             "reason": flag.reason.label,
             "comment": flag.comment or None,

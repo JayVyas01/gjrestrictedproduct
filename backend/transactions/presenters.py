@@ -1,8 +1,10 @@
 """What each viewer sees of a transaction. Party names are read as SYSTEM (the other party's
 licence is hidden from the viewer by RLS) and only the registered name is shown. The buyer's
-and officer's free-text comments, and who held the officer position when it decided
-(`held_by`), are shown to officer, superintendent and authority viewers only. `can_decide`
-says whether the viewer is the one whose decision is awaited."""
+and officer's free-text comments, and who held the position when the officer
+and superintendent decided (`held_by`), are shown to officer, superintendent and authority
+viewers only. `can_decide` says whether the viewer is the one whose decision is awaited, and
+`allowed_outcomes` what they may decide. `stock_limit_problem` (the buyer's own stock numbers)
+is shown to the buyer only, while the sale waits for them; the seller never sees it."""
 
 from core.db_context import acting_as_system
 from identity.models import User
@@ -10,13 +12,15 @@ from identity.roles import Role
 from positions.service import positions_held
 from transactions.checks import fmt_qty
 from transactions.models import DecisionStep, Transaction, TransactionStatus
-from transactions.service import decision_role
+from transactions.service import allowed_outcomes, decision_role, stock_limit_problem
 
 _AUTHORITY_ROLES = {Role.HEAD_AUTHORITY, Role.SOFTWARE_OWNER}
 _NEXT_ACTION = {
     TransactionStatus.AWAITING_BUYER: "Waiting for the buyer to confirm.",
     TransactionStatus.AWAITING_OFFICER: "Waiting for the officer's decision.",
+    TransactionStatus.AWAITING_SUPERINTENDENT: "Waiting for the superintendent's final approval.",
 }
+_HELD_BY_STEPS = {DecisionStep.OFFICER, DecisionStep.SUPERINTENDENT}
 
 
 def _role(tx: Transaction, viewer: User) -> str:
@@ -53,11 +57,9 @@ def transaction_summary(tx: Transaction, viewer: User) -> dict:
     }
 
 
-def _next_action(tx: Transaction, role: str) -> str | None:
-    if (tx.status, role) in {
-        (TransactionStatus.AWAITING_BUYER, "buyer"),
-        (TransactionStatus.AWAITING_OFFICER, "officer"),
-    }:
+def _next_action(tx: Transaction, deciding_as: str | None) -> str | None:
+    """Your turn exactly when you are the decider (decision_role)."""
+    if deciding_as is not None:
         return "Your decision is needed."
     return _NEXT_ACTION.get(tx.status)
 
@@ -84,7 +86,7 @@ def _timeline(tx: Transaction, for_authority: bool) -> list[dict]:
                 "reason": d.reason.label if d.reason else None,
                 "comment": (d.comment or None) if for_authority else None,
                 "held_by": (
-                    d.actor_user_id if for_authority and d.step == DecisionStep.OFFICER else None
+                    d.actor_user_id if for_authority and d.step in _HELD_BY_STEPS else None
                 ),
             }
         )
@@ -94,6 +96,7 @@ def _timeline(tx: Transaction, for_authority: bool) -> list[dict]:
 def transaction_detail(tx: Transaction, viewer: User) -> dict:
     summary = transaction_summary(tx, viewer)
     role = summary["your_role"]
+    deciding_as = decision_role(tx, viewer)
     for_authority = (
         role in {"officer", "superintendent", "authority"} or viewer.role in _AUTHORITY_ROLES
     )
@@ -106,7 +109,17 @@ def transaction_detail(tx: Transaction, viewer: User) -> dict:
             "route": tx.route,
         },
         "designated_officer": tx.designated_position.title,
+        "approval_chain": tx.approval_chain,
+        "approval_chain_label": tx.get_approval_chain_display(),
         "timeline": _timeline(tx, for_authority),
-        "next_action": _next_action(tx, role),
-        "can_decide": decision_role(tx, viewer) is not None,
+        "next_action": _next_action(tx, deciding_as),
+        "can_decide": deciding_as is not None,
+        "allowed_outcomes": (
+            sorted(allowed_outcomes(tx, deciding_as, viewer)) if deciding_as else []
+        ),
+        "stock_limit_problem": (
+            stock_limit_problem(tx)
+            if role == "buyer" and tx.status == TransactionStatus.AWAITING_BUYER
+            else None
+        ),
     }

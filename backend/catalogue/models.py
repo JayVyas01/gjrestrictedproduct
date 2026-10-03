@@ -1,7 +1,8 @@
 """What can be traded, under which licence types, with which permissions.
 
 Maintained by the Licensing Authority. Rule versions are never edited: a change is a new
-version, and licences keep a frozen copy of the version they were recorded under.
+version, and licences keep a frozen copy of the version they were recorded under. Approval
+thresholds are versioned the same way.
 """
 
 from django.db import models
@@ -93,5 +94,56 @@ class LicenceTypeRuleVersion(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(validity_months__gt=0), name="rule_validity_positive"
+            ),
+        ]
+
+
+class ApprovalThreshold(models.Model):
+    """Above which quantity a substance or class needs the superintendent's final approval.
+    Scope is exactly one of the two; a substance threshold beats its class threshold."""
+
+    substance = models.ForeignKey(Substance, on_delete=models.PROTECT, null=True, blank=True)
+    substance_class = models.ForeignKey(
+        SubstanceClass, on_delete=models.PROTECT, null=True, blank=True
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(substance__isnull=False, substance_class__isnull=True)
+                    | models.Q(substance__isnull=True, substance_class__isnull=False)
+                ),
+                name="threshold_exactly_one_scope",
+            ),
+            models.UniqueConstraint(
+                fields=["substance"],
+                condition=models.Q(substance__isnull=False),
+                name="one_threshold_per_substance",
+            ),
+            models.UniqueConstraint(
+                fields=["substance_class"],
+                condition=models.Q(substance_class__isnull=False),
+                name="one_threshold_per_class",
+            ),
+        ]
+
+
+class ApprovalThresholdVersion(models.Model):
+    threshold = models.ForeignKey(
+        ApprovalThreshold, on_delete=models.PROTECT, related_name="versions"
+    )
+    version = models.PositiveIntegerField()
+    superintendent_above_qty = models.DecimalField(max_digits=12, decimal_places=3)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=64)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["threshold", "version"], name="unique_threshold_version"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(superintendent_above_qty__gt=0), name="threshold_qty_positive"
             ),
         ]

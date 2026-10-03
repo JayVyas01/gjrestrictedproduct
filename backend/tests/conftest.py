@@ -23,6 +23,7 @@ from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
 from licensing.service import record_licence
+from oversight.service import set_review_period
 from positions.models import Area, AreaLevel, Position
 from positions.service import assign
 from stock.service import set_opening_balance
@@ -237,6 +238,14 @@ def _sign(user, tx, outcome, otp_outbox, reason_code="", comment=""):
         reason_code=reason_code,
         comment=comment,
     )
+
+
+@pytest.fixture
+def review_setting(org):
+    with acting_as_system("test"):
+        return set_review_period(
+            position=org.district_officer, days=15, by="test", starts_on=date(2026, 6, 1)
+        )
 
 
 @pytest.fixture

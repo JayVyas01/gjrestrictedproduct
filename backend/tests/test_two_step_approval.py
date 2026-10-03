@@ -17,7 +17,7 @@ from stock.service import balance_of, transfer
 from tests.test_transaction_api import NEW_TX, login, post, sign
 from tests.test_transaction_decisions import act, as_user, new_tx
 from transactions.models import ApprovalChain, TransactionDecision, TransactionStatus
-from transactions.service import NotAllowed, TransactionRefused, request_decision_code
+from transactions.service import NotAllowed, TransactionRefused, decide, request_decision_code
 
 pytestmark = pytest.mark.django_db
 SAME_PERSON = (
@@ -269,3 +269,49 @@ def test_superintendent_sees_final_approval_next_action(
 def test_settle_drives_the_two_step_chain(app_db, catalogue, trade, threshold, settle):
     tx = settle("250", officer="RECOMMEND", superintendent="APPROVE")
     assert tx.status == TransactionStatus.APPROVED
+
+
+def test_promoted_recommender_is_not_told_to_decide(
+    app_db, client, catalogue, org, trade, threshold, otp_outbox, make_user
+):
+    """The officer who recommended is promoted to the superintendent's position: they are not
+    the decider (separation of duties), so the next action must not say it is their turn."""
+    tx = recommended(trade, catalogue, otp_outbox)
+    successor = make_user(role=Role.PERSONNEL, contact="+919800000307")
+    assign(org.area_officer, successor, by="test")
+    assign(org.district_officer, trade.officer, by="test")
+    login(client, trade.officer, otp_outbox)
+    detail = client.get(f"/api/transactions/{tx.reference}").json()
+    assert detail["next_action"] == "Waiting for the superintendent's final approval."
+    assert detail["can_decide"] is False
+    assert detail["allowed_outcomes"] == []
+
+
+def test_dual_holder_cannot_spend_another_code_on_final_approval(
+    app_db, catalogue, org, trade, threshold, otp_outbox
+):
+    """A holder of both positions recommends tx1, gets a valid decision code through tx2 (where
+    they are legitimately the officer), and tries to spend it on tx1's final approval."""
+    assign(org.district_officer, trade.officer, by="test")
+    tx1 = recommended(trade, catalogue, otp_outbox)
+    tx2 = new_tx(trade, catalogue, qty="10")
+    act(trade.buyer, Role.LICENSEE, tx2, otp_outbox, "CONFIRM")
+    as_user(trade.officer, Role.PERSONNEL)
+    challenge = request_decision_code(reference=tx2.reference, user=trade.officer)
+    with pytest.raises(NotAllowed) as refused:
+        decide(
+            reference=tx1.reference,
+            user=trade.officer,
+            challenge_id=str(challenge.public_id),
+            code=otp_outbox[-1][1],
+            outcome="APPROVE",
+        )
+    assert str(refused.value) == SAME_PERSON
+    with acting_as_system("test"):
+        tx1.refresh_from_db()
+        assert tx1.status == TransactionStatus.AWAITING_SUPERINTENDENT
+        assert not TransactionDecision.objects.filter(
+            transaction=tx1, step="SUPERINTENDENT"
+        ).exists()
+        assert not StockMovement.objects.filter(transaction_reference=tx1.reference).exists()
+    assert balances(trade, catalogue) == (Decimal("400"), Decimal("0"))

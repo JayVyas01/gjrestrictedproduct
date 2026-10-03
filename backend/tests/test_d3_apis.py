@@ -16,6 +16,7 @@ from tests.test_buyer_stock_limit import buyer_holds
 from tests.test_transaction_api import login, post
 from tests.test_transaction_decisions import act, new_tx
 from transactions.models import Transaction
+from transactions.serializers import TransactionFilterSerializer
 
 pytestmark = pytest.mark.django_db
 CHECK = {"buyer_gstin": BUYER_GSTIN, "substance_code": "WHISKY", "quantity": "150"}
@@ -97,6 +98,25 @@ def test_side_filter(app_db, client, catalogue, trade, otp_outbox):
     assert references(client, "side=sales") == set()
     assert references(client, "side=purchases") == {tx.reference}
     assert references(client, "side=purchases&awaiting=me") == {tx.reference}
+
+
+def test_blank_filter_means_no_filter(app_db, client, catalogue, trade, otp_outbox):
+    sale = new_tx(trade, catalogue, qty="10")
+    act(trade.buyer, Role.LICENSEE, sale, otp_outbox, "CONFIRM")
+    waiting = new_tx(trade, catalogue, qty="10")
+    login(client, trade.buyer, otp_outbox)
+    assert references(client, "side=&awaiting=me") == {waiting.reference}
+    assert references(client, "side=&awaiting=&approved_by=") == {
+        sale.reference,
+        waiting.reference,
+    }
+
+
+def test_filter_serializer_accepts_blanks_from_any_source():
+    """Blank means no filter even when the data is not a query string (e.g. a plain dict)."""
+    filters = TransactionFilterSerializer(data={"side": "", "awaiting": "me", "approved_by": ""})
+    assert filters.is_valid(), filters.errors
+    assert filters.validated_data == {"side": "", "awaiting": "me", "approved_by": ""}
 
 
 def test_approved_by_superintendent_filter(

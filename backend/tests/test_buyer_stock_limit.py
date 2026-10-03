@@ -50,10 +50,21 @@ def last_payload():
         return AuditEvent.objects.order_by("-id").values_list("payload", flat=True).first()
 
 
+_UNCHECKED = {"at", "created_at", "decided_at", "reference"}  # may hold digits by chance
+
+
+def _scrub(value):
+    if isinstance(value, dict):
+        return {k: _scrub(v) for k, v in value.items() if k not in _UNCHECKED}
+    if isinstance(value, list):
+        return [_scrub(v) for v in value]
+    return value
+
+
 def shows_buyer_stock(body) -> bool:
-    """Any of the buyer's stock numbers in what the viewer reads (timestamps left out)."""
-    events = [{k: v for k, v in e.items() if k != "at"} for e in body["timeline"]]
-    text = json.dumps(events) + (body["next_action"] or "") + json.dumps(body.get("reasons"))
+    """Any of the buyer's stock numbers anywhere in a response the viewer reads (timestamps
+    and the reference left out)."""
+    text = json.dumps(_scrub(body))
     return any(number in text for number in ("995", "1005", "1000"))
 
 
@@ -72,6 +83,9 @@ def test_seller_never_sees_buyer_stock(app_db, client, catalogue, trade, otp_out
     detail = client.get(f"/api/transactions/{ref}").json()
     for body in (created.json(), detail):
         assert body["stock_limit_problem"] is None
+    listing = client.get("/api/transactions").json()
+    assert [row["reference"] for row in listing] == [ref]
+    for body in (created.json(), detail, listing):
         assert not shows_buyer_stock(body)
 
     login(client, trade.buyer, otp_outbox)
@@ -83,6 +97,7 @@ def test_seller_never_sees_buyer_stock(app_db, client, catalogue, trade, otp_out
     rejection = detail["timeline"][-1]
     assert rejection["reason"] == STOCK_LIMIT_LABEL and rejection["comment"] is None
     assert not shows_buyer_stock(detail)
+    assert not shows_buyer_stock(client.get("/api/transactions").json())
 
 
 def test_buyer_sees_problem_and_only_reject(app_db, client, catalogue, trade, otp_outbox):
@@ -162,6 +177,25 @@ def test_stock_limit_reason_refused_when_no_problem(
         reason_code="NOT_ORDERED",
     )
     assert rejected.status == TransactionStatus.REJECTED_BY_BUYER
+
+
+def test_stock_limit_reason_refused_under_lock_is_audited(
+    app_db, catalogue, trade, otp_outbox, audit_actions, monkeypatch
+):
+    """The buyer's stock changed between the code request and the decision: the check before
+    the code saw a problem, the one under the lock does not. The rejection is refused, rolled
+    back, and the refusal is kept in the audit trail."""
+    tx = new_tx(trade, catalogue, qty="10")
+    monkeypatch.setattr("transactions.service.stock_limit_problem", lambda tx: PROBLEM)
+    with pytest.raises(InvalidReason) as refused:
+        act(trade.buyer, Role.LICENSEE, tx, otp_outbox, "REJECT", reason_code="STOCK_LIMIT")
+    assert str(refused.value) == NO_PROBLEM
+    assert audit_actions()[-1] == "transaction.reject_refused"
+    with acting_as_system("test"):
+        tx.refresh_from_db()
+        assert tx.status == TransactionStatus.AWAITING_BUYER
+        assert not TransactionDecision.objects.filter(transaction=tx).exists()
+        assert not AuthorityAlert.objects.filter(transaction=tx).exists()
 
 
 def test_stock_limit_rejection_raises_no_alert_and_is_not_counted(

@@ -41,6 +41,10 @@ class DecideSerializer(serializers.Serializer):
 class TransactionFilterSerializer(serializers.Serializer):
     """List filters. Blank means no filter; any other unknown value is refused."""
 
-    awaiting = serializers.ChoiceField(choices=["me"], required=False, default="")
-    side = serializers.ChoiceField(choices=["sales", "purchases"], required=False, default="")
-    approved_by = serializers.ChoiceField(choices=["superintendent"], required=False, default="")
+    awaiting = serializers.ChoiceField(choices=["me"], required=False, default="", allow_blank=True)
+    side = serializers.ChoiceField(
+        choices=["sales", "purchases"], required=False, default="", allow_blank=True
+    )
+    approved_by = serializers.ChoiceField(
+        choices=["superintendent"], required=False, default="", allow_blank=True
+    )

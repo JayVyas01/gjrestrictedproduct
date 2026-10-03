@@ -20,11 +20,6 @@ _NEXT_ACTION = {
     TransactionStatus.AWAITING_OFFICER: "Waiting for the officer's decision.",
     TransactionStatus.AWAITING_SUPERINTENDENT: "Waiting for the superintendent's final approval.",
 }
-_YOUR_TURN = {
-    (TransactionStatus.AWAITING_BUYER, "buyer"),
-    (TransactionStatus.AWAITING_OFFICER, "officer"),
-    (TransactionStatus.AWAITING_SUPERINTENDENT, "superintendent"),
-}
 _HELD_BY_STEPS = {DecisionStep.OFFICER, DecisionStep.SUPERINTENDENT}
 
 
@@ -62,8 +57,10 @@ def transaction_summary(tx: Transaction, viewer: User) -> dict:
     }
 
 
-def _next_action(tx: Transaction, role: str) -> str | None:
-    if (tx.status, role) in _YOUR_TURN:
+def _next_action(tx: Transaction, deciding_as: str | None) -> str | None:
+    """Your turn exactly when you are the decider (decision_role), so a holder who made the
+    officer decision is told to wait for the superintendent like everyone else."""
+    if deciding_as is not None:
         return "Your decision is needed."
     return _NEXT_ACTION.get(tx.status)
 
@@ -116,7 +113,7 @@ def transaction_detail(tx: Transaction, viewer: User) -> dict:
         "approval_chain": tx.approval_chain,
         "approval_chain_label": tx.get_approval_chain_display(),
         "timeline": _timeline(tx, for_authority),
-        "next_action": _next_action(tx, role),
+        "next_action": _next_action(tx, deciding_as),
         "can_decide": deciding_as is not None,
         "allowed_outcomes": sorted(allowed_outcomes(tx, deciding_as)) if deciding_as else [],
         "stock_limit_problem": (

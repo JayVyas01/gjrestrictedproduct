@@ -392,6 +392,16 @@ def decide(
             subject_id=tx.reference,
         )
         raise
+    except InvalidReason:
+        # Only the in-lock STOCK_LIMIT check raises this here (the buyer's stock changed after
+        # the code was requested). The rejection rolled back; the refusal is kept.
+        record(
+            action="transaction.reject_refused",
+            actor=user.user_id,
+            subject_type="transaction",
+            subject_id=tx.reference,
+        )
+        raise
 
 
 def _buyer_reason_code(tx: Transaction, reason_code: str) -> str:

@@ -7,6 +7,7 @@ acknowledge checks in plain Python that the user currently holds the addressed p
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from alerts.models import AlertAcknowledgement, AlertKind, AuthorityAlert
@@ -16,7 +17,12 @@ from identity.models import User
 from positions.models import Position
 from positions.service import positions_held
 from reasons.models import ReasonCode
-from transactions.models import Transaction, TransactionStatus
+from transactions.models import (
+    DecisionStep,
+    Transaction,
+    TransactionDecision,
+    TransactionStatus,
+)
 
 PATTERN_WINDOW = timedelta(days=30)
 
@@ -41,15 +47,15 @@ def pattern_text(count: int) -> str:
 def _recent_rejections(tx: Transaction) -> int:
     """Buyer rejections of this seller in the window. A STOCK_LIMIT rejection (the buyer's own
     limit) says nothing about the seller and is not counted."""
-    return (
-        Transaction.objects.filter(
-            seller_gstin_index=tx.seller_gstin_index,
-            status=TransactionStatus.REJECTED_BY_BUYER,
-            decided_at__gte=timezone.now() - PATTERN_WINDOW,
-        )
-        .exclude(decisions__step="BUYER", decisions__reason__code="STOCK_LIMIT")
-        .count()
+    stock_limit_rejection = TransactionDecision.objects.filter(
+        transaction=OuterRef("pk"), step=DecisionStep.BUYER, reason__code="STOCK_LIMIT"
     )
+    return Transaction.objects.filter(
+        ~Exists(stock_limit_rejection),
+        seller_gstin_index=tx.seller_gstin_index,
+        status=TransactionStatus.REJECTED_BY_BUYER,
+        decided_at__gte=timezone.now() - PATTERN_WINDOW,
+    ).count()
 
 
 def raise_buyer_rejection_alerts(

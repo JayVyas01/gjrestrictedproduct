@@ -162,9 +162,8 @@ Open items from the D1 reviews. None of them block D2.
 | Item | Note |
 |---|---|
 | `/me` queries the area level once per held position | Fine for the demo (a person holds one or two positions); add `select_related` later. |
-| Alert pattern count uses `.exclude(decisions__step="BUYER", decisions__reason__code="STOCK_LIMIT")` across the decisions join | Correct only because a `REJECTED_BY_BUYER` transaction has just the buyer decision. Revisit if a rejected transaction can ever carry more decisions. |
 | Gujarati | Backend messages are English sentences. They need stable message codes so the web app can translate them (W6). |
 
 ## Test gaps
 
-- **Defence-in-depth paths with no test:** the `STOCK_LIMIT` re-check under the transaction lock (a race where the buyer's stock changes between the pre-code check and the lock), and the superintendent separation-of-duties check under the lock (`_apply`). Both are covered earlier in the flow by tested checks; the in-lock copies only matter in a race.
+- **Defence-in-depth path with no test:** the superintendent separation-of-duties check under the transaction lock (`_apply`). `test_dual_holder_cannot_spend_another_code_on_final_approval` covers the code-reuse attack, but it is refused earlier by `_for_decision`, so the in-lock copy is never reached. No known sequence reaches it (the officer decision always exists before a transaction waits for the superintendent, and decision rows are append-only); it is kept as a guard and could only be tested by mocking `_for_decision`. The `STOCK_LIMIT` in-lock re-check is now covered (`test_stock_limit_reason_refused_under_lock_is_audited`).

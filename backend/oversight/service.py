@@ -32,7 +32,9 @@ from transactions.service import final_approval
 
 
 class InvalidSetting(Exception):
-    pass
+    def __init__(self, reasons: list[str]):
+        super().__init__("; ".join(reasons))
+        self.reasons = reasons
 
 
 def _next_start(position: Position, fallback: date) -> date:
@@ -64,7 +66,7 @@ def _resolve_start(position: Position, starts_on: date | None) -> date:
     if last:
         required = last.period_end + timedelta(days=1)
         if starts_on is not None and starts_on != required:
-            raise InvalidSetting(f"The new period must start on {required.isoformat()}.")
+            raise InvalidSetting([f"The new period must start on {required.isoformat()}."])
         return required
     if existing:
         latest_allowed = existing.starts_on
@@ -72,8 +74,10 @@ def _resolve_start(position: Position, starts_on: date | None) -> date:
         latest_allowed = _earliest_approval(position) or timezone.localdate()
     if starts_on is not None and starts_on > latest_allowed:
         raise InvalidSetting(
-            f"The new period cannot start after {latest_allowed.isoformat()}, "
-            "or transactions in between would never be reviewed."
+            [
+                f"The new period cannot start after {latest_allowed.isoformat()}, "
+                "or transactions in between would never be reviewed."
+            ]
         )
     return starts_on or latest_allowed
 
@@ -88,10 +92,10 @@ def set_review_period(
     *, position: Position, days: int, by: str, starts_on: date | None = None
 ) -> SuperintendentSetting:
     if days not in REVIEW_PERIODS:
-        raise InvalidSetting("The review period must be 15, 30 or 60 days.")
+        raise InvalidSetting(["The review period must be 15, 30 or 60 days."])
     if position.area.level != AreaLevel.DISTRICT:
         raise InvalidSetting(
-            "Review periods can only be set for a district superintendent position."
+            ["Review periods can only be set for a district superintendent position."]
         )
     # Lookups and write run as SYSTEM so the caller's row-level security cannot hide batches.
     with acting_as_system("set_review_period"):
@@ -108,6 +112,40 @@ def set_review_period(
             payload={"period_days": days, "starts_on": start.isoformat()},
         )
     return setting
+
+
+def _current_period_end(setting: SuperintendentSetting | None, today: date) -> date | None:
+    """The last day of the period containing today (None before the first period starts)."""
+    if setting is None or setting.starts_on > today:
+        return None
+    periods_done = (today - setting.starts_on).days // setting.period_days
+    return setting.starts_on + timedelta(days=(periods_done + 1) * setting.period_days - 1)
+
+
+def review_settings_overview(today: date) -> list[dict]:
+    """Every district superintendent position with its review period and batch dates."""
+    # Runs as SYSTEM: the Licensing Authority manages review periods but cannot read batches
+    # under row-level security. Only dates leave this block, never batch contents.
+    with acting_as_system("review_settings_overview"):
+        rows = []
+        positions = Position.objects.filter(area__level=AreaLevel.DISTRICT).select_related(
+            "area", "review_setting"
+        )
+        for position in positions.order_by("id"):
+            setting = getattr(position, "review_setting", None)
+            last = position.batches.order_by("-period_end").first()
+            rows.append(
+                {
+                    "position_id": position.id,
+                    "title": position.title,
+                    "area": position.area.name,
+                    "period_days": setting.period_days if setting else None,
+                    "starts_on": setting.starts_on if setting else None,
+                    "current_period_end": _current_period_end(setting, today),
+                    "last_batch_end": last.period_end if last else None,
+                }
+            )
+    return rows
 
 
 def _make_batch(position: Position, start: date, end: date) -> tuple[OversightBatch, int]:

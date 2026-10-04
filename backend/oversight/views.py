@@ -7,10 +7,21 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from identity.permissions import role_required
+from identity.roles import Role
 from oversight.models import OversightBatch
 from oversight.presenters import batch_detail, batch_summary
-from oversight.serializers import FlagSerializer, SignOffSerializer
-from oversight.service import NotAllowed, flag_item, request_sign_off_code, sign_off
+from oversight.serializers import FlagSerializer, ReviewPeriodSerializer, SignOffSerializer
+from oversight.service import (
+    InvalidSetting,
+    NotAllowed,
+    flag_item,
+    request_sign_off_code,
+    review_settings_overview,
+    set_review_period,
+    sign_off,
+)
+from positions.models import Position
 from reasons.service import InvalidReason
 
 WRONG_CODE = {"detail": "The code is wrong or has expired. Request a new code."}
@@ -82,3 +93,41 @@ class SignOffView(APIView):
         if signed is None:
             return Response(WRONG_CODE, status=status.HTTP_401_UNAUTHORIZED)
         return _detail(batch_id, request.user)
+
+
+class ReviewSettingsView(APIView):
+    permission_classes = [
+        role_required(Role.LICENSING_AUTHORITY, Role.HEAD_AUTHORITY, Role.SOFTWARE_OWNER)
+    ]
+
+    def get(self, request):
+        return Response(review_settings_overview(timezone.localdate()))
+
+
+class ReviewSettingChangeView(APIView):
+    permission_classes = [role_required(Role.LICENSING_AUTHORITY)]
+
+    def put(self, request, position_id):
+        data = ReviewPeriodSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        position = Position.objects.select_related("area").filter(pk=position_id).first()
+        if position is None:
+            return Response({"detail": "Position not found."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            set_review_period(
+                position=position,
+                days=data.validated_data["period_days"],
+                starts_on=data.validated_data["starts_on"],
+                by=request.user.user_id,
+            )
+        except InvalidSetting as exc:
+            return Response(
+                {"detail": "This review period can't be saved.", "reasons": exc.reasons},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        [row] = [
+            r
+            for r in review_settings_overview(timezone.localdate())
+            if r["position_id"] == position.id
+        ]
+        return Response(row)

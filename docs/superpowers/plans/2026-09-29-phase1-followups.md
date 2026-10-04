@@ -177,9 +177,15 @@ Open items from the D1 reviews. None of them block D2.
 ## For D3 (screens) and D4 (demo tooling)
 
 - **D4 seed data:** seed one approved and one pending rule-change proposal, and two Head Authority users, so the maker-checker flow can be demoed (the drafter cannot decide their own change).
-- **D3 before/after diff:** the rule-change detail screen shows `current` against `proposed`.
+- **D3 before/after diff:** the rule-change detail screen shows `current` against `proposed`. `current` is null once the proposal is decided or withdrawn, so a decided proposal shows `proposed` only.
 - **D3 `current` is same-scope only:** `current` is the latest rule version for the same licence type and scope (or the latest threshold for the same scope). It does not show the rule that would actually resolve for a substance when a class rule governs it today. The screen should say so, or D3 can add the resolved rule.
 - **D3 licence register area filter:** `?area=` is an exact match, so a district does not include its talukas. D3 may want a hierarchy filter.
+
+## Later optimisations (D2d final review)
+
+- **`proposal_view` queries:** each row costs about 4 to 6 queries (licence type, scope, rule, latest version or threshold). The list is capped at 100, so this is fine for the demo; batch the lookups if the list grows.
+- **`LicenceTypeListView`:** one query per rule for its latest version. Prefetch or annotate the latest versions when the catalogue grows.
+- **`ReviewSettingChangeView`:** rebuilds the whole review-settings overview to return one position's row. Build only that row when there are many district positions.
 
 ## Decisions to confirm
 

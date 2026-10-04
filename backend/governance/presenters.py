@@ -90,6 +90,9 @@ def _proposed_and_current(p: RuleChangeProposal) -> tuple[dict, dict | None]:
 def proposal_view(p: RuleChangeProposal, viewer: User) -> dict:
     proposed, current = _proposed_and_current(p)
     submitted = p.status == ProposalStatus.SUBMITTED
+    if not submitted:
+        # Once decided, the live catalogue no longer is "what this would replace".
+        current = None
     view = {
         "id": p.id,
         "kind": p.kind,

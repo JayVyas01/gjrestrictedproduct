@@ -22,11 +22,9 @@ class LicenceTypeExists(Exception):
         self.code = code
 
 
-def add_licence_type(*, code: str, name: str, description: str, created_by: str) -> LicenceType:
+def add_licence_type(*, code: str, name: str, description: str) -> LicenceType:
     """A new licence type, refused when the code is taken (also by a concurrent insert).
-
-    created_by is accepted for symmetry with the versioned additions; the decision that
-    applied it records who did."""
+    The decision that applied it records who did."""
     if LicenceType.objects.filter(code=code).exists():
         raise LicenceTypeExists(code)
     try:

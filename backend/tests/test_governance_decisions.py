@@ -393,6 +393,7 @@ def test_rule_version_apply_failure_leaves_no_rule(app_db, catalogue, people, ot
     assert LicenceTypeRule.objects.count() == rules_before
     assert LicenceTypeRuleVersion.objects.count() == versions_before
     assert reload(proposal).status == ProposalStatus.SUBMITTED
+    assert events()[-1].action == "rule_change.apply_failed"
 
 
 def test_already_decided_is_refused(app_db, catalogue, people, otp_outbox):

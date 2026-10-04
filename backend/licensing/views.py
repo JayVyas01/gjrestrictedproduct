@@ -99,10 +99,13 @@ class SubstanceListView(APIView):
         )
 
 
+MAX_REGISTER_PAGE = 10**6
+
+
 def _register_filters(params) -> dict:
     """The register's query parameters, checked. Raises ValueError for an unknown value."""
     page = int(params.get("page", "1"))
-    if page < 1:
+    if not 1 <= page <= MAX_REGISTER_PAGE:  # a huge page would overflow the SQL OFFSET
         raise ValueError("page")
     status_filter = params.get("status")
     if status_filter is not None and status_filter not in LicenceStatus.values:

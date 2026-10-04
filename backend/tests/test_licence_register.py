@@ -105,7 +105,15 @@ def test_filters_and_pagination(app_db, client, org, make_licence, make_user, ot
     district = client.get("/api/licences", {"area": org.ahmedabad.id}).json()
     assert [r["id"] for r in district["results"]] == [in_district.id]
 
-    for bad in ({"page": "0"}, {"page": "x"}, {"status": "LOST"}, {"area": "x"}, {"area": 9999}):
+    for bad in (
+        {"page": "0"},
+        {"page": "x"},
+        {"page": str(10**6 + 1)},
+        {"page": "9" * 30},
+        {"status": "LOST"},
+        {"area": "x"},
+        {"area": 9999},
+    ):
         response = client.get("/api/licences", bad)
         assert response.status_code == 400 and response.json() == UNKNOWN_FILTER
     assert events("licence.register_search") == []  # unfiltered listing is not audited

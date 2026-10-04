@@ -266,10 +266,12 @@ def apply_change(proposal: RuleChangeProposal, *, by: str) -> str:
                 code=cleaned["code"],
                 name=cleaned["name"],
                 description=cleaned["description"],
-                created_by=by,
             )
         except LicenceTypeExists as exists:
-            raise ProposalInvalid([str(exists)]) from None
+            # Built from the code, never from exception text (CodeQL: no exception info leaks).
+            raise ProposalInvalid(
+                [f"A licence type with code {exists.code} already exists."]
+            ) from None
         _catalogue_audit(
             "catalogue.licence_type_added", proposal, by, licence_type_id=licence_type.id
         )

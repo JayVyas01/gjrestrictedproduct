@@ -148,6 +148,19 @@ def test_rule_version_shows_current_and_proposed(app_db, client, catalogue, peop
     assert new_scope.json()["proposed"]["scope_kind"] == "substance"
 
 
+def test_decided_proposal_has_no_live_current(app_db, client, catalogue, people, otp_outbox):
+    login(client, people.superintendent, otp_outbox)
+    drafted = draft(client, kind="RULE_VERSION", payload=dict(RULE)).json()
+    assert drafted["current"]["version"] == 1
+    login(client, people.head, otp_outbox)
+    decided = decide(client, drafted["id"], otp_outbox)
+    assert decided.status_code == 200, decided.json()
+    detail = client.get(f"/api/rule-changes/{drafted['id']}").json()
+    assert detail["status"] == "APPROVED"
+    assert detail["current"] is None  # the live rule is now the proposed one; no misleading diff
+    assert detail["proposed"] == drafted["proposed"]
+
+
 def test_threshold_shows_current_and_proposed(
     app_db, client, catalogue, threshold, people, otp_outbox
 ):

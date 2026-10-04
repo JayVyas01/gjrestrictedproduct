@@ -1,0 +1,24 @@
+{
+  "area": "Sanand",
+  "gstin": "99AAAAA0000A1Z5",
+  "holder_name": "Sanand Spirits Pvt Ltd",
+  "id": 45,
+  "licence_number": "GJ/TEST/0001",
+  "licence_type": "Retail",
+  "periods": [
+    {
+      "ends_on": "2047-12-31",
+      "starts_on": "2026-01-01"
+    }
+  ],
+  "permissions": {
+    "max_per_transaction_qty": "500.000",
+    "max_stock_qty": "1000.000",
+    "may_buy": true,
+    "may_sell": true,
+    "may_transport": false
+  },
+  "scope": "Spirits",
+  "status": "ACTIVE",
+  "valid_to": "2047-12-31"
+}

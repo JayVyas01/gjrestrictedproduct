@@ -1,0 +1,10 @@
+{
+  "counts": {
+    "awaiting_your_decision": 1,
+    "next_due": null,
+    "open_batches": 0,
+    "overdue_batches": 0,
+    "unacknowledged_alerts": 1
+  },
+  "role": "PERSONNEL"
+}

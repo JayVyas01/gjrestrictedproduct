@@ -1,0 +1,8 @@
+{
+  "detail": "This transaction can't go ahead.",
+  "reasons": [
+    "Quantity 600 L exceeds your licence's per-transaction limit of 500 L.",
+    "Quantity 600 L exceeds the buyer's licence's per-transaction limit of 500 L.",
+    "You have 400 L of Whisky in stock, which is less than 600 L."
+  ]
+}

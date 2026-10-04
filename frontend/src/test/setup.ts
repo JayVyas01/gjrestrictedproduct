@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, expect } from "vitest";
 import * as axeMatchers from "vitest-axe/matchers";
+import { resetClientState } from "@/api/client";
 import { server } from "./server";
 
 expect.extend(axeMatchers);
@@ -12,6 +13,8 @@ afterEach(() => {
   server.resetHandlers();
   cleanup();
   sessionStorage.clear();
+  resetClientState();
+  document.cookie = "csrftoken=; path=/; max-age=0";
 });
 afterAll(() => server.close());
 

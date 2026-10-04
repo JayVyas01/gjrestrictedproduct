@@ -22,8 +22,25 @@ The dev server forwards `/api`, so the browser sees one origin and the session c
 npm run dev:mock  # http://localhost:5174, no backend needed
 ```
 
-Vite runs in `--mode mock`, which reads `.env.mock` (`VITE_MOCK_API=1`). The MSW browser worker then answers
-`/api` calls from the recorded API contracts (wired up in Task 2). The worker is never part of `npm run build`.
+Vite runs in `--mode mock`, which reads `.env.mock` (`VITE_MOCK_API=1`). The MSW browser worker
+(`public/mockServiceWorker.js`, from `npx msw init public --save`) then answers `/api` calls from the API contracts
+in `src/test/contracts/`, the same handlers the tests use (`src/test/handlers.ts`). Pick who you are with `?as=`:
+`seller`, `buyer`, `officer`, `superintendent`, `la` or `head` (remembered for the tab; seller by default).
+The worker is never part of `npm run build`: `main.tsx` imports it only in dev mock mode, and the build drops
+`mockServiceWorker.js` from `dist/`.
+
+## API contracts
+
+The contracts are captured from the real backend by `backend/tests/test_api_contracts.py`. After changing an
+endpoint, regenerate and commit them:
+
+```sh
+cd backend && UPDATE_CONTRACTS=1 uv run --env-file .env.test pytest tests/test_api_contracts.py
+```
+
+Without `UPDATE_CONTRACTS` the backend test fails when a response's shape no longer matches its file, and
+`src/api/contracts.test.ts` fails when a file no longer matches its type in `src/api/types.ts`. In a test, serve
+another contract for one endpoint with `server.use(serveContract("transaction_detail_buyer_stock_limit"))`.
 
 ## Check
 

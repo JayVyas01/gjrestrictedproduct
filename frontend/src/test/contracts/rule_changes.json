@@ -1,0 +1,22 @@
+[
+  {
+    "can_decide": true,
+    "can_withdraw": false,
+    "current": null,
+    "decision": null,
+    "drafted_at": "2026-10-04T11:52:14.767998+00:00",
+    "drafted_by": "GJKXZCP97TLW",
+    "drafted_by_role": "Licensing Authority",
+    "id": 5,
+    "justification": "Retail outlets now stock beer in larger volumes.",
+    "kind": "NEW_LICENCE_TYPE",
+    "kind_label": "New licence type",
+    "proposed": {
+      "code": "BEER_BAR",
+      "description": "On-premises beer",
+      "name": "Beer bar"
+    },
+    "status": "SUBMITTED",
+    "status_label": "Submitted"
+  }
+]

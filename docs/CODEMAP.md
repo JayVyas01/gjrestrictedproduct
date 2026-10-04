@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-04, D3 Task 1 (backend 470 tests, frontend 3 tests): web app scaffold in `frontend/` (Vite, React 18, Mantine 7, i18n, Vitest with MSW and axe), `frontend` CI job, CodeQL for JavaScript/TypeScript, Dependabot for npm. Before that, D2d: maker-checker rule changes (`governance` app), catalogue reads for drafting forms, licence register and review-settings APIs.
+**Last updated:** 2026-10-04, D3 Task 2 (backend 529 tests, frontend 85 tests): API contracts captured from the real backend (`tests/test_api_contracts.py` → `frontend/src/test/contracts/`), the typed API client (CSRF, error mapping, session expiry), endpoint modules and TanStack Query hooks, contract-backed MSW handlers and mock mode. Before that, D3 Task 1: web app scaffold in `frontend/` (Vite, React 18, Mantine 7, i18n, Vitest with MSW and axe), `frontend` CI job, CodeQL for JavaScript/TypeScript, Dependabot for npm. Before that, D2d: maker-checker rule changes (`governance` app), catalogue reads for drafting forms, licence register and review-settings APIs.
 
 ---
 
@@ -116,6 +116,7 @@ Paths are relative to `backend/`, except in the **frontend** section (relative t
 | `licensing/register.py` | The licence register for authorities (B7), under the caller's own row-level security (no SYSTEM). `search`: exact match on number and/or GSTIN through the blind index (case and surrounding spaces ignored, no partial match), optional status and exact area filters, 25 per page, oldest first; a search with a number or GSTIN is audited as `licence.register_search` with `number_index`/`gstin_index` and `results` (total matches), an unfiltered listing is not audited. Row: `id`, `licence_number`, `holder_name`, `licence_type`, `scope`, `area` (name), `status`, `valid_to` (latest period's end). `detail`: the row plus `gstin`, sorted `periods` and `permissions` (the `licence_card` permission fields), audited as `licence.viewed` (subject licence id). Never the contact or any stock figure; `record()` last | `search`, `detail`, `PAGE_SIZE` | `test_licence_register.py` |
 | `licensing/urls.py` | Routes enrolment, my-licences, licence-register (`licences`, `licences/<int:licence_id>`; the int converter keeps `licences/mine` on its own view) and substance-list endpoints under `/api/` | `urlpatterns` | `test_enrolment.py`, `test_licence_register.py` |
 | `tests/conftest.py` fixtures | `make_licence(...)` records a licence as SYSTEM with sensible defaults (area Sanand; valid 2026-01-01 to 2047-12-31 so tests never expire before 2047); `make_licensee(licence)` creates a Licensee linked to the licence's GSTIN; `trade` sets up a seller, a buyer, the Sanand officer, the district superintendent and 400 L of seller whisky; `settle(qty, buyer=, officer=, reason_code=, comment=)` drives a transaction through the real services (`officer=None` stops at awaiting officer); `set_decided_on(tx, day)` moves a decision to noon local on that day; `review_setting` sets a 15-day period from 2026-06-01 for the district officer position; `DEMO_GSTIN` and `BUYER_GSTIN` use a non-existent state code | `make_licence`, `make_licensee`, `trade`, `settle`, `set_decided_on`, `DEMO_GSTIN`, `BUYER_GSTIN` | — |
+| `tests/test_api_contracts.py` | The API contracts the web app is built on (D3 Task 2). One case per contract drives a real endpoint as the right role with the synthetic fixtures; with `UPDATE_CONTRACTS=1` it writes the JSON (sorted keys, 2-space indent, trailing newline) to `frontend/src/test/contracts/<name>.json`, otherwise it compares the response's shape with the committed file (same keys; string, number, boolean, null, list by its first element, object; an empty list matches any list). Fixtures make every list non-empty and set nullable fields where they can (a flagged batch item, an OPEN batch dated from today so `next_due` is set) | `CASES`, `contract`, `shape`, `differences`, `open_batch` | itself; `frontend/src/api/contracts.test.ts` |
 
 ### reasons: configurable reason codes
 
@@ -226,18 +227,26 @@ Paths are relative to `frontend/`. Stack: React 18, TypeScript (strict), Vite 6,
 | File | Responsible for | Key names | Tests |
 |---|---|---|---|
 | `package.json`, `package-lock.json` | Exact-pinned dependencies; scripts `dev` (5173), `dev:mock` (5174, `--mode mock`), `build` (`tsc -b && vite build`), `test` (`vitest run`), `test:watch`, `lint`, `typecheck` | — | CI `frontend` job |
-| `vite.config.ts` | Dev server on 5173 (strict port) forwarding `/api` to `http://127.0.0.1:8000` (one origin for the session cookie and CSRF); `@/` alias to `src/`; no source maps in the build; Vitest settings (jsdom, `src/test/setup.ts`) | — | `npm run build`, every test |
+| `vite.config.ts` | Dev server on 5173 (strict port) forwarding `/api` to `http://127.0.0.1:8000` (one origin for the session cookie and CSRF); `@/` alias to `src/`; no source maps in the build; `dropMockWorker` removes `mockServiceWorker.js` (copied from `public/`) from the build output; Vitest settings (jsdom, `src/test/setup.ts`) | — | `npm run build`, every test |
 | `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json` | Strict TypeScript (`noUncheckedIndexedAccess` too) for `src/` and for the config files; `@/*` path | — | `npm run typecheck` |
 | `eslint.config.js` | Flat config: typescript-eslint (type-checked), react-hooks, jsx-a11y; `no-restricted-syntax` bans `dangerouslySetInnerHTML` and `localStorage` | — | `npm run lint` |
 | `postcss.config.js` | Mantine's PostCSS preset and breakpoint variables for CSS modules | — | `npm run build` |
 | `.env.mock` | `VITE_MOCK_API=1`, read only in `--mode mock` (not a secret) | — | — |
-| `index.html`, `src/main.tsx` | Page shell (`lang="en"`) and mounting `<App />` in `StrictMode` | — | `npm run build` |
+| `index.html`, `src/main.tsx` | Page shell (`lang="en"`) and mounting `<App />` in `StrictMode`; in mock mode only (`import.meta.env.DEV` and `VITE_MOCK_API === "1"`) it first starts the MSW worker through a dynamic import, so MSW never reaches `vite build` | — | `npm run build` (no `msw` in `dist/`) |
 | `src/App.tsx` | All providers: `MantineProvider` (theme and page background), `Notifications`, `QueryClientProvider` (retry 1, no refetch on window focus) and the browser router | `App`, `AppProviders`, `createQueryClient` | `App.test.tsx` |
 | `src/routes.tsx` | The route table; for now a placeholder home that shows the app name in a `<main>` | `routes` | `App.test.tsx` |
 | `src/theme.ts` | Design W2, the only place for colours: `navy` 10-shade palette as the primary colour (brand shade 6, `#1B365D`), `saffron` for attention only, page `#F5F7FA` (`cssVariablesResolver`), radius `sm`, system font stack, `autoContrast` for readable text on saffron | `theme`, `cssVariablesResolver`, `STATUS_COLORS`, `StatusTone`, `NAVY`, `SAFFRON`, `PAGE_BACKGROUND` | `App.test.tsx` (axe) |
 | `src/i18n/index.ts`, `src/i18n/en.json`, `src/i18n/i18next.d.ts` | i18next with English only, no detection, `escapeValue: false` (React escapes); every user-visible string is a key in `en.json`; `t()` keys are type-checked | `resources`, `defaultNS` | `App.test.tsx`, `render.test.tsx` |
-| `src/test/setup.ts` | jest-dom and `vitest-axe` matchers; the MSW server with `onUnhandledRequest: "error"` (reset after each test); clears `sessionStorage`; `matchMedia`, `ResizeObserver`, `scrollIntoView` and canvas stubs for Mantine and axe in jsdom | — | every test |
-| `src/test/server.ts` | The shared MSW server (`server.use(...)` to override an endpoint in one test); Task 2 adds the contract handlers | `server` | every test |
+| `src/test/setup.ts` | jest-dom and `vitest-axe` matchers; the MSW server with `onUnhandledRequest: "error"` (reset after each test); clears `sessionStorage`, the CSRF cookie and the client's state (`resetClientState`); `matchMedia`, `ResizeObserver`, `scrollIntoView` and canvas stubs for Mantine and axe in jsdom | — | every test |
+| `src/test/server.ts` | The shared MSW server, serving the contract handlers by default (`server.use(...)` overrides an endpoint in one test) | `server` | every test |
+| `src/test/contracts/*.json` | The API contracts captured from the real backend by `backend/tests/test_api_contracts.py` (synthetic fixture data only). Never edit by hand: regenerate with `UPDATE_CONTRACTS=1` | — | `test_api_contracts.py`, `src/api/contracts.test.ts` |
+| `src/test/handlers.ts` | MSW handlers serving the contracts: one default per endpoint (`ENDPOINTS`, fixed paths before `:param` paths), the CSRF view (sets the `csrftoken` cookie), logout (204) and reason codes by `kind`. `createHandlers(selected)` swaps in variants (another role or state); `serveContract(name, target?)` overrides one endpoint in a test (status from the endpoint or an `error_NNN_` name); `contract(name)` returns a fresh copy | `contracts`, `contract`, `createHandlers`, `handlers`, `serveContract` | `hooks.test.tsx`, `browser.test.ts`, `client.test.ts` |
+| `src/mocks/browser.ts`, `public/mockServiceWorker.js` | Mock mode (`npm run dev:mock`): the MSW service worker with the same handlers; `?as=seller\|buyer\|officer\|superintendent\|la\|head` picks the `me`, `home` and transaction-detail contracts (kept in `sessionStorage` under `gj.mock.as` for the tab; seller by default). The worker file is generated by `npx msw init public --save` and is dev-only | `PERSONAS`, `mockPersona`, `startMockWorker` | `browser.test.ts` |
+| `src/api/types.ts` | Hand-written, minimal types for every response (quantities as decimal strings, dates as ISO strings); `stock_limit_problem` is the buyer's only; `drafted_by` is optional (Head Authority and Software Owner only) | `Me`, `Home`, `TransactionSummary`, `TransactionDetail`, `CheckResult`, `LicenceCard`, `StockRow`, `ReasonCode`, `Substance`, `LicenceType`, `ApprovalThreshold`, `Alert`, `AlertList`, `BatchSummary`, `BatchDetail`, `ReviewSetting`, `RuleChange`, `LicenceRegister`, `LicenceDetail`, `ErrorBody` | `contracts.test.ts` |
+| `src/api/client.ts` | The only code that calls `fetch`: same-origin credentials; `ensureCsrf()` fetches `/api/auth/csrf` once (again only after a failure) and every non-GET sends `X-CSRFToken` from the `csrftoken` cookie, read fresh each time (Django rotates it at sign-in); every failure becomes `ApiError {status, detail, reasons?, fieldErrors?}` (`fieldErrors` from a 400's field lists, `reasons` from a 422); a 403 on any call except `me` triggers `GET /api/auth/me`, and if that fails the handler registered with `setSessionExpiredHandler` runs (SessionProvider, Task 3) | `apiGet`, `apiPost`, `apiPut`, `ensureCsrf`, `ApiError`, `setSessionExpiredHandler`, `resetClientState`, `query` | `client.test.ts` |
+| `src/api/auth.ts`, `home.ts`, `transactions.ts`, `alerts.ts`, `oversight.ts`, `licensing.ts`, `catalogue.ts`, `governance.ts` | Typed functions, one per endpoint. GSTINs, transport details and codes travel only in POST bodies, except the register's exact GSTIN search, which the backend offers only as a GET query (`searchRegister`) | `startLogin`, `verifyLogin`, `logout`, `getMe`, `getHome`, `listTransactions`, `getTransaction`, `checkSale`, `lookupBuyer`, `startSale`, `requestDecisionCode`, `decideTransaction`, `cancelTransaction`, `listAlerts`, `acknowledgeAlert`, `listBatches`, `getBatch`, `flagItem`, `requestSignOffCode`, `signOff`, `listReviewSettings`, `saveReviewSetting`, `myLicences`, `myStock`, `searchRegister`, `getLicence`, `listSubstances`, `listClasses`, `listLicenceTypes`, `listApprovalThresholds`, `listReasonCodes`, `listRuleChanges`, `getRuleChange`, `draftRuleChange`, `withdrawRuleChange`, `requestRuleChangeCode`, `decideRuleChange` | `hooks.test.tsx`, `client.test.ts` |
+| `src/api/hooks/keys.ts` | Every query key as a constant (keys with arguments start with their area's key, so invalidating the area refreshes all of them); `POLL_MS` (30 s, W7); `invalidate(client, ...keys)` always adds `["home"]` | `keys`, `POLL_MS`, `invalidate` | `hooks.test.tsx` |
+| `src/api/hooks/*.ts` | TanStack Query hooks per area. `useHome` and `useAlerts` poll every 30 s. Mutations store the returned object in its detail key, then invalidate the related lists and home (a decision also alerts; a flag also alerts; an approved rule change also the catalogue); `useLogout` clears the cache. The catalogue is kept fresh for 5 minutes | `useMe`, `useStartLogin`, `useVerifyLogin`, `useLogout`, `useHome`, `useTransactions`, `useTransaction`, `useCheckSale`, `useLookupBuyer`, `useStartSale`, `useRequestDecisionCode`, `useDecideTransaction`, `useCancelTransaction`, `useAlerts`, `useAcknowledgeAlert`, `useBatches`, `useBatch`, `useFlagItem`, `useRequestSignOffCode`, `useSignOff`, `useReviewSettings`, `useSaveReviewSetting`, `useMyLicences`, `useMyStock`, `useRegister`, `useLicence`, `useSubstances`, `useClasses`, `useLicenceTypes`, `useApprovalThresholds`, `useReasonCodes`, `useRuleChanges`, `useRuleChange`, `useDraftRuleChange`, `useWithdrawRuleChange`, `useRequestRuleChangeCode`, `useDecideRuleChange` | `hooks.test.tsx` |
 | `src/test/render.tsx` | `renderWithProviders(ui, {route, path})`: the real providers, a fresh query cache and a memory router; returns a `user` (user-event) and the `router` | `renderWithProviders` | `render.test.tsx` |
 | `src/test/vitest-axe.d.ts` | Declares `toHaveNoViolations` on Vitest's `Assertion` (vitest-axe 0.1.0 only types the legacy `Vi` namespace) | — | `npm run typecheck` |
 
@@ -845,6 +854,14 @@ Shared fixtures (`make_user`, `make_licence`, `make_licensee`, `trade`, `org`, `
 | `test_licence_types_show_latest_rule_versions` | Anonymous 403; types by code with only the latest version of each rule (class and substance scopes, units, limits as strings); a type with no rules has an empty list; a rule with no version is left out |
 | `test_classes` | Anonymous 403; classes by code with their unit, null for a class with no substances |
 
+### `test_api_contracts.py`: API contracts for the web app
+
+| Test | Proves |
+|---|---|
+| `test_shape_helpers` | The shape comparison reports missing and unexpected keys and changed value types (including null becoming a value), and treats an empty list as matching any list |
+| `test_contract[<name>]` (57 cases) | Each endpoint the web app uses still answers, as the right role, with the status and shape of its committed contract. Cases: `login_start`, `login_verify`; `me_*` and `home_*` for licensee, personnel, superintendent, licensing authority, head authority and software owner; `transactions_list`, `transaction_created`, `transaction_detail_seller`, `_buyer`, `_buyer_stock_limit` (only REJECT allowed), `_officer` (APPROVE/REJECT), `_officer_two_step` (RECOMMEND/REJECT), `_superintendent_final`, `_authority` (two-step, Head Authority view); `transaction_check_ok`, `transaction_check_refused`, `buyer_lookup`, `decision_code`; `licences_mine`, `stock_mine`; `reason_codes_buyer_rejection`, `_officer_rejection`, `_superintendent_flag`; `catalogue_substances`, `_classes`, `_licence_types`, `_approval_thresholds`; `alerts`, `alert_acknowledged`; `oversight_batches`, `oversight_batch_detail` (a flagged item); `review_settings`, `review_setting_saved`; `rule_changes`, `rule_change_new_licence_type` (drafter's view), `rule_change_rule_version` and `rule_change_threshold` (Head Authority, with `current`), `rule_change_decided`; `licences_register`, `licence_detail`; errors `error_400_field_errors`, `error_400_unknown_filter`, `error_401_wrong_code`, `error_403_not_signed_in`, `error_403_not_allowed`, `error_404_not_found`, `error_409_conflict`, `error_422_transaction_refused` |
+| `test_every_contract_file_has_a_case` | No stale contract file (its case renamed or removed) is left serving outdated mocks |
+
 ### Frontend tests
 
 Run all: `cd frontend && npm test`. Run one: `npx vitest run src/App.test.tsx`. Every page test includes an axe check; unhandled network requests fail the test.
@@ -861,6 +878,48 @@ Run all: `cd frontend && npm test`. Run one: `npx vitest run src/App.test.tsx`. 
 | Test | Proves |
 |---|---|
 | `renders at the given route with translations and route params` | `renderWithProviders` supplies i18n and a memory router at `route` with `path` params, and returns a user-event `user` |
+
+#### `src/api/client.test.ts`: the API client
+
+| Test | Proves |
+|---|---|
+| `sends the token on POST and PUT, not on GET` | `X-CSRFToken` (from the cookie the CSRF view set) is on every POST and PUT and never on a GET |
+| `fetches the CSRF cookie once` | Concurrent and later writes share one `GET /api/auth/csrf` |
+| `tries again after a failed CSRF fetch` | A failed CSRF fetch is an `ApiError` and the next call fetches again |
+| `reads the cookie fresh on each request` | A rotated `csrftoken` (as after sign-in) is sent from then on |
+| `returns the parsed body`, `returns undefined for 204 No Content` | Successful responses |
+| `400 carries field errors`, `400 with only a detail has no field errors` | Field lists become `fieldErrors`; a detail-only 400 keeps the detail |
+| `error_401_wrong_code`, `error_404_not_found`, `error_409_conflict` `keeps the status and the server's detail` | Each status maps to an `ApiError` with the server's `detail` |
+| `422 carries the reasons` | The refusal's `reasons` list reaches the `ApiError` |
+| `429 and 5xx without a JSON body still become ApiErrors` | Throttling and server errors (even an HTML body) map to an `ApiError` with the status |
+| `a 403 followed by a failed me calls the expiry handler` | Session expiry is detected and reported once |
+| `a 403 followed by a working me does not` | A plain refusal keeps the server's detail and leaves the session alone |
+| `a 403 from me itself does not check me again` | No loop when `me` is the failing call |
+
+#### `src/api/contracts.test.ts`: contracts against the hand-written types
+
+| Test | Proves |
+|---|---|
+| `found the contract files` | The contracts are loaded |
+| `<contract name>` (one per file) | Each contract has a type guard and carries every key the guard requires (key lists are typed `satisfies (keyof T)[]`, so a renamed type field fails the type check); lists are non-empty |
+| `a buyer over their stock limit may only reject, and the seller never sees the problem` | The captured buyer view allows only REJECT with a problem text; the seller's `stock_limit_problem` is null |
+| `field errors are lists of messages` | The 400 contract is a field → messages map |
+
+#### `src/api/hooks/hooks.test.tsx`: query and mutation hooks
+
+| Test | Proves |
+|---|---|
+| `useHome and useAlerts poll every 30 seconds` | Both queries refetch every `POLL_MS` |
+| `serves a contract variant for one test` | `serveContract("transaction_detail_buyer_stock_limit")` overrides the detail endpoint |
+| `a decision stores the returned transaction and refetches home and the lists` | `useDecideTransaction` caches the returned detail, refetches home and marks the transaction lists stale |
+
+#### `src/mocks/browser.test.ts`: mock mode
+
+| Test | Proves |
+|---|---|
+| `every persona names captured contracts` | Each `?as=` persona uses existing contracts |
+| `?as= picks the persona and keeps it for the tab; seller by default` | Persona selection, its `sessionStorage` memory and the default |
+| `the officer persona is answered as the officer` | `createHandlers(PERSONAS.officer)` serves `me_personnel` |
 
 ---
 
@@ -897,6 +956,8 @@ Run all: `cd frontend && npm test`. Run one: `npx vitest run src/App.test.tsx`. 
 | Frontend: all user-visible text comes from `src/i18n/en.json` through `t()`; server refusal text (`detail`, `reasons`) is shown as is | One place to review wording and translate later | Typed `t()` keys (`src/i18n/i18next.d.ts`), code review |
 | Frontend: only `src/api/` talks to the server; components use the TanStack Query hooks in `src/api/hooks/` | CSRF, error mapping and session expiry live in one place | Code review; MSW `onUnhandledRequest: "error"` in tests |
 | Frontend: no `localStorage` (wizard drafts use `sessionStorage` only) and no `dangerouslySetInnerHTML` | No personal data left in the browser; server text renders as plain text | `eslint.config.js` (`no-restricted-syntax`) |
+| API contracts: every endpoint the web app calls has a case in `backend/tests/test_api_contracts.py` and a committed `frontend/src/test/contracts/<name>.json`, regenerated only with `UPDATE_CONTRACTS=1` (never edited by hand), built from synthetic fixtures only; the MSW handlers serve these files and `src/api/types.ts` is checked against them | The mocks and types can't drift from the real API without a failing test | `test_api_contracts.py`, `src/api/contracts.test.ts` |
+| Frontend: MSW and the mock worker never ship: `src/mocks/browser.ts` is imported dynamically only when `import.meta.env.DEV && VITE_MOCK_API === "1"`, and the build drops `mockServiceWorker.js` | Production never answers with fake data | `vite.config.ts` (`dropMockWorker`), `src/main.tsx`; check `dist/` for `msw` after `npm run build` |
 | **Update this file in the same PR** | Keeps the map trustworthy | Code review |
 
 Open follow-ups from the reviews: [`superpowers/plans/2026-09-29-phase1-followups.md`](superpowers/plans/2026-09-29-phase1-followups.md).

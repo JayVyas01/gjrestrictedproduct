@@ -1,0 +1,11 @@
+{
+  "counts": {
+    "awaiting_your_decision": 1,
+    "next_due": "2026-10-28",
+    "open_batches": 1,
+    "overdue_batches": 0,
+    "unacknowledged_alerts": 0,
+    "your_open_rule_changes": 0
+  },
+  "role": "PERSONNEL"
+}

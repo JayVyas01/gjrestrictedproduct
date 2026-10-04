@@ -1,0 +1,9 @@
+{
+  "counts": {
+    "districts_without_review_period": 1,
+    "expiring_licences_30d": 0,
+    "rule_changes_submitted": 0,
+    "your_open_rule_changes": 0
+  },
+  "role": "LICENSING_AUTHORITY"
+}

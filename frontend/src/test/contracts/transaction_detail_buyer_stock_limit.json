@@ -1,0 +1,38 @@
+{
+  "allowed_outcomes": [
+    "REJECT"
+  ],
+  "approval_chain": "OFFICER",
+  "approval_chain_label": "Officer",
+  "buyer_name": "Bopal Bar & Kitchen",
+  "can_decide": true,
+  "created_at": "2026-10-04T11:52:17.380604+00:00",
+  "designated_officer": "Area Officer, Sanand",
+  "next_action": "Your decision is needed.",
+  "quantity": "10",
+  "reference": "TXZWSADK68UJ",
+  "seller_name": "Sanand Spirits Pvt Ltd",
+  "status": "AWAITING_BUYER",
+  "status_label": "Waiting for the buyer",
+  "stock_limit_problem": "Confirming would take your Whisky stock to 1005 L, above your licence limit of 1000 L. You can only reject this sale.",
+  "substance": "Whisky",
+  "timeline": [
+    {
+      "at": "2026-10-04T11:52:17.380604+00:00",
+      "by": "Seller",
+      "comment": null,
+      "held_by": null,
+      "outcome": "STARTED",
+      "reason": null,
+      "step": "SELLER"
+    }
+  ],
+  "transport": {
+    "id_number": "GJ-TR-4411",
+    "name": "Ravi Transport Co",
+    "route": "Sanand to Bopal",
+    "vehicle_number": "GJ01AB1234"
+  },
+  "unit": "L",
+  "your_role": "buyer"
+}

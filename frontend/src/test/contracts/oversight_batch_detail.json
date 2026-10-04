@@ -1,0 +1,31 @@
+{
+  "can_sign": true,
+  "due_on": "2026-10-28",
+  "flag_count": 1,
+  "id": 2,
+  "item_count": 1,
+  "items": [
+    {
+      "approved_at": "2026-10-04T11:52:09.953799+00:00",
+      "approved_by_position": "Area Officer, Sanand",
+      "approved_by_superintendent": false,
+      "buyer_name": "Bopal Bar & Kitchen",
+      "flag": {
+        "comment": "Check",
+        "flagged_at": "2026-10-04T11:52:10.064019+00:00",
+        "reason": "Quantity unusually high"
+      },
+      "quantity": "10",
+      "reference": "TX7UXYR8RTPT",
+      "seller_name": "Sanand Spirits Pvt Ltd",
+      "substance": "Whisky",
+      "unit": "L"
+    }
+  ],
+  "period_end": "2026-09-28",
+  "period_start": "2026-09-14",
+  "position": "District Officer, Ahmedabad",
+  "signed_at": null,
+  "signed_by": null,
+  "status": "OPEN"
+}

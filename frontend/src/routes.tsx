@@ -7,6 +7,7 @@ import { SignInPage } from "@/auth/SignInPage";
 import { LicenseeHomePage } from "@/features/licensee/LicenseeHomePage";
 import { LicenseeTransactionsPage } from "@/features/licensee/LicenseeTransactionsPage";
 import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
+import { NewSalePage } from "@/features/sale/NewSalePage";
 import { TransactionPage } from "@/features/transactions/TransactionPage";
 import { AppShell } from "@/layout/AppShell";
 import { PlaceholderPage, type PageKey } from "@/layout/PlaceholderPage";
@@ -55,7 +56,7 @@ export const routes: RouteObject[] = [
             L,
             <TransactionPage listPath={TRANSACTIONS_PATH} />,
           ),
-          page("licensee/sale/new", L, "newSale"),
+          screen("licensee/sale/new", L, <NewSalePage />),
           page("personnel", P, "personnelHome"),
           page("personnel/transactions", P, "personnelTransactions"),
           page("personnel/transactions/:reference", P, "transactionDetail"),

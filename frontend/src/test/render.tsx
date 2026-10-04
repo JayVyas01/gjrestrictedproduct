@@ -6,7 +6,7 @@ import type { ReactElement } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { AppProviders, createQueryClient } from "@/App";
 import { routes } from "@/routes";
-import { contract, createHandlers } from "./handlers";
+import { contract, createHandlers, handlers } from "./handlers";
 import { server } from "./server";
 
 export interface RenderOptions {
@@ -23,9 +23,7 @@ export interface RenderWithProvidersResult extends RenderResult {
   queryClient: QueryClient;
 }
 
-function renderRouter(
-  router: ReturnType<typeof createMemoryRouter>,
-): RenderWithProvidersResult {
+function renderRouter(router: ReturnType<typeof createMemoryRouter>): RenderWithProvidersResult {
   const queryClient = createQueryClient();
   const result = render(
     <AppProviders queryClient={queryClient}>
@@ -60,11 +58,16 @@ export function serveSignedOut() {
 
 // The whole app (session, guards, shell and pages) at `route`, signed in as the person the
 // contracts describe (the licensee by default), or signed out.
+// A handler the test set with `server.use(...)` before calling renderApp still wins: MSW
+// puts the newest handlers first, so the test's own handlers are put back in front.
 export function renderApp(
   route = "/",
   { contracts = [], signedOut = false }: RenderAppOptions = {},
 ): RenderWithProvidersResult {
+  const defaults: readonly unknown[] = handlers;
+  const overrides = server.listHandlers().filter((handler) => !defaults.includes(handler));
   if (contracts.length) server.use(...createHandlers(contracts));
   if (signedOut) server.use(serveSignedOut());
+  if (overrides.length && (contracts.length || signedOut)) server.use(...overrides);
   return renderRouter(createMemoryRouter(routes, { initialEntries: [route] }));
 }

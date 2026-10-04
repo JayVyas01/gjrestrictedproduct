@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "Gujarat Restricted Goods"
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "back": "Back",
+    "continue": "Continue",
+    "close": "Close",
+    "skipToContent": "Skip to main content"
+  }
+}

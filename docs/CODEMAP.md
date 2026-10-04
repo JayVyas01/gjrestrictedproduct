@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-04, D2d (470 tests): maker-checker rule changes (`governance` app), catalogue reads for drafting forms, licence register and review-settings APIs; CODEMAP sweep; final-review fixes (register page cap, no exception text in apply reasons, no live `current` after a decision).
+**Last updated:** 2026-10-04, D3 Task 1 (backend 470 tests, frontend 3 tests): web app scaffold in `frontend/` (Vite, React 18, Mantine 7, i18n, Vitest with MSW and axe), `frontend` CI job, CodeQL for JavaScript/TypeScript, Dependabot for npm. Before that, D2d: maker-checker rule changes (`governance` app), catalogue reads for drafting forms, licence register and review-settings APIs.
 
 ---
 
@@ -29,7 +29,7 @@ Every app's `apps.py` only registers the app (its `AppConfig`), so section 2 doe
 
 ## 2. Code responsibility map
 
-Paths are relative to `backend/`.
+Paths are relative to `backend/`, except in the **frontend** section (relative to `frontend/`).
 
 ### config: settings and startup
 
@@ -219,15 +219,39 @@ An authority drafts a change to the catalogue (a new licence type, a rule versio
 | `audit/migrations/0002_protect_and_rls.py` | Append-only (REVOKE plus a trigger), readable only by Software Owner, Head Authority and SYSTEM | — | `test_audit.py` |
 | `audit/management/commands/verify_audit_chain.py` | Scheduled integrity check; exits with an error if the log was altered | — | `test_audit.py::test_verify_command_*` |
 
+### frontend: the web app (D3)
+
+Paths are relative to `frontend/`. Stack: React 18, TypeScript (strict), Vite 6, Mantine 7, React Router 6, TanStack Query 5, react-i18next. Tests: Vitest, Testing Library, MSW 2, `vitest-axe`.
+
+| File | Responsible for | Key names | Tests |
+|---|---|---|---|
+| `package.json`, `package-lock.json` | Exact-pinned dependencies; scripts `dev` (5173), `dev:mock` (5174, `--mode mock`), `build` (`tsc -b && vite build`), `test` (`vitest run`), `test:watch`, `lint`, `typecheck` | — | CI `frontend` job |
+| `vite.config.ts` | Dev server on 5173 (strict port) forwarding `/api` to `http://127.0.0.1:8000` (one origin for the session cookie and CSRF); `@/` alias to `src/`; no source maps in the build; Vitest settings (jsdom, `src/test/setup.ts`) | — | `npm run build`, every test |
+| `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json` | Strict TypeScript (`noUncheckedIndexedAccess` too) for `src/` and for the config files; `@/*` path | — | `npm run typecheck` |
+| `eslint.config.js` | Flat config: typescript-eslint (type-checked), react-hooks, jsx-a11y; `no-restricted-syntax` bans `dangerouslySetInnerHTML` and `localStorage` | — | `npm run lint` |
+| `postcss.config.js` | Mantine's PostCSS preset and breakpoint variables for CSS modules | — | `npm run build` |
+| `.env.mock` | `VITE_MOCK_API=1`, read only in `--mode mock` (not a secret) | — | — |
+| `index.html`, `src/main.tsx` | Page shell (`lang="en"`) and mounting `<App />` in `StrictMode` | — | `npm run build` |
+| `src/App.tsx` | All providers: `MantineProvider` (theme and page background), `Notifications`, `QueryClientProvider` (retry 1, no refetch on window focus) and the browser router | `App`, `AppProviders`, `createQueryClient` | `App.test.tsx` |
+| `src/routes.tsx` | The route table; for now a placeholder home that shows the app name in a `<main>` | `routes` | `App.test.tsx` |
+| `src/theme.ts` | Design W2, the only place for colours: `navy` 10-shade palette as the primary colour (brand shade 6, `#1B365D`), `saffron` for attention only, page `#F5F7FA` (`cssVariablesResolver`), radius `sm`, system font stack, `autoContrast` for readable text on saffron | `theme`, `cssVariablesResolver`, `STATUS_COLORS`, `StatusTone`, `NAVY`, `SAFFRON`, `PAGE_BACKGROUND` | `App.test.tsx` (axe) |
+| `src/i18n/index.ts`, `src/i18n/en.json`, `src/i18n/i18next.d.ts` | i18next with English only, no detection, `escapeValue: false` (React escapes); every user-visible string is a key in `en.json`; `t()` keys are type-checked | `resources`, `defaultNS` | `App.test.tsx`, `render.test.tsx` |
+| `src/test/setup.ts` | jest-dom and `vitest-axe` matchers; the MSW server with `onUnhandledRequest: "error"` (reset after each test); clears `sessionStorage`; `matchMedia`, `ResizeObserver`, `scrollIntoView` and canvas stubs for Mantine and axe in jsdom | — | every test |
+| `src/test/server.ts` | The shared MSW server (`server.use(...)` to override an endpoint in one test); Task 2 adds the contract handlers | `server` | every test |
+| `src/test/render.tsx` | `renderWithProviders(ui, {route, path})`: the real providers, a fresh query cache and a memory router; returns a `user` (user-event) and the `router` | `renderWithProviders` | `render.test.tsx` |
+| `src/test/vitest-axe.d.ts` | Declares `toHaveNoViolations` on Vitest's `Assertion` (vitest-axe 0.1.0 only types the legacy `Vi` namespace) | — | `npm run typecheck` |
+
 ### Repository, CI and local setup
 
 | File | Responsible for | Check name |
 |---|---|---|
-| `.github/workflows/ci.yml` | Lint, format, migrations check, tests, dependency vulnerability audit, production settings check | `backend` |
+| `.github/workflows/ci.yml` | Backend: lint, format, migrations check, tests, dependency vulnerability audit, production settings check | `backend` |
+| `.github/workflows/ci.yml` | Frontend (Node 22, npm cache on `frontend/package-lock.json`): `npm ci`, lint, type check, tests, build, `npm audit --audit-level=high` | `frontend` |
 | `.github/workflows/branch-policy.yml` | Pull requests into `main` must come from `dev` | `source-branch` |
-| `.github/workflows/codeql.yml` | Security scanning of Python and GitHub Actions | `analyze (python)`, `analyze (actions)` |
-| `.github/dependabot.yml` | Weekly dependency and action updates | — |
-| GitHub ruleset "Protect dev and main" | Pull request required, the checks above must pass, merge commits only, no force-push, deletion or bypass | — |
+| `.github/workflows/codeql.yml` | Security scanning of Python, GitHub Actions and JavaScript/TypeScript | `analyze (python)`, `analyze (actions)`, `analyze (javascript-typescript)` |
+| `.github/dependabot.yml` | Weekly dependency updates: uv (`/backend`), npm (`/frontend`) and GitHub Actions | — |
+| GitHub ruleset "Protect dev and main" | Pull request required, the checks above must pass, merge commits only, no force-push, deletion or bypass. `frontend` and `analyze (javascript-typescript)` become required only after the owner confirms | — |
+| `.claude/launch.json` | Local preview servers: `backend` (`uv run --env-file .env python manage.py runserver 8000` in `backend/`), `frontend` (`npm run dev`, 5173), `frontend-mock` (`npm run dev:mock`, 5174) | — |
 | `docker-compose.yml`, `docker/postgres-init.sh` | Local Postgres 16 with roles `gj_owner` (migrations and tests) and `gj_app` (the running app) | — |
 
 ---
@@ -821,6 +845,23 @@ Shared fixtures (`make_user`, `make_licence`, `make_licensee`, `trade`, `org`, `
 | `test_licence_types_show_latest_rule_versions` | Anonymous 403; types by code with only the latest version of each rule (class and substance scopes, units, limits as strings); a type with no rules has an empty list; a rule with no version is left out |
 | `test_classes` | Anonymous 403; classes by code with their unit, null for a class with no substances |
 
+### Frontend tests
+
+Run all: `cd frontend && npm test`. Run one: `npx vitest run src/App.test.tsx`. Every page test includes an axe check; unhandled network requests fail the test.
+
+#### `src/App.test.tsx`: the app shell
+
+| Test | Proves |
+|---|---|
+| `renders the app name` | The app mounts with all providers and shows "Gujarat Restricted Goods" as the level-1 heading (from `en.json`) |
+| `has no accessibility violations` | axe finds no violations on the rendered app |
+
+#### `src/test/render.test.tsx`: the test render helper
+
+| Test | Proves |
+|---|---|
+| `renders at the given route with translations and route params` | `renderWithProviders` supplies i18n and a memory router at `route` with `path` params, and returns a user-event `user` |
+
 ---
 
 ## 4. Conventions every change must follow
@@ -853,6 +894,9 @@ Shared fixtures (`make_user`, `make_licence`, `make_licensee`, `trade`, `org`, `
 | Maker-checker for rule changes: the drafter never decides their own proposal. Only a Head Authority officer whose `user_id` differs from `drafted_by` decides, with a fresh DECISION code; the rule is checked at the code request, before the code is spent and again under the proposal lock. An approval applies the change in the same SYSTEM block (all or nothing); a failed apply rolls back and is audited `rule_change.apply_failed` after the rollback | One person can't change the rules alone | `governance/service.py`, `test_governance_decisions.py` |
 | Rule-change decision lock order: user row → OTP challenge → proposal row (`select_for_update`) → catalogue row (rule or threshold `select_for_update`) → audit (catalogue audit, then `rule_change.approved` last) | Prevents deadlocks between decisions and other catalogue writes | `governance/service.py`, code review |
 | Rule-change proposals are written only by SYSTEM through `governance.service` after the plain-Python who-may-act check; `gj_app` may update only the decision columns, a decided proposal is final (trigger, even for the owner) and proposals are never deleted. Audit payloads hold only the proposal id and kind (ruling D-R3) | Only an approved change reaches the catalogue; the record of who proposed and decided what can't be rewritten | `governance/migrations/0002_rls_and_guards.py`, `test_governance.py` |
+| Frontend: all user-visible text comes from `src/i18n/en.json` through `t()`; server refusal text (`detail`, `reasons`) is shown as is | One place to review wording and translate later | Typed `t()` keys (`src/i18n/i18next.d.ts`), code review |
+| Frontend: only `src/api/` talks to the server; components use the TanStack Query hooks in `src/api/hooks/` | CSRF, error mapping and session expiry live in one place | Code review; MSW `onUnhandledRequest: "error"` in tests |
+| Frontend: no `localStorage` (wizard drafts use `sessionStorage` only) and no `dangerouslySetInnerHTML` | No personal data left in the browser; server text renders as plain text | `eslint.config.js` (`no-restricted-syntax`) |
 | **Update this file in the same PR** | Keeps the map trustworthy | Code review |
 
 Open follow-ups from the reviews: [`superpowers/plans/2026-09-29-phase1-followups.md`](superpowers/plans/2026-09-29-phase1-followups.md).

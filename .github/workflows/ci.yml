@@ -58,3 +58,26 @@ jobs:
           export DJANGO_SSL_REDIRECT=1
           export DJANGO_SECRET_KEY="ci-deploy-check-$(openssl rand -hex 32)"
           uv run python manage.py check --deploy --fail-level WARNING
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      # Pin actions to full commit SHAs before go-live (Dependabot keeps them current).
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high

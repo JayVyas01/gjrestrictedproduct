@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import type { TransactionDetail } from "@/api/types";
+import { useSession } from "@/auth/SessionProvider";
 import { LICENSEE_HOME_PATH, TRANSACTIONS_PATH } from "@/features/licensee/paths";
 import { BuyerStep } from "./BuyerStep";
 import { clearDraft, emptyDraft, loadDraft, saveDraft, type SaleDraft } from "./draft";
@@ -16,9 +17,9 @@ const STEPS = ["buyer", "goods", "transport", "review"] as const;
 /** The draft is written this long after the last change. */
 export const DRAFT_DEBOUNCE_MS = 300;
 
-/** The draft this tab saved, on the furthest step that still holds; or a fresh one. */
-function initialDraft(): { draft: SaleDraft; restored: boolean } {
-  const saved = loadDraft();
+/** The draft `owner` saved in this tab, on the furthest step that still holds; or a fresh one. */
+function initialDraft(owner: string): { draft: SaleDraft; restored: boolean } {
+  const saved = loadDraft(owner);
   if (!saved) return { draft: emptyDraft(), restored: false };
   return { draft: { ...saved, step: reachableStep(saved) }, restored: true };
 }
@@ -28,12 +29,17 @@ function initialDraft(): { draft: SaleDraft; restored: boolean } {
 export function NewSalePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [initial] = useState(initialDraft);
+  // The page sits behind RequireRole, so someone is signed in.
+  const owner = useSession().user?.user_id ?? "";
+  const [initial] = useState(() => initialDraft(owner));
   const [draft, setDraft] = useState<SaleDraft>(initial.draft);
   const [restored, setRestored] = useState(initial.restored);
   const [errors, setErrorState] = useState<FieldErrors>({});
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
+  const section = useRef<HTMLDivElement>(null);
+  // Bumped by a Next that found errors: the first field to fix then takes the focus.
+  const [refused, setRefused] = useState(0);
   const shownStep = useRef(draft.step);
   // Set by a change the seller made; a sent or discarded sale is never saved again.
   const dirty = useRef(false);
@@ -52,10 +58,10 @@ export function NewSalePage() {
   useEffect(() => {
     if (!dirty.current || finished.current) return;
     const timer = window.setTimeout(() => {
-      if (!finished.current) saveDraft(draft);
+      if (!finished.current) saveDraft(draft, owner);
     }, DRAFT_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [draft]);
+  }, [draft, owner]);
 
   // A new step: its heading takes the focus, so screen readers announce where the seller is.
   useEffect(() => {
@@ -63,6 +69,16 @@ export function NewSalePage() {
     shownStep.current = draft.step;
     heading.current?.focus();
   }, [draft.step]);
+
+  // After a refused Next: the first invalid field, or the Check button when only the check is
+  // missing, takes the focus, so keyboard and screen reader users land on what to fix.
+  useEffect(() => {
+    if (refused === 0) return;
+    const target =
+      section.current?.querySelector<HTMLElement>('[aria-invalid="true"]') ??
+      section.current?.querySelector<HTMLElement>("[data-check-button]");
+    target?.focus();
+  }, [refused]);
 
   const goTo = (step: number) => {
     setErrorState({});
@@ -73,6 +89,7 @@ export function NewSalePage() {
     const found = stepErrors(draft.step, draft);
     setErrorState(found);
     if (Object.keys(found).length === 0) goTo(draft.step + 1);
+    else setRefused((count) => count + 1);
   };
 
   const startOver = () => {
@@ -131,7 +148,7 @@ export function NewSalePage() {
       </Stepper>
       <Text fw={700}>{t("sale.progress", { current: draft.step + 1, total: STEPS.length })}</Text>
 
-      <Stack component="section" aria-labelledby={headingId}>
+      <Stack component="section" aria-labelledby={headingId} ref={section}>
         <Title order={2} id={headingId} ref={heading} tabIndex={-1}>
           {t(`sale.steps.${current}`)}
         </Title>

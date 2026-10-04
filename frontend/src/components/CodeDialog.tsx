@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import type { Challenge } from "@/api/types";
 import { ErrorNotice } from "./ErrorNotice";
+import { useFocusHeadingOnSuccess } from "./focusPageHeading";
 
 const CODE_LENGTH = 6;
 /** A code is valid for 5 minutes from when it was issued. */
@@ -32,17 +33,24 @@ function minutesSeconds(ms: number): string {
 }
 
 // The one-time code step for a decision or sign-off, in a modal (focus trapped, Escape closes).
-export function CodeDialog<T>({ opened, onClose, title, ...rest }: Props<T>) {
+// Once the action is done its trigger is usually gone, so the page heading takes the focus.
+export function CodeDialog<T>({ opened, onClose, title, onDone, ...rest }: Props<T>) {
   const { t } = useTranslation();
+  const { returnFocus, succeed } = useFocusHeadingOnSuccess(opened);
+  const done = (result: T) => {
+    succeed();
+    onDone(result);
+  };
   return (
     <Modal
       opened={opened}
       onClose={onClose}
       title={title}
       centered
+      returnFocus={returnFocus}
       closeButtonProps={{ "aria-label": t("common.close") }}
     >
-      {opened && <CodeForm onClose={onClose} {...rest} />}
+      {opened && <CodeForm onClose={onClose} onDone={done} {...rest} />}
     </Modal>
   );
 }

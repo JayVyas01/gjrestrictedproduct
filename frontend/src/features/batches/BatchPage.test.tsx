@@ -149,6 +149,8 @@ describe("BatchPage", () => {
 
     expect(await screen.findByText("Flag recorded. The officer is alerted.")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // The item's Flag button is gone: focus goes to the page heading.
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveFocus());
     expect(bodies).toEqual([
       {
         reference: UNFLAGGED.reference,
@@ -198,6 +200,7 @@ describe("BatchPage", () => {
     await enterCode(user);
 
     expect(await screen.findByText("Batch signed off.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveFocus());
     expect(bodies).toEqual([{ challenge_id: CHALLENGE, code: "123456" }]);
     expect(
       await screen.findByText("Signed by GJ5SVTKLEY5X on 4 Oct 2026, 12:00 pm"),
@@ -229,7 +232,30 @@ describe("BatchPage", () => {
       "/overview/batches",
     );
     expect(screen.queryByRole("button", { name: /Flag|Sign off/ })).toBeNull();
+    // Not the viewer's own approval: the superintendent's final approval is named as such.
+    const own = rowFor(OWN.reference);
+    expect(within(own).getByText("Final approval by the superintendent")).toBeInTheDocument();
+    expect(screen.queryByText("Approved by you")).toBeNull();
   });
+
+  it.each(["abc", "1e3", "-2", "2.5"])(
+    "shows not found for the id %s without asking the server",
+    async (id) => {
+      let requests = 0;
+      server.use(
+        http.get("/api/oversight/batches/:id", () => {
+          requests += 1;
+          return HttpResponse.json(OPEN_BATCH);
+        }),
+      );
+      renderWithProviders(<BatchPage listPath="/overview/batches" readOnly />, {
+        route: `/overview/batches/${id}`,
+        path: "/overview/batches/:id",
+      });
+      expect(await screen.findByText("Not found, or not yours to see.")).toBeInTheDocument();
+      expect(requests).toBe(0);
+    },
+  );
 
   it("becomes stacked cards under 768 px, keeping the tag and the flag action", async () => {
     window.matchMedia = (query: string) => ({

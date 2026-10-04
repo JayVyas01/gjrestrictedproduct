@@ -61,6 +61,18 @@ describe("SignInPage", () => {
     expect(await screen.findByText("Sanand Spirits Pvt Ltd")).toBeInTheDocument();
   });
 
+  it("a successful sign-in removes any draft left in the tab", async () => {
+    serveSignIn();
+    const { user, router } = renderApp("/sign-in");
+    await passwordStep(user);
+    sessionStorage.setItem("gj.draft.sale", JSON.stringify({ owner: "SOMEONE-ELSE" }));
+    await user.click(screen.getByLabelText("Digit 1 of 6"));
+    await user.paste("123456");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/licensee"));
+    expect(sessionStorage.getItem("gj.draft.sale")).toBeNull();
+  });
+
   it("asks for both fields before calling the server", async () => {
     const { user } = renderApp("/sign-in", { signedOut: true });
     await user.click(await screen.findByRole("button", { name: "Continue" }));

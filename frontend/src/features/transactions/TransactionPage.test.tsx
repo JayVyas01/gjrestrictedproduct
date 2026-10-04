@@ -100,6 +100,8 @@ describe("TransactionPage", () => {
       const again = await screen.findByRole("dialog", { name: "Cancel this sale?" });
       await user.click(within(again).getByRole("button", { name: "Yes, cancel the sale" }));
       expect(await screen.findByText("Sale cancelled.")).toBeInTheDocument();
+      // The Cancel sale button is gone once cancelled: focus goes to the page heading.
+      await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveFocus());
       expect(posts).toEqual([{}]);
       expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.home });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.transactions });
@@ -167,6 +169,8 @@ describe("TransactionPage", () => {
       await enterCode(user);
 
       expect(await screen.findByText("You confirmed the purchase.")).toBeInTheDocument();
+      // The decision buttons go away once decided: focus goes to the page heading.
+      await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveFocus());
       expect(posts).toEqual([{ challenge_id: CHALLENGE, code: "123456", outcome: "CONFIRM" }]);
       expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.home });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.transactions });

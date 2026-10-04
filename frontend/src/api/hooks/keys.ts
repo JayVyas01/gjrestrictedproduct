@@ -1,4 +1,4 @@
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type { QueryClient, QueryFunctionContext, QueryKey } from "@tanstack/react-query";
 import type { RegisterFilters, RegisterSearch } from "../licensing";
 import type { TransactionFilters } from "../transactions";
 import type { ProposalStatus, ReasonKind } from "../types";
@@ -44,4 +44,12 @@ export function invalidate(client: QueryClient, ...queryKeys: QueryKey[]): Promi
   return Promise.all(
     [keys.home, ...queryKeys].map((queryKey) => client.invalidateQueries({ queryKey })),
   ).then(() => undefined);
+}
+
+/**
+ * For the polled queries: a fetch of something already shown (the 30-second interval, a
+ * refocus) is a background refresh, which does not extend the session; the first load is not.
+ */
+export function isBackground({ client, queryKey }: QueryFunctionContext): boolean {
+  return client.getQueryData(queryKey) !== undefined;
 }

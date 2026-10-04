@@ -11,6 +11,12 @@ interface Props {
   /** Flagging is open (the viewer can review this unsigned batch, and it isn't read-only). */
   canFlag: boolean;
   onFlag: (item: BatchItem) => void;
+  /**
+   * The viewer is the superintendent whose batch this is, so their final approvals are tagged
+   * "Approved by you". False in the read-only views (Head Authority, Software Owner), where the
+   * same approvals read "Final approval by the superintendent".
+   */
+  ownApprovals: boolean;
 }
 
 /** An item can be flagged once, and never the superintendent's own final approval. */
@@ -18,14 +24,14 @@ export function flaggable(item: BatchItem): boolean {
   return !item.approved_by_superintendent && item.flag === null;
 }
 
-function ApprovedBy({ item }: { item: BatchItem }) {
+function ApprovedBy({ item, own }: { item: BatchItem; own: boolean }) {
   const { t } = useTranslation();
   return (
     <Group gap="xs" wrap="wrap">
       <span>{item.approved_by_position}</span>
       {item.approved_by_superintendent && (
         <Badge color="navy" variant="light" tt="none">
-          {t("batches.approvedByYou")}
+          {own ? t("batches.approvedByYou") : t("batches.superintendentFinal")}
         </Badge>
       )}
     </Group>
@@ -69,9 +75,10 @@ function FlagButton({ item, onFlag }: { item: BatchItem; onFlag: Props["onFlag"]
 }
 
 // A batch's transactions: substance, quantity, parties, when and by which position each was
-// approved ("Approved by you" on the superintendent's own final approvals), any flag, and the
+// approved ("Approved by you" on the superintendent's own final approvals; "Final approval by
+// the superintendent" in the read-only views), any flag, and the
 // Flag action where allowed. Stacked cards under 768 px; only one of the two is rendered.
-export function BatchItems({ items, canFlag, onFlag }: Props) {
+export function BatchItems({ items, canFlag, onFlag, ownApprovals }: Props) {
   const { t } = useTranslation();
   const stacked = useMediaQuery(STACKED);
   const parties = (item: BatchItem) =>
@@ -92,7 +99,7 @@ export function BatchItems({ items, canFlag, onFlag }: Props) {
             </Text>
             <Text size="sm">{parties(item)}</Text>
             <Text size="sm" component="div">
-              <ApprovedBy item={item} />
+              <ApprovedBy item={item} own={ownApprovals} />
             </Text>
             <Text size="sm" c="dimmed">
               <DateText iso={item.approved_at} withTime />
@@ -134,7 +141,7 @@ export function BatchItems({ items, canFlag, onFlag }: Props) {
                 <DateText iso={item.approved_at} withTime />
               </Table.Td>
               <Table.Td>
-                <ApprovedBy item={item} />
+                <ApprovedBy item={item} own={ownApprovals} />
               </Table.Td>
               <Table.Td>
                 <FlagText item={item} />

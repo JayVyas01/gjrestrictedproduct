@@ -17,8 +17,8 @@ export function useBatches() {
   return useQuery({ queryKey: keys.batches, queryFn: listBatches });
 }
 
-export function useBatch(id: number) {
-  return useQuery({ queryKey: keys.batch(id), queryFn: () => getBatch(id) });
+export function useBatch(id: number, enabled = true) {
+  return useQuery({ queryKey: keys.batch(id), queryFn: () => getBatch(id), enabled });
 }
 
 function useBatchChange<A>(id: number, change: (args: A) => Promise<BatchDetail>) {

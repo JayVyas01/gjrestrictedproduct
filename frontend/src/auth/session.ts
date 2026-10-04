@@ -18,17 +18,29 @@ export const EXPIRED_PATH = "/sign-in?expired=1";
 
 const DRAFT_PREFIX = "gj.draft.";
 
-/** Removes every wizard draft (`gj.draft.*`) from sessionStorage; other keys stay. */
-export function clearDrafts(): void {
+function draftKeys(): string[] {
   const drafts: string[] = [];
   for (let i = 0; i < sessionStorage.length; i += 1) {
     const key = sessionStorage.key(i);
     if (key?.startsWith(DRAFT_PREFIX)) drafts.push(key);
   }
-  drafts.forEach((key) => sessionStorage.removeItem(key));
+  return drafts;
 }
 
-/** A district (or state) position: superintendents review batches and draft rule changes. */
+/** Is any wizard draft (`gj.draft.*`) saved in this tab? */
+export function hasDrafts(): boolean {
+  return draftKeys().length > 0;
+}
+
+/** Removes every wizard draft (`gj.draft.*`) from sessionStorage; other keys stay. */
+export function clearDrafts(): void {
+  draftKeys().forEach((key) => sessionStorage.removeItem(key));
+}
+
+/**
+ * A district position: superintendents review batches and draft rule changes. Only DISTRICT
+ * counts, as on the server (oversight and governance services); a state position does not.
+ */
 export function holdsDistrictPosition(user: Me): boolean {
-  return user.positions.some((position) => position.level !== "TALUKA");
+  return user.positions.some((position) => position.level === "DISTRICT");
 }

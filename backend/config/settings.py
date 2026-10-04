@@ -46,7 +46,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "core.middleware.SessionMiddleware",  # background refreshes do not extend the session
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -101,7 +101,8 @@ OTP_SENDER = env.required("OTP_SENDER")
 # --- Sessions: server-side, short-lived, never readable by JavaScript --------------
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 15 * 60  # 15 minutes of inactivity
-SESSION_SAVE_EVERY_REQUEST = True  # each request extends the idle timeout
+SESSION_SAVE_EVERY_REQUEST = True  # each request extends the idle timeout, except a
+# background refresh (header X-Background-Refresh: 1, core.middleware.SessionMiddleware)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Strict"

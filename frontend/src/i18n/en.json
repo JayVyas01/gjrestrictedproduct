@@ -39,7 +39,10 @@
   },
   "session": {
     "signOut": "Sign out",
-    "signedInAs": "Signed in as"
+    "signedInAs": "Signed in as",
+    "idleTitle": "Are you still there?",
+    "idleBody": "You'll be signed out in 1 minute because of inactivity.",
+    "staySignedIn": "Stay signed in"
   },
   "roles": {
     "LICENSEE": "Licensee",
@@ -365,6 +368,7 @@
     "approvedAt": "Approved",
     "approvedBy": "Approved by",
     "approvedByYou": "Approved by you",
+    "superintendentFinal": "Final approval by the superintendent",
     "flag": "Flag",
     "noFlag": "Not flagged",
     "flaggedOn": "Flagged {{date}}",

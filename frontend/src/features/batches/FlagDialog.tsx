@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useFlagItem } from "@/api/hooks/oversight";
 import type { BatchItem } from "@/api/types";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { useFocusHeadingOnSuccess } from "@/components/focusPageHeading";
 import {
   COMMENT_MAX,
   EMPTY_REASON,
@@ -22,18 +23,33 @@ interface Props {
 
 // Flags one batch item: a superintendent-flag reason and a comment (required for Other, optional
 // otherwise). A refusal (403: own approval, already flagged, signed) shows the server's text.
+// Once flagged, the item's Flag button is gone, so the page heading takes the focus.
 export function FlagDialog({ batchId, item, onClose }: Props) {
   const { t } = useTranslation();
+  const { returnFocus, succeed } = useFocusHeadingOnSuccess(item !== null);
   const title = item ? t("batches.flagLabel", { reference: item.reference }) : "";
+  const flagged = () => {
+    succeed();
+    onClose();
+  };
   return (
     <Modal
       opened={item !== null}
       onClose={onClose}
       title={title}
       centered
+      returnFocus={returnFocus}
       closeButtonProps={{ "aria-label": t("common.close") }}
     >
-      {item && <FlagForm key={item.reference} batchId={batchId} item={item} onClose={onClose} />}
+      {item && (
+        <FlagForm
+          key={item.reference}
+          batchId={batchId}
+          item={item}
+          onClose={onClose}
+          onFlagged={flagged}
+        />
+      )}
     </Modal>
   );
 }
@@ -42,9 +58,10 @@ interface FormProps {
   batchId: number;
   item: BatchItem;
   onClose: () => void;
+  onFlagged: () => void;
 }
 
-function FlagForm({ batchId, item, onClose }: FormProps) {
+function FlagForm({ batchId, item, onClose, onFlagged }: FormProps) {
   const { t } = useTranslation();
   const flag = useFlagItem(batchId);
   const [reason, setReason] = useState<ReasonValue>(EMPTY_REASON);
@@ -63,7 +80,7 @@ function FlagForm({ batchId, item, onClose }: FormProps) {
       {
         onSuccess: () => {
           notifications.show({ message: t("batches.flagged") });
-          onClose();
+          onFlagged();
         },
       },
     );

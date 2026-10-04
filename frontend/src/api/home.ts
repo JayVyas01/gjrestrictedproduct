@@ -1,6 +1,6 @@
-import { apiGet } from "./client";
+import { apiGet, type RequestOptions } from "./client";
 import type { Home } from "./types";
 
-export function getHome(): Promise<Home> {
-  return apiGet<Home>("/api/home");
+export function getHome(options?: RequestOptions): Promise<Home> {
+  return apiGet<Home>("/api/home", options);
 }

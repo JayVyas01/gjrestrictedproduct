@@ -64,7 +64,9 @@ function Detail({ change }: { change: RuleChange }) {
 
   return (
     <Stack gap="lg">
-      <Title order={1}>{t("ruleChange.title", { kind: change.kind_label, id: change.id })}</Title>
+      <Title order={1} tabIndex={-1}>
+        {t("ruleChange.title", { kind: change.kind_label, id: change.id })}
+      </Title>
       <div>
         <ProposalStatusBadge status={change.status} />
       </div>

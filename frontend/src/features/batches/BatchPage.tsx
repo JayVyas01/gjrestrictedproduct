@@ -3,6 +3,7 @@ import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
+import { ApiError } from "@/api/client";
 import { useBatch, useRequestSignOffCode, useSignOff } from "@/api/hooks/oversight";
 import type { BatchDetail, BatchItem } from "@/api/types";
 import { CodeDialog } from "@/components/CodeDialog";
@@ -76,13 +77,20 @@ function Batch({ batch, readOnly }: { batch: BatchDetail; readOnly: boolean }) {
 
   return (
     <>
-      <Title order={1}>{t("batches.title", { period: batchPeriod(t, batch) })}</Title>
+      <Title order={1} tabIndex={-1}>
+        {t("batches.title", { period: batchPeriod(t, batch) })}
+      </Title>
       <Summary batch={batch} />
       <Section title={t("batches.itemsTitle")}>
         {batch.items.length === 0 ? (
           <Text c="dimmed">{t("batches.noItems")}</Text>
         ) : (
-          <BatchItems items={batch.items} canFlag={reviewing} onFlag={setFlagging} />
+          <BatchItems
+            items={batch.items}
+            canFlag={reviewing}
+            onFlag={setFlagging}
+            ownApprovals={!readOnly}
+          />
         )}
       </Section>
       {reviewing && <SignOff batch={batch} />}
@@ -96,14 +104,21 @@ function Batch({ batch, readOnly }: { batch: BatchDetail; readOnly: boolean }) {
 export function BatchPage({ listPath, readOnly = false }: Props) {
   const { t } = useTranslation();
   const { id = "" } = useParams();
-  const batch = useBatch(Number(id));
+  const batchId = /^\d+$/.test(id) ? Number(id) : NaN;
+  const valid = Number.isSafeInteger(batchId);
+  const batch = useBatch(valid ? batchId : 0, valid);
 
   return (
     <Stack>
       <Anchor component={Link} to={listPath} size="sm">
         {t("batches.back")}
       </Anchor>
-      {batch.isPending ? (
+      {!valid ? (
+        <>
+          <Title order={1}>{t("pages.batchDetail")}</Title>
+          <ErrorNotice error={new ApiError(404, "")} />
+        </>
+      ) : batch.isPending ? (
         <>
           <Title order={1}>{t("pages.batchDetail")}</Title>
           <LoadingSkeleton />

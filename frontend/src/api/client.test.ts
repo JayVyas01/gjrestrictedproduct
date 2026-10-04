@@ -2,7 +2,15 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
 import { contract, serveContract } from "@/test/handlers";
 import { server } from "@/test/server";
-import { ApiError, apiGet, apiPost, apiPut, ensureCsrf, setSessionExpiredHandler } from "./client";
+import {
+  ApiError,
+  apiGet,
+  apiPost,
+  apiPut,
+  ensureCsrf,
+  lastActiveRequestAt,
+  setSessionExpiredHandler,
+} from "./client";
 
 // Records the CSRF header of each request to `path`.
 function recordCsrf(method: "get" | "post" | "put", path: string) {
@@ -181,5 +189,61 @@ describe("session expiry", () => {
     await failure(apiGet("/api/auth/me"));
     expect(calls.count).toBe(1);
     expect(expired).not.toHaveBeenCalled();
+  });
+});
+
+describe("sign-in requests", () => {
+  it.each(["/api/auth/login", "/api/auth/login/verify"])(
+    "a 403 from %s is not taken for an ended session",
+    async (path) => {
+      const expired = vi.fn();
+      setSessionExpiredHandler(expired);
+      let meCalls = 0;
+      server.use(
+        http.post(path, () => HttpResponse.json({ detail: "Locked." }, { status: 403 })),
+        http.get("/api/auth/me", () => {
+          meCalls += 1;
+          return HttpResponse.json(contract("error_403_not_signed_in"), { status: 403 });
+        }),
+      );
+      expect((await failure(apiPost(path, {}))).status).toBe(403);
+      expect(meCalls).toBe(0);
+      expect(expired).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("background refreshes", () => {
+  function recordBackground(path: string) {
+    const seen: (string | null)[] = [];
+    server.use(
+      http.get(path, ({ request }) => {
+        seen.push(request.headers.get("X-Background-Refresh"));
+        return HttpResponse.json({});
+      }),
+    );
+    return seen;
+  }
+
+  it("send X-Background-Refresh: 1 only when asked to", async () => {
+    const seen = recordBackground("/api/x");
+    await apiGet("/api/x", { background: true });
+    await apiGet("/api/x");
+    expect(seen).toEqual(["1", null]);
+  });
+
+  it("only requests that are not background refreshes count as activity", async () => {
+    recordBackground("/api/x");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(1_000_000);
+      await apiGet("/api/x");
+      expect(lastActiveRequestAt()).toBe(1_000_000);
+      vi.setSystemTime(2_000_000);
+      await apiGet("/api/x", { background: true });
+      expect(lastActiveRequestAt()).toBe(1_000_000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

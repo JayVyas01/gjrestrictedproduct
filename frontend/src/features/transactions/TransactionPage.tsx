@@ -22,7 +22,9 @@ export function TransactionPage({ listPath }: Props) {
       <Anchor component={Link} to={listPath} size="sm">
         {t("transaction.back")}
       </Anchor>
-      <Title order={1}>{t("transaction.title", { reference })}</Title>
+      <Title order={1} tabIndex={-1}>
+        {t("transaction.title", { reference })}
+      </Title>
       {transaction.isPending ? (
         <LoadingSkeleton />
       ) : transaction.isError ? (

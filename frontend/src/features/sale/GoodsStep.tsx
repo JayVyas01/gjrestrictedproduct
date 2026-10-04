@@ -124,6 +124,7 @@ export function GoodsStep({ draft, update, errors, setErrors }: StepProps) {
             variant="outline"
             onClick={run}
             loading={check.isPending}
+            data-check-button
             aria-describedby={errors.check ? `${checkHelpId} ${checkErrorId}` : checkHelpId}
           >
             {t("sale.check")}
@@ -133,7 +134,7 @@ export function GoodsStep({ draft, update, errors, setErrors }: StepProps) {
           {t("sale.checkHelp")}
         </Text>
         {errors.check && (
-          <Text id={checkErrorId} size="sm" c="red.9">
+          <Text id={checkErrorId} size="sm" c="red.9" role="alert">
             {t(errors.check)}
           </Text>
         )}

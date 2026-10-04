@@ -229,6 +229,7 @@ describe("RuleChangePage", () => {
       within(await screen.findByRole("dialog")).getByRole("button", { name: "Yes, withdraw it" }),
     );
     expect(await screen.findByText("Rule change withdrawn.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveFocus());
     expect(withdrawn).toBe(1);
     expect(screen.getAllByText("Withdrawn").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Withdraw" })).toBeNull();

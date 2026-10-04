@@ -13,6 +13,7 @@ import { invalidate, keys } from "@/api/hooks/keys";
 import type { RuleChange } from "@/api/types";
 import { CodeDialog, type CodeSubmission } from "@/components/CodeDialog";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { useFocusHeadingOnSuccess } from "@/components/focusPageHeading";
 
 /** Same as DecideSerializer: a rejection needs a note of 10 to 500 characters. */
 export const NOTE_MIN = 10;
@@ -26,15 +27,18 @@ function isRefusal(error: unknown): error is ApiError {
   return error instanceof ApiError && (error.status === 409 || error.status === 422);
 }
 
-// "Withdraw", for the drafter while the change is open: asks for confirmation first.
+// "Withdraw", for the drafter while the change is open: asks for confirmation first. Once
+// withdrawn the button goes away, so the page heading takes the focus.
 export function WithdrawRuleChange({ id }: { id: number }) {
   const { t } = useTranslation();
   const withdraw = useWithdrawRuleChange(id);
   const [opened, setOpened] = useState(false);
+  const { returnFocus, succeed } = useFocusHeadingOnSuccess(opened);
   const close = () => setOpened(false);
   const confirm = () =>
     withdraw.mutate(undefined, {
       onSuccess: () => {
+        succeed();
         close();
         notifications.show({ message: t("ruleChange.withdrawn") });
       },
@@ -59,6 +63,7 @@ export function WithdrawRuleChange({ id }: { id: number }) {
         onClose={close}
         title={t("ruleChange.withdrawTitle")}
         centered
+        returnFocus={returnFocus}
         closeButtonProps={{ "aria-label": t("common.close") }}
       >
         <Stack>

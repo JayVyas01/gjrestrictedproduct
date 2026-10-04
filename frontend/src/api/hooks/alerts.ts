@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { acknowledgeAlert, listAlerts } from "../alerts";
-import { invalidate, keys, POLL_MS } from "./keys";
+import { invalidate, isBackground, keys, POLL_MS } from "./keys";
 
 export function useAlerts(enabled = true) {
   return useQuery({
     queryKey: keys.alerts,
-    queryFn: listAlerts,
+    queryFn: (context) => listAlerts({ background: isBackground(context) }),
     refetchInterval: POLL_MS,
     enabled,
   });

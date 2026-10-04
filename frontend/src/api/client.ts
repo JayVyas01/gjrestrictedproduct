@@ -1,5 +1,7 @@
 // The only code that talks to the server. Same origin, the session cookie, a CSRF header on
 // every non-GET request, every failure as an ApiError, and session-expiry detection.
+// A background refresh (the 30-second polls) sends `X-Background-Refresh: 1`, so the server
+// does not count it as activity: only the user's own requests keep the session alive.
 
 import type { ErrorBody } from "./types";
 
@@ -28,9 +30,18 @@ export class ApiError extends Error {
 
 const CSRF_COOKIE = "csrftoken";
 const ME = "/api/auth/me";
+/** Their 403s mean "refused", never "your session ended": there is no session yet. */
+const NO_SESSION_CHECK = new Set([ME, "/api/auth/login", "/api/auth/login/verify"]);
+export const BACKGROUND_HEADER = "X-Background-Refresh";
 
 let csrfReady: Promise<void> | null = null;
 let onSessionExpired: (() => void) | null = null;
+let lastActive = 0;
+
+/** When the last request that extends the session (any but a background refresh) answered. */
+export function lastActiveRequestAt(): number {
+  return lastActive;
+}
 
 /** SessionProvider registers what to do when the session has ended (clear, go to sign-in). */
 export function setSessionExpiredHandler(handler: (() => void) | null): void {
@@ -55,6 +66,7 @@ export function ensureCsrf(): Promise<void> {
 export function resetClientState(): void {
   csrfReady = null;
   onSessionExpired = null;
+  lastActive = 0;
 }
 
 function readCookie(name: string): string {
@@ -99,8 +111,19 @@ async function checkSession(): Promise<void> {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export interface RequestOptions {
+  /** A refresh the user did not ask for: the server does not extend the session for it. */
+  background?: boolean;
+}
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  { background = false }: RequestOptions = {},
+): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
+  if (background) headers[BACKGROUND_HEADER] = "1";
   if (method !== "GET") {
     await ensureCsrf();
     headers["X-CSRFToken"] = readCookie(CSRF_COOKIE);
@@ -112,14 +135,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  if (!background) lastActive = Date.now();
   const data = await readJson(response);
   if (response.ok) return data as T;
-  if (response.status === 403 && path !== ME) await checkSession();
+  if (response.status === 403 && !NO_SESSION_CHECK.has(path)) await checkSession();
   throw toApiError(response.status, data);
 }
 
-export function apiGet<T>(path: string): Promise<T> {
-  return request<T>("GET", path);
+export function apiGet<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>("GET", path, undefined, options);
 }
 
 export function apiPost<T>(path: string, body: unknown = {}): Promise<T> {

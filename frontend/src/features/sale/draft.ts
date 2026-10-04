@@ -1,5 +1,7 @@
 // The new-sale wizard's draft. It lives only in this tab's sessionStorage (never localStorage),
 // under the `gj.draft.` prefix that sign-out and session end clear (auth/session.ts clearDrafts).
+// It is stored with the user ID of the person who wrote it, and only that person gets it back:
+// anyone else signing in on this tab finds it discarded.
 
 import type { ApprovalChain } from "@/api/types";
 
@@ -62,21 +64,30 @@ function isDraft(value: unknown): value is SaleDraft {
   return check === null || (typeof check === "object" && typeof check.key === "string");
 }
 
-/** The saved draft, or null when there is none or it can't be read. */
-export function loadDraft(): SaleDraft | null {
+/**
+ * `owner`'s saved draft, or null when there is none or it can't be read. A draft written by
+ * someone else (or by nobody named) is removed, never restored.
+ */
+export function loadDraft(owner: string): SaleDraft | null {
   try {
     const raw = sessionStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    return isDraft(parsed) ? parsed : null;
+    if (!parsed || typeof parsed !== "object") return null;
+    const { owner: savedBy, ...draft } = parsed as Record<string, unknown>;
+    if (savedBy !== owner) {
+      clearDraft();
+      return null;
+    }
+    return isDraft(draft) ? draft : null;
   } catch {
     return null;
   }
 }
 
-export function saveDraft(draft: SaleDraft): void {
+export function saveDraft(draft: SaleDraft, owner: string): void {
   try {
-    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, owner }));
   } catch {
     // Storage full or blocked: the wizard still works, only without a draft.
   }

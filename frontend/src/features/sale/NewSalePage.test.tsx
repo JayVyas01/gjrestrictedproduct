@@ -12,6 +12,7 @@ const NEW_SALE = "/licensee/sale/new";
 const GSTIN = "24ABCDE1234F1Z5";
 const BUYER = contract<{ holder_name: string }>("buyer_lookup").holder_name;
 const CREATED = contract<{ reference: string }>("transaction_created").reference;
+const SELLER = contract<{ user_id: string }>("me_licensee").user_id;
 const REFUSED = contract<{ reasons: string[] }>("transaction_check_refused").reasons;
 
 type User = ReturnType<typeof renderApp>["user"];
@@ -99,6 +100,7 @@ describe("NewSalePage", () => {
       const gstin = screen.getByLabelText("Buyer's GSTIN");
       expect(gstin).toHaveAttribute("aria-invalid", "true");
       expect(gstin).toHaveAccessibleDescription(/Enter all 15 characters/);
+      expect(gstin).toHaveFocus();
 
       await user.type(gstin, GSTIN);
       await next(user);
@@ -203,12 +205,15 @@ describe("NewSalePage", () => {
         /Enter a quantity greater than 0/,
       );
 
+      expect(screen.getByLabelText(/^Substance/)).toHaveFocus();
+
       await fillGoods(user);
       expect(screen.getByLabelText("Quantity in L")).toBeInTheDocument();
       await next(user);
-      expect(screen.getByRole("button", { name: "Check" })).toHaveAccessibleDescription(
-        /Check the sale before you continue/,
-      );
+      const check = screen.getByRole("button", { name: "Check" });
+      expect(check).toHaveAccessibleDescription(/Check the sale before you continue/);
+      expect(check).toHaveFocus();
+      expect(screen.getByRole("alert")).toHaveTextContent(/Check the sale before you continue/);
       expect(screen.getByText("Step 2 of 4")).toBeInTheDocument();
     });
 
@@ -302,6 +307,7 @@ describe("NewSalePage", () => {
 
       await next(user);
       expect(screen.getByLabelText("Transporter name")).toHaveAttribute("aria-invalid", "true");
+      expect(screen.getByLabelText("Transporter name")).toHaveFocus();
       expect(screen.getByLabelText("Route")).toHaveAccessibleDescription(/Fill this in\./);
 
       await user.type(screen.getByLabelText("Vehicle number"), "gj-01");
@@ -408,14 +414,22 @@ describe("NewSalePage", () => {
         check: { key: `${GSTIN}|WHISKY|150`, approval_chain: "OFFICER" },
         transporterName: "Ravi Transport Co",
       };
-      saveDraft(draft);
+      saveDraft(draft, SELLER);
       await open();
       expect(screen.getByText("Step 3 of 4")).toBeInTheDocument();
       expect(screen.getByLabelText("Transporter name")).toHaveValue("Ravi Transport Co");
     });
 
+    it("does not restore a draft another user left in this tab", async () => {
+      saveDraft({ ...emptyDraft(), gstin: GSTIN }, "SOMEONE-ELSE");
+      await open();
+      expect(screen.queryByText("Draft restored")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Buyer's GSTIN")).toHaveValue("");
+      expect(sessionStorage.getItem(DRAFT_KEY)).toBeNull();
+    });
+
     it("Start over empties the form and removes the draft", async () => {
-      saveDraft({ ...emptyDraft(), gstin: GSTIN });
+      saveDraft({ ...emptyDraft(), gstin: GSTIN }, SELLER);
       const { user } = await open();
       await user.click(screen.getByRole("button", { name: "Start over" }));
       expect(screen.getByLabelText("Buyer's GSTIN")).toHaveValue("");
@@ -424,7 +438,7 @@ describe("NewSalePage", () => {
     });
 
     it("Discard draft removes it and goes home", async () => {
-      saveDraft({ ...emptyDraft(), gstin: GSTIN });
+      saveDraft({ ...emptyDraft(), gstin: GSTIN }, SELLER);
       const { user, router } = await open();
       await user.click(screen.getByRole("button", { name: "Discard draft" }));
       await waitFor(() => expect(router.state.location.pathname).toBe("/licensee"));

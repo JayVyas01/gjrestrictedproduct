@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useVerifyLogin } from "@/api/hooks/auth";
-import { landingFor } from "./session";
+import { clearDrafts, landingFor } from "./session";
 import { signInError } from "./signInError";
 
 const CODE_LENGTH = 6;
@@ -40,9 +40,15 @@ export function CodeStep({ challengeId, onRestart }: Props) {
       return;
     }
     // useVerifyLogin refetches `me` before this resolves, so the guard sees the new session.
+    // A new session starts clean: no draft from an earlier one (whoever wrote it) carries over.
     verify.mutate(
       { challengeId, code },
-      { onSuccess: ({ role }) => navigate(landingFor(role), { replace: true }) },
+      {
+        onSuccess: ({ role }) => {
+          clearDrafts();
+          navigate(landingFor(role), { replace: true });
+        },
+      },
     );
   };
 

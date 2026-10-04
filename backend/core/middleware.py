@@ -1,4 +1,6 @@
-"""Run every request in a single transaction tagged with the acting user.
+"""Request middleware: the per-request transaction and actor, and the session middleware.
+
+DbContextMiddleware runs every request in a single transaction tagged with the acting user.
 
 This replaces ATOMIC_REQUESTS so that the RLS context and the view's queries share
 one transaction. Rule for every view: RAISE to roll back, RETURN a response to commit
@@ -12,7 +14,9 @@ anonymous ones -- otherwise an anonymous request on a reused connection would in
 the previous request's actor.
 """
 
+from django.contrib.sessions.middleware import SessionMiddleware as DjangoSessionMiddleware
 from django.db import transaction
+from django.utils.cache import patch_vary_headers
 
 from core.db_context import set_actor
 
@@ -32,3 +36,29 @@ class DbContextMiddleware:
             if response.status_code >= 500:
                 transaction.set_rollback(True)
             return response
+
+
+BACKGROUND_REFRESH_HEADER = "X-Background-Refresh"
+
+
+class SessionMiddleware(DjangoSessionMiddleware):
+    """Django's session middleware, except that a background refresh never extends the session.
+
+    The session ends after SESSION_COOKIE_AGE without activity, and every request normally
+    extends it (SESSION_SAVE_EVERY_REQUEST). The web app's 30-second polls (home counts, alerts)
+    send `X-Background-Refresh: 1`: they authenticate as usual -- and fail once the session has
+    expired -- but are not activity, so neither the stored expiry nor the cookie is renewed.
+    A request that changed the session (signing in or out) is always saved.
+    """
+
+    def process_response(self, request, response):
+        session = getattr(request, "session", None)
+        if (
+            session is not None
+            and request.headers.get(BACKGROUND_REFRESH_HEADER) == "1"
+            and not session.modified
+        ):
+            if session.accessed:
+                patch_vary_headers(response, ("Cookie",))
+            return response
+        return super().process_response(request, response)

@@ -42,6 +42,28 @@ describe("query hooks", () => {
     }
   });
 
+  it("their first load is ordinary; refreshes of what is already shown are background", async () => {
+    const seen: Record<string, (string | null)[]> = { "/api/home": [], "/api/alerts": [] };
+    server.use(
+      http.get("/api/home", ({ request }) => {
+        seen["/api/home"]!.push(request.headers.get("X-Background-Refresh"));
+        return HttpResponse.json(contract<object>("home_licensee"));
+      }),
+      http.get("/api/alerts", ({ request }) => {
+        seen["/api/alerts"]!.push(request.headers.get("X-Background-Refresh"));
+        return HttpResponse.json(contract<object>("alerts"));
+      }),
+    );
+    const { client, wrapper } = setup();
+    renderHook(() => [useHome(), useAlerts()], { wrapper });
+    await waitFor(() => expect(client.getQueryData(keys.alerts)).toBeDefined());
+    await waitFor(() => expect(client.getQueryData(keys.home)).toBeDefined());
+    // What the 30-second interval does.
+    await client.refetchQueries({ queryKey: keys.home });
+    await client.refetchQueries({ queryKey: keys.alerts });
+    expect(seen).toEqual({ "/api/home": [null, "1"], "/api/alerts": [null, "1"] });
+  });
+
   it("serves a contract variant for one test", async () => {
     server.use(serveContract("transaction_detail_buyer_stock_limit"));
     const { wrapper } = setup();

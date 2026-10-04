@@ -22,13 +22,13 @@ const SUMMARY = keysOf([
   "buyer_name",
   "created_at",
   "your_role",
+  "approval_chain",
+  "approval_chain_label",
 ] satisfies (keyof T.TransactionSummary)[]);
 const DETAIL = keysOf([
   ...SUMMARY,
   "transport",
   "designated_officer",
-  "approval_chain",
-  "approval_chain_label",
   "timeline",
   "next_action",
   "can_decide",
@@ -54,6 +54,11 @@ const ALERT = keysOf([
   "transaction_reference",
   "reason",
   "pattern",
+  "pattern_count",
+  "comment",
+  "created_at",
+  "seller_name",
+  "buyer_name",
   "acknowledged",
   "note",
 ] satisfies (keyof T.Alert)[]);

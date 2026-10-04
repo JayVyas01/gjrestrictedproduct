@@ -1,0 +1,22 @@
+[
+  {
+    "code": "QUANTITY_UNUSUAL",
+    "label": "Quantity unusually high",
+    "requires_text": false
+  },
+  {
+    "code": "PATTERN_CONCERN",
+    "label": "Repeated pattern needs review",
+    "requires_text": false
+  },
+  {
+    "code": "TRANSPORT_CONCERN",
+    "label": "Transport details need checking",
+    "requires_text": false
+  },
+  {
+    "code": "OTHER",
+    "label": "Other",
+    "requires_text": true
+  }
+]

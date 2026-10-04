@@ -100,6 +100,20 @@ def test_side_filter(app_db, client, catalogue, trade, otp_outbox):
     assert references(client, "side=purchases&awaiting=me") == {tx.reference}
 
 
+def test_list_rows_carry_the_approval_chain(
+    app_db, client, catalogue, trade, threshold, otp_outbox
+):
+    """The officer's queue shows each row's chain without opening it."""
+    small = new_tx(trade, catalogue, qty="10")
+    large = new_tx(trade, catalogue, qty="250")
+    login(client, trade.seller, otp_outbox)
+    rows = {row["reference"]: row for row in client.get("/api/transactions").json()}
+    assert rows[small.reference]["approval_chain"] == "OFFICER"
+    assert rows[small.reference]["approval_chain_label"] == "Officer"
+    assert rows[large.reference]["approval_chain"] == "OFFICER_THEN_SUPERINTENDENT"
+    assert rows[large.reference]["approval_chain_label"] == "Officer, then superintendent"
+
+
 def test_blank_filter_means_no_filter(app_db, client, catalogue, trade, otp_outbox):
     sale = new_tx(trade, catalogue, qty="10")
     act(trade.buyer, Role.LICENSEE, sale, otp_outbox, "CONFIRM")

@@ -1,0 +1,42 @@
+[
+  {
+    "code": "RETAIL",
+    "description": "",
+    "name": "Retail",
+    "rules": [
+      {
+        "max_per_transaction_qty": "500.000",
+        "max_stock_qty": "1000.000",
+        "may_buy": true,
+        "may_sell": true,
+        "may_transport": false,
+        "scope": "Spirits",
+        "scope_code": "SPIRITS",
+        "scope_kind": "class",
+        "unit": "L",
+        "validity_months": 12,
+        "version": 1
+      }
+    ]
+  },
+  {
+    "code": "WHOLESALE",
+    "description": "",
+    "name": "Wholesale",
+    "rules": [
+      {
+        "max_per_transaction_qty": "10000.000",
+        "max_stock_qty": "50000.000",
+        "may_buy": true,
+        "may_sell": true,
+        "may_transport": true,
+        "scope": "Spirits",
+        "scope_code": "SPIRITS",
+        "scope_kind": "class",
+        "unit": "L",
+        "validity_months": 12,
+        "version": 1
+      }
+    ]
+  }
+]

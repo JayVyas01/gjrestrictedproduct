@@ -1,0 +1,14 @@
+[
+  {
+    "code": "RUM",
+    "name": "Rum",
+    "substance_class": "Spirits",
+    "unit": "L"
+  },
+  {
+    "code": "WHISKY",
+    "name": "Whisky",
+    "substance_class": "Spirits",
+    "unit": "L"
+  }
+]

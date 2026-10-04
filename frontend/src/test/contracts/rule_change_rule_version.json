@@ -1,0 +1,37 @@
+{
+  "can_decide": true,
+  "can_withdraw": false,
+  "current": {
+    "max_per_transaction_qty": "500.000",
+    "max_stock_qty": "1000.000",
+    "may_buy": true,
+    "may_sell": true,
+    "may_transport": false,
+    "validity_months": 12,
+    "version": 1
+  },
+  "decision": null,
+  "drafted_at": "2026-10-04T11:52:13.712632+00:00",
+  "drafted_by": "GJTJ8M2CSMTK",
+  "drafted_by_role": "Authorised Personnel",
+  "id": 3,
+  "justification": "Retail outlets now stock beer in larger volumes.",
+  "kind": "RULE_VERSION",
+  "kind_label": "New rule version",
+  "proposed": {
+    "class_code": "SPIRITS",
+    "licence_type_code": "RETAIL",
+    "licence_type_name": "Retail",
+    "max_per_transaction_qty": "300.000",
+    "max_stock_qty": "2000.000",
+    "may_buy": true,
+    "may_sell": false,
+    "may_transport": false,
+    "scope": "Spirits",
+    "scope_kind": "class",
+    "unit": "L",
+    "validity_months": 24
+  },
+  "status": "SUBMITTED",
+  "status_label": "Submitted"
+}

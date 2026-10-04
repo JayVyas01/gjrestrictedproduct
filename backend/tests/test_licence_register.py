@@ -1,23 +1,31 @@
-"""The licence register for authorities: exact search, filters, detail, audit (D2d Task 4)."""
+"""The licence register for authorities: exact search, filters, detail, audit (D2d Task 4).
+The exact search moved to a POST body in D3 Task 9, so no number or GSTIN is in a URL."""
 
 from datetime import date
 from decimal import Decimal
 
 import pytest
 from django.db import transaction
+from django.test import Client
 
 from audit.models import AuditEvent
 from core import crypto
 from core.db_context import SYSTEM_ROLE, acting_as_system, set_actor
 from identity.roles import Role
 from licensing.service import set_status
+from licensing.views import LicenceSearchView
 from stock.service import set_opening_balance
-from tests.conftest import BUYER_GSTIN, DEMO_GSTIN
-from tests.test_transaction_api import login
+from tests.conftest import BUYER_GSTIN, DEMO_GSTIN, TEST_PASSWORD
+from tests.test_transaction_api import login, post
 
 pytestmark = pytest.mark.django_db
 
 UNKNOWN_FILTER = {"detail": "Unknown filter value."}
+SEARCH = "/api/licences/search"
+
+
+def search(client, **body):
+    return post(client, SEARCH, body)
 
 
 def events(action):
@@ -48,6 +56,7 @@ def test_only_authorities_can_use_register(
     expected = 200 if allowed else 403
     assert client.get("/api/licences").status_code == expected
     assert client.get(f"/api/licences/{licence.id}").status_code == expected
+    assert search(client, number="GJ/TEST/0001").status_code == expected
 
 
 def test_mine_still_routes_to_my_licences(app_db, client, make_user, otp_outbox):
@@ -60,15 +69,74 @@ def test_exact_search_by_number_and_gstin(app_db, client, make_licence, make_use
     make_licence(gstin=BUYER_GSTIN)  # GJ/TEST/0002
     login(client, make_user(role=Role.LICENSING_AUTHORITY), otp_outbox)
 
-    body = client.get("/api/licences", {"number": "  gj/test/0001 "}).json()
-    assert body["count"] == 1
+    body = search(client, number="  gj/test/0001 ").json()
+    assert body["count"] == 1 and body["page"] == 1 and body["page_size"] == 25
     assert [row["id"] for row in body["results"]] == [first.id]
 
-    body = client.get("/api/licences", {"gstin": DEMO_GSTIN.lower() + " "}).json()
+    body = search(client, gstin=DEMO_GSTIN.lower() + " ").json()
     assert [row["id"] for row in body["results"]] == [first.id]
 
-    assert client.get("/api/licences", {"number": "GJ/TEST/000"}).json()["count"] == 0
-    assert client.get("/api/licences", {"gstin": DEMO_GSTIN[:10]}).json()["count"] == 0
+    assert search(client, number="GJ/TEST/000").json()["count"] == 0
+    assert search(client, gstin=DEMO_GSTIN[:10]).json()["count"] == 0
+    # The filters combine with the exact match.
+    assert search(client, number="GJ/TEST/0001", status="SUSPENDED").json()["count"] == 0
+    # A blank search is the plain listing.
+    assert search(client, number="", gstin="").json()["count"] == 2
+
+
+def test_search_values_are_never_taken_from_the_url(
+    app_db, client, make_licence, make_user, otp_outbox
+):
+    """A licence number or GSTIN in a URL ends up in server and proxy logs: GET refuses them."""
+    make_licence()
+    login(client, make_user(role=Role.LICENSING_AUTHORITY), otp_outbox)
+    for params in ({"number": "GJ/TEST/0001"}, {"gstin": DEMO_GSTIN}, {"number": ""}):
+        response = client.get("/api/licences", params)
+        assert response.status_code == 400 and response.json() == UNKNOWN_FILTER
+    assert events("licence.register_search") == []
+
+
+def test_search_checks_its_filters(app_db, client, org, make_licence, make_user, otp_outbox):
+    make_licence()
+    login(client, make_user(role=Role.LICENSING_AUTHORITY), otp_outbox)
+    for bad in (
+        {"page": 0},
+        {"page": "x"},
+        {"page": None},
+        {"status": "LOST"},
+        {"area": "x"},
+        {"area": 9999},
+    ):
+        response = search(client, **bad)
+        assert response.status_code == 400 and response.json() == UNKNOWN_FILTER, bad
+    too_long = search(client, number="X" * 41)
+    assert too_long.status_code == 400 and "number" in too_long.json()
+    assert search(client, area=org.sanand.id, page=1).json()["count"] == 1
+
+
+def test_search_needs_csrf_and_uses_the_lookup_throttle(app_db, make_user, otp_outbox):
+    assert LicenceSearchView.throttle_scope == "lookup"
+    authority = make_user(role=Role.LICENSING_AUTHORITY)
+    c = Client(enforce_csrf_checks=True)
+    token = c.get("/api/auth/csrf").cookies["csrftoken"].value
+    headers = {"HTTP_X_CSRFTOKEN": token}
+    first = c.post(
+        "/api/auth/login",
+        {"user_id": authority.user_id, "password": TEST_PASSWORD},
+        content_type="application/json",
+        **headers,
+    )
+    c.post(
+        "/api/auth/login/verify",
+        {"challenge_id": first.json()["challenge_id"], "code": otp_outbox[-1][1]},
+        content_type="application/json",
+        **headers,
+    )
+    token = c.cookies["csrftoken"].value
+    body = {"number": "GJ/TEST/0001"}
+    assert c.post(SEARCH, body, content_type="application/json").status_code == 403
+    allowed = c.post(SEARCH, body, content_type="application/json", HTTP_X_CSRFTOKEN=token)
+    assert allowed.status_code == 200
 
 
 def test_filters_and_pagination(app_db, client, org, make_licence, make_user, otp_outbox):
@@ -143,6 +211,12 @@ def test_detail_has_periods_and_permissions_but_no_contact_or_stock(
         "may_transport": False,
         "max_stock_qty": "1000.000",
         "max_per_transaction_qty": "500.000",
+        # What the permissions card needs as well: the unit (the class's, for a class
+        # licence) and the current period.
+        "unit": "L",
+        "trading_permitted": True,
+        "valid_from": "2026-01-01",
+        "valid_to": "2047-12-31",
     }
     raw = response.content.decode()
     assert "9876543210" not in raw and "777" not in raw and "contact" not in raw
@@ -158,8 +232,8 @@ def test_search_and_view_are_audited_by_blind_index_only(
     authority = make_user(role=Role.LICENSING_AUTHORITY)
     login(client, authority, otp_outbox)
 
-    client.get("/api/licences", {"number": "GJ/TEST/0001"})
-    client.get("/api/licences", {"gstin": DEMO_GSTIN})
+    search(client, number="GJ/TEST/0001")
+    search(client, gstin=DEMO_GSTIN)
     client.get(f"/api/licences/{licence.id}")
 
     searches = events("licence.register_search")

@@ -1,0 +1,6 @@
+/* The router link only wraps Mantine's NavLink, which carries the look. */
+.link {
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--mantine-radius-sm);
+}

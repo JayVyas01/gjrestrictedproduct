@@ -5,6 +5,7 @@ from datetime import date
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from catalogue.service import class_unit
 from licensing.models import Licence
 from licensing.service import current_period, current_permissions, trading_permitted
 
@@ -24,6 +25,14 @@ class EnrolmentCompleteSerializer(serializers.Serializer):
         return value
 
 
+class RegisterSearchSerializer(serializers.Serializer):
+    """The exact-match values of a register search (the filters are checked by the view).
+    Surrounding spaces are trimmed; a blank value means no search."""
+
+    number = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    gstin = serializers.CharField(max_length=15, required=False, allow_blank=True)
+
+
 def licence_card(licence: Licence, today: date) -> dict:
     """Everything the permissions card shows: the holder's own licences, and the permission
     fields of the authorities' licence register (`licensing.register`)."""
@@ -34,7 +43,13 @@ def licence_card(licence: Licence, today: date) -> dict:
         "holder_name": licence.holder_name,
         "licence_type": licence.licence_type.name,
         "scope": licence.scope_name(),
-        "unit": licence.substance.unit if licence.substance else None,
+        # Whether `scope` names a substance or a class: the sale wizard matches it to the catalogue.
+        "scope_kind": "substance" if licence.substance else "class",
+        # A class shares one unit, so a class licence's limits carry it too (None only while
+        # the class has no substances).
+        "unit": (
+            licence.substance.unit if licence.substance else class_unit(licence.substance_class)
+        ),
         "status": licence.status,
         "valid_from": period.starts_on.isoformat() if period else None,
         "valid_to": period.ends_on.isoformat() if period else None,

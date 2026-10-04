@@ -1,0 +1,25 @@
+{
+  "can_decide": true,
+  "can_withdraw": false,
+  "current": {
+    "superintendent_above_qty": "200.000",
+    "version": 1
+  },
+  "decision": null,
+  "drafted_at": "2026-10-04T11:52:14.241846+00:00",
+  "drafted_by": "GJU2HQ6NY855",
+  "drafted_by_role": "Licensing Authority",
+  "id": 4,
+  "justification": "Retail outlets now stock beer in larger volumes.",
+  "kind": "APPROVAL_THRESHOLD",
+  "kind_label": "New approval threshold",
+  "proposed": {
+    "class_code": "SPIRITS",
+    "scope": "Spirits",
+    "scope_kind": "class",
+    "superintendent_above_qty": "500.000",
+    "unit": "L"
+  },
+  "status": "SUBMITTED",
+  "status_label": "Submitted"
+}

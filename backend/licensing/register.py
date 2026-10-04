@@ -15,12 +15,18 @@ from licensing.models import Licence
 from licensing.serializers import licence_card
 
 PAGE_SIZE = 25
+# The permissions card's fields (licensing.serializers.licence_card): the allowances, the limits
+# and their unit, and the current period (valid_from/valid_to, null when none covers today).
 PERMISSION_FIELDS = (
     "may_buy",
     "may_sell",
     "may_transport",
     "max_stock_qty",
     "max_per_transaction_qty",
+    "unit",
+    "trading_permitted",
+    "valid_from",
+    "valid_to",
 )
 
 

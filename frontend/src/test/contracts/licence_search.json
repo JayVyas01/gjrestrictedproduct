@@ -1,0 +1,17 @@
+{
+  "count": 1,
+  "page": 1,
+  "page_size": 25,
+  "results": [
+    {
+      "area": "Sanand",
+      "holder_name": "Sanand Spirits Pvt Ltd",
+      "id": 3,
+      "licence_number": "GJ/TEST/0001",
+      "licence_type": "Retail",
+      "scope": "Spirits",
+      "status": "ACTIVE",
+      "valid_to": "2047-12-31"
+    }
+  ]
+}

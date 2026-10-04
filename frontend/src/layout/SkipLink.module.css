@@ -1,0 +1,16 @@
+/* Off screen until focused, then shown over the header (design §7). */
+.skip {
+  position: absolute;
+  left: var(--mantine-spacing-sm);
+  top: -100px;
+  z-index: 1000;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  background: var(--mantine-color-white);
+  color: var(--mantine-color-navy-6);
+  font-weight: 600;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.skip:focus {
+  top: var(--mantine-spacing-xs);
+}

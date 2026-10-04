@@ -41,13 +41,25 @@ const saffron: MantineColorsTuple = [
 
 export type StatusTone = "approved" | "rejected" | "cancelled" | "waiting";
 
-// Mantine colour names for each status tone (used by StatusBadge).
+// A green dark enough for white text (5.4:1); Mantine's darkest green, #2b8a3e, is only 4.4:1.
+const APPROVED_GREEN = "#1F7A35";
+
+// Colours for each status tone (used by StatusBadge as filled badges). White text on the green,
+// red.9 (#c92a2a, 5.5:1) and gray.7 (8.2:1) meets WCAG AA; saffron gets dark text (9.7:1).
 export const STATUS_COLORS: Record<StatusTone, string> = {
-  approved: "green",
-  rejected: "red",
-  cancelled: "gray",
-  waiting: "saffron",
+  approved: APPROVED_GREEN,
+  rejected: "red.9",
+  cancelled: "gray.7",
+  waiting: "saffron.5",
 };
+
+/** "Awaiting you" (attention, saffron). */
+export const AWAITING_YOU_COLOR = "saffron.5";
+/** Allowance ticks and crosses, and a warning banner. */
+export const ALLOWED_COLOR = APPROVED_GREEN;
+export const NOT_ALLOWED_COLOR = "red.9";
+/** The saffron left accent of the What's next card. */
+export const ACCENT_BORDER = `4px solid ${SAFFRON}`;
 
 export const theme = createTheme({
   primaryColor: "navy",

@@ -9,12 +9,17 @@
     "back": "Back",
     "continue": "Continue",
     "close": "Close",
-    "skipToContent": "Skip to main content"
+    "skipToContent": "Skip to main content",
+    "notSet": "Not set"
   },
   "errors": {
     "wrongCode": "That code didn't match. Check the SMS or send a new code.",
     "tooManyTries": "Too many tries. Wait a minute and try again.",
-    "somethingWrong": "Something went wrong. Try again."
+    "somethingWrong": "Something went wrong. Try again.",
+    "notFound": "Not found, or not yours to see.",
+    "notAllowed": "You can't do this.",
+    "checkFields": "Some answers need fixing. Check the fields marked below.",
+    "refused": "This can't go ahead:"
   },
   "signIn": {
     "title": "Sign in",
@@ -80,5 +85,76 @@
     "ruleChanges": "Rule changes",
     "newRuleChange": "New rule change",
     "ruleChangeDetail": "Rule change"
+  },
+  "status": {
+    "AWAITING_BUYER": "Waiting for the buyer",
+    "AWAITING_OFFICER": "Waiting for the officer",
+    "AWAITING_SUPERINTENDENT": "Waiting for the superintendent",
+    "APPROVED": "Approved",
+    "REJECTED_BY_BUYER": "Rejected by the buyer",
+    "REJECTED_BY_OFFICER": "Rejected by the officer",
+    "REJECTED_BY_SUPERINTENDENT": "Rejected by the superintendent",
+    "CANCELLED": "Cancelled",
+    "awaitingYou": "Awaiting you"
+  },
+  "timeline": {
+    "label": "Progress",
+    "SELLER_STARTED": "Sale started",
+    "SELLER_CANCEL": "Seller cancelled the sale",
+    "BUYER_CONFIRM": "Buyer confirmed",
+    "BUYER_REJECT": "Buyer rejected",
+    "OFFICER_APPROVE": "Officer approved",
+    "OFFICER_RECOMMEND": "Officer recommended approval",
+    "OFFICER_REJECT": "Officer rejected",
+    "SUPERINTENDENT_APPROVE": "Superintendent approved",
+    "SUPERINTENDENT_REJECT": "Superintendent rejected",
+    "other": "Step recorded",
+    "pending_BUYER": "Next: the buyer confirms or rejects",
+    "pending_OFFICER": "Next: the officer's decision",
+    "pending_SUPERINTENDENT": "Next: the superintendent's decision",
+    "pending_SELLER": "Next: the seller",
+    "reason": "Reason: {{reason}}",
+    "comment": "Comment: {{comment}}",
+    "heldBy": "Held by {{holder}}"
+  },
+  "code": {
+    "intro": "Enter the 6-digit code we sent by SMS to your registered mobile number.",
+    "label": "One-time code",
+    "digit": "Digit {{position}} of 6",
+    "incomplete": "Enter all 6 digits.",
+    "submit": "Confirm",
+    "newCode": "Send a new code",
+    "requesting": "Sending a code…",
+    "expiresIn": "The code expires in {{time}}.",
+    "expired": "This code has expired. Send a new code."
+  },
+  "reasons": {
+    "label": "Reason",
+    "choose": "Choose a reason.",
+    "comment": "Describe the reason",
+    "commentHint": "Up to 500 characters.",
+    "commentRequired": "Describe the reason."
+  },
+  "licence": {
+    "number": "Licence {{number}}",
+    "status": {
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "REVOKED": "Revoked"
+    },
+    "allowances": "What this licence allows",
+    "mayBuy": "Can buy",
+    "mayNotBuy": "Cannot buy",
+    "maySell": "Can sell",
+    "mayNotSell": "Cannot sell",
+    "mayTransport": "Can transport",
+    "mayNotTransport": "Cannot transport",
+    "stockLimit": "Stock limit",
+    "perTransaction": "Limit per transaction",
+    "validity": "Valid",
+    "suspended": "This licence is suspended. You can't buy, sell or transport under it until it is restored.",
+    "revoked": "This licence has been revoked. You can't buy, sell or transport under it.",
+    "notValid": "This licence is not valid today (expired or not yet started). You can't buy, sell or transport under it.",
+    "to": "to"
   }
 }

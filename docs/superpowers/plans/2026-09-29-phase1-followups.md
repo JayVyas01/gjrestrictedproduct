@@ -194,3 +194,11 @@ Open items from the D1 reviews. None of them block D2.
 | `review_settings_overview` reads batch dates as SYSTEM with no audit event | Read-only and returns dates only, so no audit was added. Confirm this is acceptable. |
 | A REJECT note that is mostly spaces | Raised in review: if such a note passed the serializer's length check, the service (which trims it) would still refuse it, giving 422 instead of the 400 field error. Harmless either way, since nothing is written and the code is not spent. Note that DRF's `CharField` trims surrounding whitespace by default, the same way the service does, so over HTTP the two checks should agree; add a test to confirm before changing anything. |
 | `max_stock_qty` in the register detail | It is a permission limit from the licence's frozen snapshot, not a stock figure, so it appears by design. The register still never shows stock balances. |
+
+# Demo D3 follow-ups (added 2026-10-04)
+
+## From Task 9 (Licensing Authority screens)
+
+- **Register area filter left out:** the licences page filters by status only. `?area=` takes an area ID, but no endpoint lists the areas with their IDs (`review-settings` gives district names only, and the register rows give taluka names). Add `GET /api/areas` (or area IDs in the review settings) and a district/taluka select, ideally with the hierarchy filter noted under D2d.
+- **Register search moved to POST:** `POST /api/licences/search` replaced the `?number=`/`?gstin=` query on `GET /api/licences` (which now answers 400 for them), so no licence number or GSTIN reaches server or proxy logs. Any other client of the old query must move to the POST.
+- **A class licence's unit:** `licence_card` sends `unit: null` for a class-scoped licence, so its limits show without a unit in the permissions card (the register detail and the licensee's own card). The class has a unit in the catalogue (`L` for Spirits); consider sending it.

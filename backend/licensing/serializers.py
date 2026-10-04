@@ -24,6 +24,14 @@ class EnrolmentCompleteSerializer(serializers.Serializer):
         return value
 
 
+class RegisterSearchSerializer(serializers.Serializer):
+    """The exact-match values of a register search (the filters are checked by the view).
+    Surrounding spaces are trimmed; a blank value means no search."""
+
+    number = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    gstin = serializers.CharField(max_length=15, required=False, allow_blank=True)
+
+
 def licence_card(licence: Licence, today: date) -> dict:
     """Everything the permissions card shows: the holder's own licences, and the permission
     fields of the authorities' licence register (`licensing.register`)."""

@@ -94,6 +94,7 @@ const ENDPOINTS: Endpoint[] = [
     contract: "transaction_detail_seller",
   },
   { method: "get", path: "/api/licences/mine", contract: "licences_mine" },
+  { method: "post", path: "/api/licences/search", contract: "licence_search" },
   { method: "get", path: "/api/stock/mine", contract: "stock_mine" },
   { method: "get", path: "/api/catalogue/substances", contract: "catalogue_substances" },
   { method: "get", path: "/api/catalogue/classes", contract: "catalogue_classes" },

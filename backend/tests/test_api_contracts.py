@@ -418,6 +418,13 @@ def _(ctx):
     return as_(ctx, authority(ctx, Role.LICENSING_AUTHORITY)).get("/api/licences")
 
 
+@contract("licence_search")
+def _(ctx):
+    client = as_(ctx, authority(ctx, Role.LICENSING_AUTHORITY))
+    number = ctx.trade.seller_licence.number()
+    return post(client, "/api/licences/search", {"number": number, "page": 1})
+
+
 @contract("licence_detail")
 def _(ctx):
     client = as_(ctx, authority(ctx, Role.LICENSING_AUTHORITY))
@@ -469,6 +476,15 @@ def _(ctx):
     alert_id = buyer_rejection_alert(ctx)
     post(ctx.client, f"/api/alerts/{alert_id}/acknowledge")
     return post(ctx.client, f"/api/alerts/{alert_id}/acknowledge")
+
+
+@contract("error_422_review_setting", status=422)
+def _(ctx):
+    open_batch(ctx)  # with a batch, the new period must start the day after it
+    client = as_(ctx, authority(ctx, Role.LICENSING_AUTHORITY))
+    url = f"/api/oversight/review-settings/{ctx.org.district_officer.id}"
+    body = {"period_days": 30, "starts_on": "2020-01-01"}
+    return client.put(url, body, content_type="application/json")
 
 
 @contract("error_422_transaction_refused", status=422)

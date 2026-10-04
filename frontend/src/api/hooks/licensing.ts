@@ -5,6 +5,7 @@ import {
   myStock,
   searchRegister,
   type RegisterFilters,
+  type RegisterSearch,
 } from "../licensing";
 import { keys } from "./keys";
 
@@ -16,14 +17,15 @@ export function useMyStock() {
   return useQuery({ queryKey: keys.myStock, queryFn: myStock });
 }
 
-export function useRegister(filters: RegisterFilters = {}) {
+/** One page of the register. The search value is kept in memory only (the query cache). */
+export function useRegister(filters: RegisterFilters = {}, search: RegisterSearch = {}) {
   return useQuery({
-    queryKey: keys.registerSearch(filters),
-    queryFn: () => searchRegister(filters),
+    queryKey: keys.registerSearch(filters, search),
+    queryFn: () => searchRegister(filters, search),
     placeholderData: keepPreviousData,
   });
 }
 
-export function useLicence(id: number) {
-  return useQuery({ queryKey: keys.licence(id), queryFn: () => getLicence(id) });
+export function useLicence(id: number, enabled = true) {
+  return useQuery({ queryKey: keys.licence(id), queryFn: () => getLicence(id), enabled });
 }

@@ -1,5 +1,5 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { RegisterFilters } from "../licensing";
+import type { RegisterFilters, RegisterSearch } from "../licensing";
 import type { TransactionFilters } from "../transactions";
 import type { ProposalStatus, ReasonKind } from "../types";
 
@@ -18,7 +18,12 @@ export const keys = {
   myLicences: ["licences", "mine"],
   myStock: ["stock", "mine"],
   register: ["register"],
-  registerSearch: (filters: RegisterFilters) => ["register", "search", filters],
+  registerSearch: (filters: RegisterFilters, search: RegisterSearch) => [
+    "register",
+    "search",
+    filters,
+    search,
+  ],
   licence: (id: number) => ["register", "licence", id],
   substances: ["catalogue", "substances"],
   classes: ["catalogue", "classes"],

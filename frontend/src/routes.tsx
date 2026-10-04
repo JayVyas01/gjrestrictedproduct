@@ -4,6 +4,11 @@ import type { Role } from "@/api/types";
 import { LandingRedirect, RequireRole } from "@/auth/RequireRole";
 import { SessionProvider } from "@/auth/SessionProvider";
 import { SignInPage } from "@/auth/SignInPage";
+import { AuthorityHomePage } from "@/features/authority/AuthorityHomePage";
+import { LicencePage } from "@/features/authority/LicencePage";
+import { LicencesPage } from "@/features/authority/LicencesPage";
+import { LicenceTypesPage } from "@/features/authority/LicenceTypesPage";
+import { ReviewPeriodsPage } from "@/features/authority/ReviewPeriodsPage";
 import { BatchesPage } from "@/features/batches/BatchesPage";
 import { BatchPage } from "@/features/batches/BatchPage";
 import { LicenseeHomePage } from "@/features/licensee/LicenseeHomePage";
@@ -71,11 +76,11 @@ export const routes: RouteObject[] = [
           ),
           screen("personnel/batches", P, <BatchesPage />),
           screen("personnel/batches/:id", P, <BatchPage listPath={BATCHES_PATH} />),
-          page("authority", LA, "authorityHome"),
-          page("authority/licences", LA, "licences"),
-          page("authority/licences/:id", LA, "licenceDetail"),
-          page("authority/licence-types", LA, "licenceTypes"),
-          page("authority/review-periods", LA, "reviewPeriods"),
+          screen("authority", LA, <AuthorityHomePage />),
+          screen("authority/licences", LA, <LicencesPage />),
+          screen("authority/licences/:id", LA, <LicencePage />),
+          screen("authority/licence-types", LA, <LicenceTypesPage />),
+          screen("authority/review-periods", LA, <ReviewPeriodsPage />),
           page("head", ["HEAD_AUTHORITY"], "headHome"),
           page("overview", ["SOFTWARE_OWNER"], "overview"),
           page("rule-changes", RULE_CHANGES, "ruleChanges"),

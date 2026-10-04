@@ -318,9 +318,18 @@ export interface LicenceRegister {
 export interface LicenceDetail extends LicenceRow {
   gstin: string;
   periods: { starts_on: string; ends_on: string }[];
+  /** The permissions card's fields: allowances, limits and unit, and the current period. */
   permissions: Pick<
     LicenceCard,
-    "may_buy" | "may_sell" | "may_transport" | "max_stock_qty" | "max_per_transaction_qty"
+    | "may_buy"
+    | "may_sell"
+    | "may_transport"
+    | "max_stock_qty"
+    | "max_per_transaction_qty"
+    | "unit"
+    | "trading_permitted"
+    | "valid_from"
+    | "valid_to"
   >;
 }
 

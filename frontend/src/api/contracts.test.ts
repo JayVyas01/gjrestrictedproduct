@@ -201,8 +201,25 @@ const GUARDS: Record<string, Guard> = {
     keys: ["count", "page", "page_size", "results"] satisfies (keyof T.LicenceRegister)[],
     nested: { "results[0]": LICENCE_ROW },
   },
+  licence_search: {
+    keys: ["count", "page", "page_size", "results"] satisfies (keyof T.LicenceRegister)[],
+    nested: { "results[0]": LICENCE_ROW },
+  },
   licence_detail: {
     keys: [...LICENCE_ROW, "gstin", "periods", "permissions"] satisfies (keyof T.LicenceDetail)[],
+    nested: {
+      permissions: [
+        "may_buy",
+        "may_sell",
+        "may_transport",
+        "max_stock_qty",
+        "max_per_transaction_qty",
+        "unit",
+        "trading_permitted",
+        "valid_from",
+        "valid_to",
+      ] satisfies (keyof T.LicenceDetail["permissions"])[],
+    },
   },
   error_400_field_errors: { keys: [] },
   "error_*": { keys: ERROR },

@@ -18,6 +18,7 @@ from licensing.models import Licence, LicenceStatus
 from licensing.serializers import (
     EnrolmentCompleteSerializer,
     EnrolmentStartSerializer,
+    RegisterSearchSerializer,
     licence_card,
 )
 from positions.models import Area
@@ -100,11 +101,15 @@ class SubstanceListView(APIView):
 
 
 MAX_REGISTER_PAGE = 10**6
+# Licence numbers and GSTINs are searched only through POST bodies: in a query string they would
+# end up in server and proxy logs. The GET listing refuses them rather than ignoring them.
+URL_FORBIDDEN = {"number", "gstin"}
 
 
 def _register_filters(params) -> dict:
-    """The register's query parameters, checked. Raises ValueError for an unknown value."""
-    page = int(params.get("page", "1"))
+    """The register's status, area and page filters, checked. Raises ValueError (or TypeError,
+    for a JSON null or a list) for an unknown value."""
+    page = int(params.get("page", 1))
     if not 1 <= page <= MAX_REGISTER_PAGE:  # a huge page would overflow the SQL OFFSET
         raise ValueError("page")
     status_filter = params.get("status")
@@ -115,32 +120,55 @@ def _register_filters(params) -> dict:
         area_id = int(area_id)
         if not Area.objects.filter(pk=area_id).exists():
             raise ValueError("area")
-    return {
-        "number": params.get("number"),
-        "gstin": params.get("gstin"),
-        "status": status_filter,
-        "area_id": area_id,
-        "page": page,
-    }
+    return {"status": status_filter, "area_id": area_id, "page": page}
+
+
+def _register_page(user, filters: dict) -> Response:
+    rows, total = register.search(user, **filters)
+    return Response(
+        {
+            "count": total,
+            "page": filters["page"],
+            "page_size": register.PAGE_SIZE,
+            "results": rows,
+        }
+    )
 
 
 class LicenceRegisterView(APIView):
+    """The register, filtered by status and area only (no search values in URLs)."""
+
     permission_classes = [role_required(*REGISTER_READERS)]
 
     def get(self, request):
         try:
+            if URL_FORBIDDEN & request.query_params.keys():
+                raise ValueError("search values belong in a POST body")
             filters = _register_filters(request.query_params)
-        except ValueError:
+        except (TypeError, ValueError):
             return Response(UNKNOWN_FILTER, status=status.HTTP_400_BAD_REQUEST)
-        rows, total = register.search(request.user, **filters)
-        return Response(
-            {
-                "count": total,
-                "page": filters["page"],
-                "page_size": register.PAGE_SIZE,
-                "results": rows,
-            }
-        )
+        return _register_page(request.user, filters)
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class LicenceSearchView(APIView):
+    """The register's exact search by licence number or GSTIN, from the request body."""
+
+    permission_classes = [role_required(*REGISTER_READERS)]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "lookup"
+
+    def post(self, request):
+        data = RegisterSearchSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        try:
+            filters = _register_filters(request.data)
+        except (TypeError, ValueError):
+            return Response(UNKNOWN_FILTER, status=status.HTTP_400_BAD_REQUEST)
+        # A blank value is no search at all (the plain listing), not a search for "".
+        filters["number"] = data.validated_data.get("number") or None
+        filters["gstin"] = data.validated_data.get("gstin") or None
+        return _register_page(request.user, filters)
 
 
 class LicenceDetailView(APIView):

@@ -167,3 +167,24 @@ Open items from the D1 reviews. None of them block D2.
 ## Test gaps
 
 - None open. The `STOCK_LIMIT` in-lock re-check is covered (`test_stock_limit_reason_refused_under_lock_is_audited`).
+
+# Demo D2d follow-ups (added 2026-10-04)
+
+## Deferred from D2d
+
+- **Licence write APIs:** recording, renewing, suspending and revoking licences over HTTP are still not exposed. D2d built the read-only register (B7); the services (`record_licence`, `record_renewal`, `set_status`) exist.
+
+## For D3 (screens) and D4 (demo tooling)
+
+- **D4 seed data:** seed one approved and one pending rule-change proposal, and two Head Authority users, so the maker-checker flow can be demoed (the drafter cannot decide their own change).
+- **D3 before/after diff:** the rule-change detail screen shows `current` against `proposed`.
+- **D3 `current` is same-scope only:** `current` is the latest rule version for the same licence type and scope (or the latest threshold for the same scope). It does not show the rule that would actually resolve for a substance when a class rule governs it today. The screen should say so, or D3 can add the resolved rule.
+- **D3 licence register area filter:** `?area=` is an exact match, so a district does not include its talukas. D3 may want a hierarchy filter.
+
+## Decisions to confirm
+
+| Item | Note |
+|---|---|
+| `review_settings_overview` reads batch dates as SYSTEM with no audit event | Read-only and returns dates only, so no audit was added. Confirm this is acceptable. |
+| A REJECT note that is mostly spaces | Raised in review: if such a note passed the serializer's length check, the service (which trims it) would still refuse it, giving 422 instead of the 400 field error. Harmless either way, since nothing is written and the code is not spent. Note that DRF's `CharField` trims surrounding whitespace by default, the same way the service does, so over HTTP the two checks should agree; add a test to confirm before changing anything. |
+| `max_stock_qty` in the register detail | It is a permission limit from the licence's frozen snapshot, not a stock figure, so it appears by design. The register still never shows stock balances. |

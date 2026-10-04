@@ -72,6 +72,8 @@ AWAITING_BUYER → CANCELLED (seller)
 
 Rows can only change their status and decision fields, using the same RLS and update pattern as transactions. All writes run as SYSTEM after a who-may-act check in the service.
 
+> **Note (2026-10-04, D2d):** the proposal model lives in a new `governance` app (`governance.RuleChangeProposal`), not in `catalogue`, because the proposal lifecycle is not reference data (ruling D-R1). The drafter's user id (`drafted_by`) is shown only to the Head Authority and the Software Owner; other viewers see the drafter's role only (ruling D-R2).
+
 ### Who may act
 - **Draft:** the Licensing Authority, a Personnel user who currently holds a **district** position, or the Head Authority.
 - **Approve or reject:** a Head Authority user who is **not the drafter**. Approval needs a `DECISION` code, and so does a rejection, so both are attributable.

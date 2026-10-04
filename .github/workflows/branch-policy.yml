@@ -1,0 +1,26 @@
+# Enforces the branching rule GitHub has no built-in setting for:
+# pull requests into `main` (production) must come from `dev` in this repository.
+# Pull requests into any other branch pass. Required on `dev` and `main` by the repo ruleset.
+name: branch-policy
+
+on: pull_request
+
+permissions: {}
+
+jobs:
+  source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only dev may merge into main
+        env:
+          # Passed through env, never interpolated into the script: branch names are untrusted input.
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$BASE_REF" = "main" ] && { [ "$HEAD_REF" != "dev" ] || [ "$HEAD_REPO" != "$THIS_REPO" ]; }; then
+            echo "::error::Pull requests into main must come from this repository's dev branch (got $HEAD_REPO:$HEAD_REF)."
+            exit 1
+          fi
+          echo "OK: $HEAD_REPO:$HEAD_REF -> $BASE_REF"

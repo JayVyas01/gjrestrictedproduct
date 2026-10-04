@@ -1,0 +1,9 @@
+{
+  "counts": {
+    "awaiting_superintendent": 0,
+    "rule_changes_awaiting_you": 1,
+    "unacknowledged_alerts": 0,
+    "your_open_rule_changes": 0
+  },
+  "role": "HEAD_AUTHORITY"
+}

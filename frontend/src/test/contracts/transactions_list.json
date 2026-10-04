@@ -1,0 +1,16 @@
+[
+  {
+    "approval_chain": "OFFICER",
+    "approval_chain_label": "Officer",
+    "buyer_name": "Bopal Bar & Kitchen",
+    "created_at": "2026-10-04T13:02:30.676973+00:00",
+    "quantity": "10",
+    "reference": "TXGTPGD3K3KZ",
+    "seller_name": "Sanand Spirits Pvt Ltd",
+    "status": "APPROVED",
+    "status_label": "Approved",
+    "substance": "Whisky",
+    "unit": "L",
+    "your_role": "seller"
+  }
+]

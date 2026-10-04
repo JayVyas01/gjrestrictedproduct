@@ -1,0 +1,32 @@
+[
+  {
+    "code": "NOT_ORDERED",
+    "label": "I did not place this order",
+    "requires_text": false
+  },
+  {
+    "code": "QUANTITY_WRONG",
+    "label": "Quantity does not match",
+    "requires_text": false
+  },
+  {
+    "code": "WRONG_SUBSTANCE",
+    "label": "Wrong substance",
+    "requires_text": false
+  },
+  {
+    "code": "TERMS_DISPUTE",
+    "label": "Terms dispute",
+    "requires_text": false
+  },
+  {
+    "code": "STOCK_LIMIT",
+    "label": "This would take me over my licence's stock limit",
+    "requires_text": false
+  },
+  {
+    "code": "OTHER",
+    "label": "Other",
+    "requires_text": true
+  }
+]

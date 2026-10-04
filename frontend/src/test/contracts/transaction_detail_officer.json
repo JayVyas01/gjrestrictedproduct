@@ -1,0 +1,48 @@
+{
+  "allowed_outcomes": [
+    "APPROVE",
+    "REJECT"
+  ],
+  "approval_chain": "OFFICER",
+  "approval_chain_label": "Officer",
+  "buyer_name": "Bopal Bar & Kitchen",
+  "can_decide": true,
+  "created_at": "2026-10-04T11:52:17.739714+00:00",
+  "designated_officer": "Area Officer, Sanand",
+  "next_action": "Your decision is needed.",
+  "quantity": "10",
+  "reference": "TX4S3CKV9EA6",
+  "seller_name": "Sanand Spirits Pvt Ltd",
+  "status": "AWAITING_OFFICER",
+  "status_label": "Waiting for the officer",
+  "stock_limit_problem": null,
+  "substance": "Whisky",
+  "timeline": [
+    {
+      "at": "2026-10-04T11:52:17.739714+00:00",
+      "by": "Seller",
+      "comment": null,
+      "held_by": null,
+      "outcome": "STARTED",
+      "reason": null,
+      "step": "SELLER"
+    },
+    {
+      "at": "2026-10-04T11:52:17.761744+00:00",
+      "by": "Buyer",
+      "comment": null,
+      "held_by": null,
+      "outcome": "CONFIRM",
+      "reason": null,
+      "step": "BUYER"
+    }
+  ],
+  "transport": {
+    "id_number": "GJ-TR-4411",
+    "name": "Ravi Transport Co",
+    "route": "Sanand to Bopal",
+    "vehicle_number": "GJ01AB1234"
+  },
+  "unit": "L",
+  "your_role": "officer"
+}

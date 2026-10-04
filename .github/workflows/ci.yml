@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      # Pin actions to full commit SHAs before go-live (Dependabot keeps them current).
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Create database roles
+        working-directory: .
+        env:
+          PGHOST: localhost
+          PGPASSWORD: postgres_ci_only
+          POSTGRES_USER: postgres
+          GJ_OWNER_PASSWORD: gj_owner_local_only
+          GJ_APP_PASSWORD: gj_app_ci_only
+        run: bash docker/postgres-init.sh
+
+      - run: uv sync --locked
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run --env-file .env.test python manage.py makemigrations --check --dry-run
+      - run: uv run --env-file .env.test pytest
+
+      - name: Dependency vulnerability audit
+        run: |
+          uv export --format requirements-txt --no-emit-project --output-file "$RUNNER_TEMP/req.txt"
+          uv run pip-audit --disable-pip --requirement "$RUNNER_TEMP/req.txt"
+
+      - name: Production settings check
+        run: |
+          set -a; source .env.test; set +a
+          export DJANGO_SSL_REDIRECT=1
+          export DJANGO_SECRET_KEY="ci-deploy-check-$(openssl rand -hex 32)"
+          uv run python manage.py check --deploy --fail-level WARNING
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      # Pin actions to full commit SHAs before go-live (Dependabot keeps them current).
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high

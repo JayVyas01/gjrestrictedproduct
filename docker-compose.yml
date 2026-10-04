@@ -1,0 +1,17 @@
+# Local development database only. Production uses a managed Postgres in an India region.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?copy .env.example to .env}
+      GJ_OWNER_PASSWORD: ${GJ_OWNER_PASSWORD:?copy .env.example to .env}
+      GJ_APP_PASSWORD: ${GJ_APP_PASSWORD:?copy .env.example to .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

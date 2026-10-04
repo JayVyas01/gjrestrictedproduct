@@ -1,0 +1,27 @@
+[
+  {
+    "code": "QUANTITY_MISMATCH",
+    "label": "Quantity mismatch (expected vs found)",
+    "requires_text": false
+  },
+  {
+    "code": "WEIGHT_MISMATCH",
+    "label": "Material weight mismatch",
+    "requires_text": false
+  },
+  {
+    "code": "TRANSPORTER_INVALID",
+    "label": "Transporter details invalid",
+    "requires_text": false
+  },
+  {
+    "code": "LICENCE_NOT_VALID",
+    "label": "Licence expired or not valid",
+    "requires_text": false
+  },
+  {
+    "code": "OTHER",
+    "label": "Other",
+    "requires_text": true
+  }
+]

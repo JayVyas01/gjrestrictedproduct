@@ -1,0 +1,24 @@
+{
+  "can_decide": false,
+  "can_withdraw": false,
+  "current": null,
+  "decision": {
+    "decided_at": "2026-10-04T11:52:13.008283+00:00",
+    "note": "Agreed with the district.",
+    "outcome": "APPROVED"
+  },
+  "drafted_at": "2026-10-04T11:52:12.846311+00:00",
+  "drafted_by": "GJ6MEV3SDBR6",
+  "drafted_by_role": "Licensing Authority",
+  "id": 1,
+  "justification": "Retail outlets now stock beer in larger volumes.",
+  "kind": "NEW_LICENCE_TYPE",
+  "kind_label": "New licence type",
+  "proposed": {
+    "code": "BEER_BAR",
+    "description": "On-premises beer",
+    "name": "Beer bar"
+  },
+  "status": "APPROVED",
+  "status_label": "Approved"
+}

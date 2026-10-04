@@ -10,6 +10,7 @@ import { createHandlers } from "@/test/handlers";
 export const PERSONAS: Record<string, string[]> = {
   seller: ["me_licensee", "home_licensee", "transaction_detail_seller"],
   buyer: ["me_licensee", "home_licensee", "transaction_detail_buyer"],
+  "buyer-stock": ["me_licensee", "home_licensee", "transaction_detail_buyer_stock_limit"],
   officer: ["me_personnel", "home_personnel", "transaction_detail_officer"],
   superintendent: [
     "me_superintendent",

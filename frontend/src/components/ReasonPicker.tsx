@@ -45,7 +45,7 @@ export function ReasonPicker({
 }: Props) {
   const { t } = useTranslation();
   const reasons = useReasonCodes(kind);
-  if (reasons.isPending) return <Loader size="sm" aria-label={t("common.loading")} />;
+  if (reasons.isPending) return <Loader size="sm" role="status" aria-label={t("common.loading")} />;
   if (reasons.isError) return <ErrorNotice error={reasons.error} />;
 
   const shown = reasons.data.filter(

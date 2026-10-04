@@ -19,6 +19,13 @@ describe("mock mode personas", () => {
     expect(mockPersona("?as=nobody")).toBe("officer");
   });
 
+  it("the buyer-stock persona sees a sale over their stock limit", async () => {
+    server.use(...createHandlers(PERSONAS["buyer-stock"]));
+    expect(await apiGet("/api/transactions/TXZWSADK68UJ")).toEqual(
+      contract("transaction_detail_buyer_stock_limit"),
+    );
+  });
+
   it("the officer persona is answered as the officer", async () => {
     server.use(...createHandlers(PERSONAS.officer));
     expect(await apiGet<Me>("/api/auth/me")).toEqual(contract("me_personnel"));

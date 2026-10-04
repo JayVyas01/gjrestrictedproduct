@@ -58,6 +58,8 @@ export const AWAITING_YOU_COLOR = "saffron.5";
 /** Allowance ticks and crosses, and a warning banner. */
 export const ALLOWED_COLOR = APPROVED_GREEN;
 export const NOT_ALLOWED_COLOR = "red.9";
+/** A warning the user must act on (the buyer's stock limit): saffron icon, dark text. */
+export const WARNING_COLOR = "saffron";
 /** The saffron left accent of the What's next card. */
 export const ACCENT_BORDER = `4px solid ${SAFFRON}`;
 
@@ -70,6 +72,12 @@ export const theme = createTheme({
   defaultRadius: "sm",
   fontFamily:
     'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif',
+  // Modal and drawer headers are <header> by default, which (portalled to <body>) reads as a
+  // second banner landmark next to the app bar: render them as plain <div>s.
+  components: {
+    ModalHeader: { defaultProps: { component: "div" } },
+    DrawerHeader: { defaultProps: { component: "div" } },
+  },
   headings: {
     fontFamily:
       'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif',

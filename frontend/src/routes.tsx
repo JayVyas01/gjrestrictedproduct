@@ -1,8 +1,13 @@
+import type { ReactElement } from "react";
 import { Navigate, Outlet, type RouteObject } from "react-router-dom";
 import type { Role } from "@/api/types";
 import { LandingRedirect, RequireRole } from "@/auth/RequireRole";
 import { SessionProvider } from "@/auth/SessionProvider";
 import { SignInPage } from "@/auth/SignInPage";
+import { LicenseeHomePage } from "@/features/licensee/LicenseeHomePage";
+import { LicenseeTransactionsPage } from "@/features/licensee/LicenseeTransactionsPage";
+import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
+import { TransactionPage } from "@/features/transactions/TransactionPage";
 import { AppShell } from "@/layout/AppShell";
 import { PlaceholderPage, type PageKey } from "@/layout/PlaceholderPage";
 
@@ -14,15 +19,12 @@ function SessionRoot() {
   );
 }
 
+function screen(path: string, roles: Role[], element: ReactElement): RouteObject {
+  return { path, element: <RequireRole roles={roles}>{element}</RequireRole> };
+}
+
 function page(path: string, roles: Role[], title: PageKey): RouteObject {
-  return {
-    path,
-    element: (
-      <RequireRole roles={roles}>
-        <PlaceholderPage title={title} />
-      </RequireRole>
-    ),
-  };
+  return screen(path, roles, <PlaceholderPage title={title} />);
 }
 
 const L: Role[] = ["LICENSEE"];
@@ -46,9 +48,13 @@ export const routes: RouteObject[] = [
         ),
         children: [
           { index: true, element: <LandingRedirect /> },
-          page("licensee", L, "licenseeHome"),
-          page("licensee/transactions", L, "licenseeTransactions"),
-          page("licensee/transactions/:reference", L, "transactionDetail"),
+          screen("licensee", L, <LicenseeHomePage />),
+          screen("licensee/transactions", L, <LicenseeTransactionsPage />),
+          screen(
+            "licensee/transactions/:reference",
+            L,
+            <TransactionPage listPath={TRANSACTIONS_PATH} />,
+          ),
           page("licensee/sale/new", L, "newSale"),
           page("personnel", P, "personnelHome"),
           page("personnel/transactions", P, "personnelTransactions"),

@@ -14,7 +14,7 @@ export function RequireRole({ roles, children }: { roles?: Role[]; children?: Re
   if (loading) {
     return (
       <Center mih="50vh">
-        <Loader aria-label={t("common.loading")} />
+        <Loader role="status" aria-label={t("common.loading")} />
       </Center>
     );
   }

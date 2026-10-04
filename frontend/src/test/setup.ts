@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { notifications } from "@mantine/notifications";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, expect } from "vitest";
 import * as axeMatchers from "vitest-axe/matchers";
@@ -12,6 +13,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   server.resetHandlers();
   cleanup();
+  notifications.clean(); // the notification store outlives a test's render
   sessionStorage.clear();
   resetClientState();
   document.cookie = "csrftoken=; path=/; max-age=0";

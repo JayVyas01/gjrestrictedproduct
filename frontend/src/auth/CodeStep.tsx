@@ -73,7 +73,10 @@ export function CodeStep({ challengeId, onRestart }: Props) {
               setIncomplete(false);
             }}
             error={Boolean(error)}
+            // withAria off: Mantine's own aria attributes would overwrite aria-describedby.
             getInputProps={(index) => ({
+              withAria: false,
+              "aria-invalid": Boolean(error),
               "aria-label": t("signIn.codeDigit", { position: index + 1 }),
               "aria-describedby": error ? errorId : undefined,
             })}

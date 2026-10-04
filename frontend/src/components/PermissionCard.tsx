@@ -44,11 +44,13 @@ function banner(licence: LicenceCard): ParseKeys | null {
 
 interface Props {
   licence: LicenceCard;
+  /** The card title's heading level (3 under a page section heading). */
+  titleOrder?: 2 | 3;
 }
 
 // What a licence lets its holder do: type and scope, the allowances as ticks and crosses with
 // words, the limits and the validity; a banner when it can't be used (suspended, revoked, expired).
-export function PermissionCard({ licence }: Props) {
+export function PermissionCard({ licence, titleOrder = 2 }: Props) {
   const { t } = useTranslation();
   const warning = banner(licence);
   const allowancesId = `allowances-${licence.licence_number}`;
@@ -56,7 +58,7 @@ export function PermissionCard({ licence }: Props) {
     <Card withBorder padding="lg">
       <Group justify="space-between" align="flex-start">
         <div>
-          <Title order={2} size="h3">
+          <Title order={titleOrder} size="h3">
             {`${licence.licence_type}: ${licence.scope}`}
           </Title>
           <Text size="sm" c="dimmed">

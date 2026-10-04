@@ -103,6 +103,12 @@ describe("SignInPage", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(WRONG_CODE);
     expect(router.state.location.pathname).toBe("/sign-in");
+    // The error is linked to every digit, and the digits are marked invalid.
+    for (const position of [1, 6]) {
+      const digit = screen.getByLabelText(`Digit ${position} of 6`);
+      expect(digit).toHaveAccessibleDescription(WRONG_CODE);
+      expect(digit).toHaveAttribute("aria-invalid", "true");
+    }
 
     await user.click(screen.getByRole("button", { name: "Send a new code" }));
     expect(screen.getByLabelText("User ID")).toHaveValue("GJK2PY48DX3B");

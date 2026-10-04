@@ -201,4 +201,25 @@ Open items from the D1 reviews. None of them block D2.
 
 - **Register area filter left out:** the licences page filters by status only. `?area=` takes an area ID, but no endpoint lists the areas with their IDs (`review-settings` gives district names only, and the register rows give taluka names). Add `GET /api/areas` (or area IDs in the review settings) and a district/taluka select, ideally with the hierarchy filter noted under D2d.
 - **Register search moved to POST:** `POST /api/licences/search` replaced the `?number=`/`?gstin=` query on `GET /api/licences` (which now answers 400 for them), so no licence number or GSTIN reaches server or proxy logs. Any other client of the old query must move to the POST.
-- **A class licence's unit:** `licence_card` sends `unit: null` for a class-scoped licence, so its limits show without a unit in the permissions card (the register detail and the licensee's own card). The class has a unit in the catalogue (`L` for Spirits); consider sending it.
+- ~~**A class licence's unit:**~~ **Done in Task 11.** `licence_card` now sends the class's unit (`catalogue.service.class_unit`; null only for a class with no substances) and a `scope_kind`, which the sale wizard uses instead of reading a null unit as "class".
+
+## From Task 10 and the Task 11 sweep
+
+- **react-router 6 advisories (moderate, `npm audit`):** an open redirect through a backslash in `<Link>` and `useNavigate` (a bypass of CVE-2025-68470), and constructor injection in SSR hydration's `deserializeErrors()` (SSR only; this app renders on the client). Mitigation today: the app never navigates to a user- or server-supplied path (every `to` is a fixed path or one built from a reference or numeric ID), and there is no SSR. The fix is react-router 7, a breaking upgrade: plan it for after the demo. `npm audit --audit-level=high` passes.
+- **Software Owner has the bell (ruling):** the Software Owner sees the bell and the alerts drawer read-only (no Acknowledge), as the Head Authority does.
+- **TDD was partial on Task 10 pages:** the governance and overview page tests were written after the pages. They cover the specified behaviour and pass axe, but were not seen failing first.
+- **Rule-version form doesn't prefill:** a new rule version starts from empty fields, not from the current rule for the chosen licence type and scope. Prefill from `catalogue/licence-types` so the drafter changes only what differs.
+- **Status tab in the URL uses server values:** `/rule-changes?status=SUBMITTED` (and the other tabs) carry the server's status names. Harmless (no personal data, unknown values fall back to Open), but a rename on the server would break bookmarked links.
+- **Bundle split (Task 11):** pages load lazily, one chunk per feature area plus four vendor chunks (`vite.config.ts`); the largest chunk is `vendor-mantine` at about 225 kB (67 kB gzip). If it grows past 500 kB again, split Mantine's less-used components out.
+
+## For D4 (demo tooling and deployment)
+
+- **Caddy CSP** from design §6: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'` (Mantine injects styles); `frame-ancestors 'none'`.
+- **Persona picker:** a demo-only way to switch between the seeded people without typing codes (mock mode has `?as=`; the real backend needs its own, demo-only, never in production).
+- **SMS inbox:** a demo page that shows the one-time codes the fake SMS sender "sent", so codes can be read on screen.
+- **Playwright on the real backend:** end-to-end runs of the transaction journey, the two-step approval, the buyer's stock-limit reject, batch sign-off and a rule change against the seeded backend.
+- **Seed data:** a Whisky approval threshold above 200 L (so the two-step approval shows), two Head Authority users (the drafter can't decide their own change), and one approved and one pending rule-change proposal.
+
+## Needs the owner's confirmation
+
+- **Adding `frontend` and `analyze (javascript-typescript)` to the required checks of the ruleset needs the owner's confirmation.** Both jobs run on every PR today but are not required, so a red frontend build or CodeQL finding would not block a merge.

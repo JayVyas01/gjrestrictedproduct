@@ -364,8 +364,8 @@ Build each component in `src/components/` with tests: its states plus an axe che
 
 - [ ] **`/authority` home:** What's next shows licences expiring within 30 days, districts without a review period, your open rule changes and rule changes submitted. Quick links go to each screen.
 - [ ] **`/authority/licences`:**
-  - **Search:** an exact licence number or GSTIN, submitted by a button (POST is not needed, because GET with a query is what the API takes).
-    - **Privacy:** the search value goes in the query string to the API only. **The page URL never contains it:** keep the search in component state, not router search params.
+  - **Search:** an exact licence number or GSTIN, submitted by a button as `POST /api/licences/search` (the value in the request body; CSRF and the `lookup` throttle). `GET /api/licences` keeps only the status, area and page filters and refuses `?number=`/`?gstin=` with 400.
+    - **Privacy:** the search value never sits in any URL: not the API's (it is in the POST body) and not the page's (keep the search in component state, not router search params).
     - A note says "Exact match only. Partial search isn't available, to protect licence holders."
   - **Filters:** status and area (a select fed from `review-settings` areas plus taluka names in the results; if no area list endpoint exists, filter by status only and leave the area filter out, then log it in the follow-ups).
   - **Results:** a paginated table with 25 rows per page.

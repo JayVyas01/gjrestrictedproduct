@@ -17,10 +17,15 @@ import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
 import { BATCHES_PATH, PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
 import { PersonnelHomePage } from "@/features/personnel/PersonnelHomePage";
 import { PersonnelTransactionsPage } from "@/features/personnel/PersonnelTransactionsPage";
+import { NewRuleChangePage } from "@/features/governance/NewRuleChangePage";
+import { RuleChangePage } from "@/features/governance/RuleChangePage";
+import { RuleChangesPage } from "@/features/governance/RuleChangesPage";
+import { OverviewHomePage } from "@/features/overview/OverviewHomePage";
+import { OverviewTransactionsPage } from "@/features/overview/OverviewTransactionsPage";
+import { HEAD_PATHS, OWNER_PATHS, type OverviewPaths } from "@/features/overview/paths";
 import { NewSalePage } from "@/features/sale/NewSalePage";
 import { TransactionPage } from "@/features/transactions/TransactionPage";
 import { AppShell } from "@/layout/AppShell";
-import { PlaceholderPage, type PageKey } from "@/layout/PlaceholderPage";
 
 function SessionRoot() {
   return (
@@ -34,17 +39,38 @@ function screen(path: string, roles: Role[], element: ReactElement): RouteObject
   return { path, element: <RequireRole roles={roles}>{element}</RequireRole> };
 }
 
-function page(path: string, roles: Role[], title: PageKey): RouteObject {
-  return screen(path, roles, <PlaceholderPage title={title} />);
+/**
+ * The Head Authority's or the Software Owner's read-only screens under their base path: the
+ * shared lists and details, with every action hidden (`readOnly`) or never offered by the server
+ * (`can_decide` and `can_sign` are false for these roles).
+ */
+function overviewScreens(paths: OverviewPaths, roles: Role[]): RouteObject[] {
+  const at = (path: string) => path.slice(1);
+  return [
+    screen(at(paths.home), roles, <OverviewHomePage paths={paths} />),
+    screen(at(paths.transactions), roles, <OverviewTransactionsPage basePath={paths.transactions} />),
+    screen(
+      `${at(paths.transactions)}/:reference`,
+      roles,
+      <TransactionPage listPath={paths.transactions} />,
+    ),
+    screen(at(paths.batches), roles, <BatchesPage basePath={paths.batches} />),
+    screen(`${at(paths.batches)}/:id`, roles, <BatchPage listPath={paths.batches} readOnly />),
+    screen(at(paths.reviewPeriods), roles, <ReviewPeriodsPage readOnly />),
+    screen(at(paths.licences), roles, <LicencesPage basePath={paths.licences} />),
+    screen(`${at(paths.licences)}/:id`, roles, <LicencePage listPath={paths.licences} />),
+  ];
 }
 
 const L: Role[] = ["LICENSEE"];
 const P: Role[] = ["PERSONNEL"];
 const LA: Role[] = ["LICENSING_AUTHORITY"];
-const RULE_CHANGES: Role[] = ["LICENSING_AUTHORITY", "PERSONNEL", "HEAD_AUTHORITY"];
+/** Drafters (the page itself checks personnel hold a district position). */
+const DRAFTERS: Role[] = ["LICENSING_AUTHORITY", "PERSONNEL", "HEAD_AUTHORITY"];
+/** Drafters, and the Software Owner read-only. */
+const RULE_CHANGES: Role[] = [...DRAFTERS, "SOFTWARE_OWNER"];
 
 // The app's routes: sign-in, then the shell with each role's screens behind RequireRole.
-// Placeholders stand in for the screens later tasks build.
 export const routes: RouteObject[] = [
   {
     element: <SessionRoot />,
@@ -81,11 +107,11 @@ export const routes: RouteObject[] = [
           screen("authority/licences/:id", LA, <LicencePage />),
           screen("authority/licence-types", LA, <LicenceTypesPage />),
           screen("authority/review-periods", LA, <ReviewPeriodsPage />),
-          page("head", ["HEAD_AUTHORITY"], "headHome"),
-          page("overview", ["SOFTWARE_OWNER"], "overview"),
-          page("rule-changes", RULE_CHANGES, "ruleChanges"),
-          page("rule-changes/new", RULE_CHANGES, "newRuleChange"),
-          page("rule-changes/:id", RULE_CHANGES, "ruleChangeDetail"),
+          ...overviewScreens(HEAD_PATHS, ["HEAD_AUTHORITY"]),
+          ...overviewScreens(OWNER_PATHS, ["SOFTWARE_OWNER"]),
+          screen("rule-changes", RULE_CHANGES, <RuleChangesPage />),
+          screen("rule-changes/new", DRAFTERS, <NewRuleChangePage />),
+          screen("rule-changes/:id", RULE_CHANGES, <RuleChangePage />),
         ],
       },
       { path: "*", element: <Navigate to="/" replace /> },

@@ -17,8 +17,14 @@ export const PERSONAS: Record<string, string[]> = {
     "home_superintendent",
     "transaction_detail_superintendent_final",
   ],
-  la: ["me_licensing_authority", "home_licensing_authority", "transaction_detail_authority"],
+  la: [
+    "me_licensing_authority",
+    "home_licensing_authority",
+    "transaction_detail_authority",
+    "rule_change_new_licence_type",
+  ],
   head: ["me_head_authority", "home_head_authority", "transaction_detail_authority"],
+  owner: ["me_software_owner", "home_software_owner", "transaction_detail_authority"],
 };
 
 const PERSONA_KEY = "gj.mock.as";

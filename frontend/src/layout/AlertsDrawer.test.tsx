@@ -167,9 +167,24 @@ describe("AlertsDrawer", () => {
     expect(
       within(drawer).getByText("Only the officer holding the position can acknowledge an alert."),
     ).toBeInTheDocument();
-    // No transaction screen for this role yet: the reference is plain text.
-    expect(within(drawer).getByText(ALERT.transaction_reference)).toBeInTheDocument();
-    expect(within(drawer).queryByRole("link", { name: ALERT.transaction_reference })).toBeNull();
+    // The reference opens the Head Authority's own read-only transaction screen.
+    expect(within(drawer).getByRole("link", { name: ALERT.transaction_reference })).toHaveAttribute(
+      "href",
+      `/head/transactions/${ALERT.transaction_reference}`,
+    );
     expect(await axe(document.body)).toHaveNoViolations();
+  });
+
+  it("is read-only for the Software Owner, with references to their own screen", async () => {
+    const { user } = renderApp("/overview", {
+      contracts: ["me_software_owner", "home_software_owner"],
+    });
+    const drawer = await openDrawer(user);
+    await within(drawer).findByText("Buyer rejected a transaction");
+    expect(within(drawer).queryByRole("button", { name: "Acknowledge" })).not.toBeInTheDocument();
+    expect(within(drawer).getByRole("link", { name: ALERT.transaction_reference })).toHaveAttribute(
+      "href",
+      `/overview/transactions/${ALERT.transaction_reference}`,
+    );
   });
 });

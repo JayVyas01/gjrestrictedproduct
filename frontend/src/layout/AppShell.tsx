@@ -8,7 +8,8 @@ import { Bell } from "./Bell";
 import { NavLinks } from "./NavLinks";
 import { SkipLink } from "./SkipLink";
 
-const WITH_BELL = new Set(["PERSONNEL", "HEAD_AUTHORITY"]);
+// Personnel and the authorities that see alerts (the Licensing Authority has no alerts).
+const WITH_BELL = new Set(["PERSONNEL", "HEAD_AUTHORITY", "SOFTWARE_OWNER"]);
 
 // The signed-in frame: a navy header (app name, who is signed in, the bell, sign out), the
 // role's navigation (a burger menu under 768 px) and the page in <main id="main">. The alerts

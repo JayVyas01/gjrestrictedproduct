@@ -18,8 +18,8 @@ export function useRuleChanges(status: ProposalStatus | "" = "") {
   });
 }
 
-export function useRuleChange(id: number) {
-  return useQuery({ queryKey: keys.ruleChange(id), queryFn: () => getRuleChange(id) });
+export function useRuleChange(id: number, enabled = true) {
+  return useQuery({ queryKey: keys.ruleChange(id), queryFn: () => getRuleChange(id), enabled });
 }
 
 // An approved change alters the catalogue, so that is refetched too.

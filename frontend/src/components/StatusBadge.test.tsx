@@ -1,9 +1,16 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { axe } from "vitest-axe";
-import type { BatchStatus, TransactionStatus } from "@/api/types";
+import type { BatchStatus, ProposalStatus, TransactionStatus } from "@/api/types";
 import { renderWithProviders } from "@/test/render";
-import { BatchStatusBadge, StatusBadge, batchTone, statusTone } from "./StatusBadge";
+import {
+  BatchStatusBadge,
+  ProposalStatusBadge,
+  StatusBadge,
+  batchTone,
+  proposalTone,
+  statusTone,
+} from "./StatusBadge";
 
 /** The colour tone named on the badge around a status word. */
 const toneOf = (word: HTMLElement) => word.closest("[data-tone]")?.getAttribute("data-tone");
@@ -53,6 +60,21 @@ describe("StatusBadge", () => {
     }
     const { container } = renderWithProviders(<BatchStatusBadge status="OVERDUE" />);
     expect(toneOf(await screen.findByText("Overdue"))).toBe("rejected");
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("words and colours a rule change's status: open waits, withdrawn is grey", async () => {
+    const tones: Record<ProposalStatus, string> = {
+      SUBMITTED: "waiting",
+      APPROVED: "approved",
+      REJECTED: "rejected",
+      WITHDRAWN: "cancelled",
+    };
+    for (const [status, tone] of Object.entries(tones)) {
+      expect(proposalTone(status as ProposalStatus)).toBe(tone);
+    }
+    const { container } = renderWithProviders(<ProposalStatusBadge status="SUBMITTED" />);
+    expect(toneOf(await screen.findByText("Waiting for a decision"))).toBe("waiting");
     expect(await axe(container)).toHaveNoViolations();
   });
 });

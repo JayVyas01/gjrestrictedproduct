@@ -1,6 +1,6 @@
 import { Badge } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import type { BatchStatus, TransactionStatus } from "@/api/types";
+import type { BatchStatus, ProposalStatus, TransactionStatus } from "@/api/types";
 import { AWAITING_YOU_COLOR, STATUS_COLORS, type StatusTone } from "@/theme";
 
 export function statusTone(status: TransactionStatus): StatusTone {
@@ -48,6 +48,25 @@ export function BatchStatusBadge({ status }: { status: BatchStatus }) {
   return (
     <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" data-tone={tone}>
       {t(`batchStatus.${status}`)}
+    </Badge>
+  );
+}
+
+/** A rule change: open is waiting, approved green, rejected red, withdrawn grey. */
+export function proposalTone(status: ProposalStatus): StatusTone {
+  if (status === "APPROVED") return "approved";
+  if (status === "REJECTED") return "rejected";
+  if (status === "WITHDRAWN") return "cancelled";
+  return "waiting";
+}
+
+// A rule change's status, worded and coloured like a transaction's.
+export function ProposalStatusBadge({ status }: { status: ProposalStatus }) {
+  const { t } = useTranslation();
+  const tone = proposalTone(status);
+  return (
+    <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" data-tone={tone}>
+      {t(`proposalStatus.${status}`)}
     </Badge>
   );
 }

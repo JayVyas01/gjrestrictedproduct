@@ -10,7 +10,7 @@ interface AlertsDrawerControls {
 const AlertsDrawerContext = createContext<AlertsDrawerControls>({ open: () => {} });
 
 interface Props {
-  /** The signed-in role has the bell and the drawer (personnel and the Head Authority). */
+  /** The signed-in role has the bell and the drawer (personnel, the Head Authority and the Software Owner). */
   enabled: boolean;
   children: ReactNode;
 }

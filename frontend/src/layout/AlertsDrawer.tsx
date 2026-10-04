@@ -27,11 +27,15 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { COMMENT_MAX } from "@/components/ReasonPicker";
 import { Qty } from "@/components/Qty";
+import { HEAD_PATHS, OWNER_PATHS } from "@/features/overview/paths";
+import { PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
 import { ACCENT_BORDER } from "@/theme";
 
 /** Where an alert's reference links to, for roles with a transaction screen (fixed paths). */
 const TRANSACTIONS_FOR: Partial<Record<Role, string>> = {
-  PERSONNEL: "/personnel/transactions",
+  PERSONNEL: PERSONNEL_TRANSACTIONS_PATH,
+  HEAD_AUTHORITY: HEAD_PATHS.transactions,
+  SOFTWARE_OWNER: OWNER_PATHS.transactions,
 };
 
 /** A buyer-rejection pattern of 2 or more is a repeat, and is highlighted. */

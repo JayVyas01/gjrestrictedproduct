@@ -40,9 +40,34 @@ describe("AppShell", () => {
     expect(await screen.findByRole("dialog", { name: "Alerts" })).toBeInTheDocument();
   });
 
-  it("shows the bell to the Head Authority", async () => {
+  it("shows the bell and the read-only lists to the Head Authority", async () => {
     renderApp("/head", { contracts: ["me_head_authority", "home_head_authority"] });
-    expect(await screen.findByRole("button", { name: /^Alerts/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^Alerts,/ })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Home", "/head"],
+      ["Rule changes", "/rule-changes"],
+      ["Transactions", "/head/transactions"],
+      ["Batches", "/head/batches"],
+      ["Review periods", "/head/review-periods"],
+      ["Licences", "/head/licences"],
+    ]);
+  });
+
+  it("shows the bell and the read-only lists to the Software Owner", async () => {
+    renderApp("/overview", { contracts: ["me_software_owner", "home_software_owner"] });
+    expect(await screen.findByRole("button", { name: /^Alerts,/ })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Overview", "/overview"],
+      ["Transactions", "/overview/transactions"],
+      ["Batches", "/overview/batches"],
+      ["Review periods", "/overview/review-periods"],
+      ["Licences", "/overview/licences"],
+      ["Rule changes", "/rule-changes"],
+    ]);
   });
 
   it("gives a superintendent the batch and rule-change links", async () => {

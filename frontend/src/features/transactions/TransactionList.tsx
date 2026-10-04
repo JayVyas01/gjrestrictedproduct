@@ -9,7 +9,7 @@ import { Qty } from "@/components/Qty";
 import { StatusBadge } from "@/components/StatusBadge";
 
 /** Under 768 px (Mantine's `sm`) the rows become stacked cards. */
-const STACKED = "(max-width: 47.99em)";
+export const STACKED = "(max-width: 47.99em)";
 
 /** The other party for a licensee; both parties for anyone else (officers, authorities). */
 export function otherParty(t: TFunction, tx: TransactionSummary): string {

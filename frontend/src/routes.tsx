@@ -4,10 +4,12 @@ import type { Role } from "@/api/types";
 import { LandingRedirect, RequireRole } from "@/auth/RequireRole";
 import { SessionProvider } from "@/auth/SessionProvider";
 import { SignInPage } from "@/auth/SignInPage";
+import { BatchesPage } from "@/features/batches/BatchesPage";
+import { BatchPage } from "@/features/batches/BatchPage";
 import { LicenseeHomePage } from "@/features/licensee/LicenseeHomePage";
 import { LicenseeTransactionsPage } from "@/features/licensee/LicenseeTransactionsPage";
 import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
-import { PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
+import { BATCHES_PATH, PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
 import { PersonnelHomePage } from "@/features/personnel/PersonnelHomePage";
 import { PersonnelTransactionsPage } from "@/features/personnel/PersonnelTransactionsPage";
 import { NewSalePage } from "@/features/sale/NewSalePage";
@@ -67,8 +69,8 @@ export const routes: RouteObject[] = [
             P,
             <TransactionPage listPath={PERSONNEL_TRANSACTIONS_PATH} />,
           ),
-          page("personnel/batches", P, "batches"),
-          page("personnel/batches/:id", P, "batchDetail"),
+          screen("personnel/batches", P, <BatchesPage />),
+          screen("personnel/batches/:id", P, <BatchPage listPath={BATCHES_PATH} />),
           page("authority", LA, "authorityHome"),
           page("authority/licences", LA, "licences"),
           page("authority/licences/:id", LA, "licenceDetail"),

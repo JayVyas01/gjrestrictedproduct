@@ -1,6 +1,6 @@
 import { Badge } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import type { TransactionStatus } from "@/api/types";
+import type { BatchStatus, TransactionStatus } from "@/api/types";
 import { AWAITING_YOU_COLOR, STATUS_COLORS, type StatusTone } from "@/theme";
 
 export function statusTone(status: TransactionStatus): StatusTone {
@@ -29,6 +29,25 @@ export function StatusBadge({ status, awaitingYou = false }: Props) {
   return (
     <Badge color={STATUS_COLORS[statusTone(status)]} variant="filled" tt="none">
       {t(`status.${status}`)}
+    </Badge>
+  );
+}
+
+/** A batch: open is waiting, overdue red, signed green. */
+export function batchTone(status: BatchStatus): StatusTone {
+  if (status === "SIGNED") return "approved";
+  if (status === "OVERDUE") return "rejected";
+  return "waiting";
+}
+
+// A superintendent batch's status, worded and coloured like a transaction's (`data-tone` names the
+// colour for tests).
+export function BatchStatusBadge({ status }: { status: BatchStatus }) {
+  const { t } = useTranslation();
+  const tone = batchTone(status);
+  return (
+    <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" data-tone={tone}>
+      {t(`batchStatus.${status}`)}
     </Badge>
   );
 }

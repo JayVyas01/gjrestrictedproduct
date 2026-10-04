@@ -1,9 +1,12 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { axe } from "vitest-axe";
-import type { TransactionStatus } from "@/api/types";
+import type { BatchStatus, TransactionStatus } from "@/api/types";
 import { renderWithProviders } from "@/test/render";
-import { StatusBadge, statusTone } from "./StatusBadge";
+import { BatchStatusBadge, StatusBadge, batchTone, statusTone } from "./StatusBadge";
+
+/** The colour tone named on the badge around a status word. */
+const toneOf = (word: HTMLElement) => word.closest("[data-tone]")?.getAttribute("data-tone");
 
 describe("StatusBadge", () => {
   it("shows the status label", async () => {
@@ -37,5 +40,19 @@ describe("StatusBadge", () => {
   it("labels a rejection in words, not colour alone", async () => {
     renderWithProviders(<StatusBadge status="REJECTED_BY_BUYER" />);
     expect(await screen.findByText("Rejected by the buyer")).toBeInTheDocument();
+  });
+
+  it("words and colours a batch's status: open waits, overdue is red, signed green", async () => {
+    const tones: Record<BatchStatus, string> = {
+      OPEN: "waiting",
+      OVERDUE: "rejected",
+      SIGNED: "approved",
+    };
+    for (const [status, tone] of Object.entries(tones)) {
+      expect(batchTone(status as BatchStatus)).toBe(tone);
+    }
+    const { container } = renderWithProviders(<BatchStatusBadge status="OVERDUE" />);
+    expect(toneOf(await screen.findByText("Overdue"))).toBe("rejected");
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

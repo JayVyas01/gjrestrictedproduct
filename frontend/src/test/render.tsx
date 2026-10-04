@@ -1,8 +1,13 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import type { ReactElement } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { AppProviders, createQueryClient } from "@/App";
+import { routes } from "@/routes";
+import { contract, createHandlers } from "./handlers";
+import { server } from "./server";
 
 export interface RenderOptions {
   /** The URL the component is rendered at (default "/"). */
@@ -15,19 +20,51 @@ export interface RenderWithProvidersResult extends RenderResult {
   /** A user-event instance for realistic typing and clicking. */
   user: UserEvent;
   router: ReturnType<typeof createMemoryRouter>;
+  queryClient: QueryClient;
+}
+
+function renderRouter(
+  router: ReturnType<typeof createMemoryRouter>,
+): RenderWithProvidersResult {
+  const queryClient = createQueryClient();
+  const result = render(
+    <AppProviders queryClient={queryClient}>
+      <RouterProvider router={router} />
+    </AppProviders>,
+  );
+  return { ...result, user: userEvent.setup(), router, queryClient };
 }
 
 // Renders `ui` inside the app's real providers (theme, i18n, a fresh query cache)
-// and a memory router at `route`. Task 3 adds a signed-in session option.
+// and a memory router at `route`.
 export function renderWithProviders(
   ui: ReactElement,
   { route = "/", path = "*" }: RenderOptions = {},
 ): RenderWithProvidersResult {
-  const router = createMemoryRouter([{ path, element: ui }], { initialEntries: [route] });
-  const result = render(
-    <AppProviders queryClient={createQueryClient()}>
-      <RouterProvider router={router} />
-    </AppProviders>,
+  return renderRouter(createMemoryRouter([{ path, element: ui }], { initialEntries: [route] }));
+}
+
+export interface RenderAppOptions {
+  /** Contract variants to serve, e.g. ["me_personnel", "home_personnel"] for an officer. */
+  contracts?: string[];
+  /** Nobody is signed in: `me` answers 403. */
+  signedOut?: boolean;
+}
+
+/** `me` answers 403, as it does when nobody is signed in. */
+export function serveSignedOut() {
+  return http.get("/api/auth/me", () =>
+    HttpResponse.json(contract<object>("error_403_not_signed_in"), { status: 403 }),
   );
-  return { ...result, user: userEvent.setup(), router };
+}
+
+// The whole app (session, guards, shell and pages) at `route`, signed in as the person the
+// contracts describe (the licensee by default), or signed out.
+export function renderApp(
+  route = "/",
+  { contracts = [], signedOut = false }: RenderAppOptions = {},
+): RenderWithProvidersResult {
+  if (contracts.length) server.use(...createHandlers(contracts));
+  if (signedOut) server.use(serveSignedOut());
+  return renderRouter(createMemoryRouter(routes, { initialEntries: [route] }));
 }

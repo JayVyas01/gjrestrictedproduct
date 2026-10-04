@@ -1,15 +1,73 @@
-import { Container, Title } from "@mantine/core";
-import type { RouteObject } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import { Navigate, Outlet, type RouteObject } from "react-router-dom";
+import type { Role } from "@/api/types";
+import { LandingRedirect, RequireRole } from "@/auth/RequireRole";
+import { SessionProvider } from "@/auth/SessionProvider";
+import { SignInPage } from "@/auth/SignInPage";
+import { AppShell } from "@/layout/AppShell";
+import { PlaceholderPage, type PageKey } from "@/layout/PlaceholderPage";
 
-function HomePlaceholder() {
-  const { t } = useTranslation();
+function SessionRoot() {
   return (
-    <Container component="main" id="main" py="xl">
-      <Title order={1}>{t("app.name")}</Title>
-    </Container>
+    <SessionProvider>
+      <Outlet />
+    </SessionProvider>
   );
 }
 
-// The app's routes. Later tasks add sign-in, the shell and each role's screens.
-export const routes: RouteObject[] = [{ path: "*", element: <HomePlaceholder /> }];
+function page(path: string, roles: Role[], title: PageKey): RouteObject {
+  return {
+    path,
+    element: (
+      <RequireRole roles={roles}>
+        <PlaceholderPage title={title} />
+      </RequireRole>
+    ),
+  };
+}
+
+const L: Role[] = ["LICENSEE"];
+const P: Role[] = ["PERSONNEL"];
+const LA: Role[] = ["LICENSING_AUTHORITY"];
+const RULE_CHANGES: Role[] = ["LICENSING_AUTHORITY", "PERSONNEL", "HEAD_AUTHORITY"];
+
+// The app's routes: sign-in, then the shell with each role's screens behind RequireRole.
+// Placeholders stand in for the screens later tasks build.
+export const routes: RouteObject[] = [
+  {
+    element: <SessionRoot />,
+    children: [
+      { path: "/sign-in", element: <SignInPage /> },
+      {
+        path: "/",
+        element: (
+          <RequireRole>
+            <AppShell />
+          </RequireRole>
+        ),
+        children: [
+          { index: true, element: <LandingRedirect /> },
+          page("licensee", L, "licenseeHome"),
+          page("licensee/transactions", L, "licenseeTransactions"),
+          page("licensee/transactions/:reference", L, "transactionDetail"),
+          page("licensee/sale/new", L, "newSale"),
+          page("personnel", P, "personnelHome"),
+          page("personnel/transactions", P, "personnelTransactions"),
+          page("personnel/transactions/:reference", P, "transactionDetail"),
+          page("personnel/batches", P, "batches"),
+          page("personnel/batches/:id", P, "batchDetail"),
+          page("authority", LA, "authorityHome"),
+          page("authority/licences", LA, "licences"),
+          page("authority/licences/:id", LA, "licenceDetail"),
+          page("authority/licence-types", LA, "licenceTypes"),
+          page("authority/review-periods", LA, "reviewPeriods"),
+          page("head", ["HEAD_AUTHORITY"], "headHome"),
+          page("overview", ["SOFTWARE_OWNER"], "overview"),
+          page("rule-changes", RULE_CHANGES, "ruleChanges"),
+          page("rule-changes/new", RULE_CHANGES, "newRuleChange"),
+          page("rule-changes/:id", RULE_CHANGES, "ruleChangeDetail"),
+        ],
+      },
+      { path: "*", element: <Navigate to="/" replace /> },
+    ],
+  },
+];

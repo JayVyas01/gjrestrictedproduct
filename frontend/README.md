@@ -26,6 +26,8 @@ Vite runs in `--mode mock`, which reads `.env.mock` (`VITE_MOCK_API=1`). The MSW
 (`public/mockServiceWorker.js`, from `npx msw init public --save`) then answers `/api` calls from the API contracts
 in `src/test/contracts/`, the same handlers the tests use (`src/test/handlers.ts`). Pick who you are with `?as=`:
 `seller`, `buyer`, `officer`, `superintendent`, `la` or `head` (remembered for the tab; seller by default).
+You are signed in as that persona straight away; `/sign-in` also works with any user ID, password and
+6-digit code, and then lands on the persona's home.
 The worker is never part of `npm run build`: `main.tsx` imports it only in dev mock mode, and the build drops
 `mockServiceWorker.js` from `dist/`.
 

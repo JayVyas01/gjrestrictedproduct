@@ -1,14 +1,15 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { axe } from "vitest-axe";
 import { App } from "./App";
 
 describe("App", () => {
-  it("renders the app name", async () => {
+  it("renders the app name and, signed in, the role's home", async () => {
     render(<App />);
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Gujarat Restricted Goods" }),
-    ).toBeInTheDocument();
+    const banner = await screen.findByRole("banner");
+    expect(within(banner).getByText("Gujarat Restricted Goods")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Home" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/licensee");
   });
 
   it("has no accessibility violations", async () => {

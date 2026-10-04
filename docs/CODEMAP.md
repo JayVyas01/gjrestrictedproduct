@@ -4,7 +4,7 @@
 
 **Keep it current:** every pull request that adds, removes or changes code or tests updates this file in the same pull request. A reviewer should reject a code PR that leaves this map stale.
 
-**Last updated:** 2026-10-04, D3 Task 2 (backend 529 tests, frontend 85 tests): API contracts captured from the real backend (`tests/test_api_contracts.py` → `frontend/src/test/contracts/`), the typed API client (CSRF, error mapping, session expiry), endpoint modules and TanStack Query hooks, contract-backed MSW handlers and mock mode. Before that, D3 Task 1: web app scaffold in `frontend/` (Vite, React 18, Mantine 7, i18n, Vitest with MSW and axe), `frontend` CI job, CodeQL for JavaScript/TypeScript, Dependabot for npm. Before that, D2d: maker-checker rule changes (`governance` app), catalogue reads for drafting forms, licence register and review-settings APIs.
+**Last updated:** 2026-10-04, D3 Task 3 (backend 529 tests, frontend 113 tests): sign-in with a one-time code (`auth/SignInPage`), `SessionProvider` (sign-out and session expiry clear the query cache and `gj.draft.*` drafts), `RequireRole` guards and role landing routes, and the app shell (navy header, role navigation with a burger under 768 px, bell and alerts drawer stub, skip link), with placeholder pages for the screens later tasks build. Before that, D3 Task 2: API contracts captured from the real backend (`tests/test_api_contracts.py` → `frontend/src/test/contracts/`), the typed API client (CSRF, error mapping, session expiry), endpoint modules and TanStack Query hooks, contract-backed MSW handlers and mock mode. Before that, D3 Task 1: web app scaffold in `frontend/` (Vite, React 18, Mantine 7, i18n, Vitest with MSW and axe), `frontend` CI job, CodeQL for JavaScript/TypeScript, Dependabot for npm. Before that, D2d: maker-checker rule changes (`governance` app), catalogue reads for drafting forms, licence register and review-settings APIs.
 
 ---
 
@@ -234,7 +234,16 @@ Paths are relative to `frontend/`. Stack: React 18, TypeScript (strict), Vite 6,
 | `.env.mock` | `VITE_MOCK_API=1`, read only in `--mode mock` (not a secret) | — | — |
 | `index.html`, `src/main.tsx` | Page shell (`lang="en"`) and mounting `<App />` in `StrictMode`; in mock mode only (`import.meta.env.DEV` and `VITE_MOCK_API === "1"`) it first starts the MSW worker through a dynamic import, so MSW never reaches `vite build` | — | `npm run build` (no `msw` in `dist/`) |
 | `src/App.tsx` | All providers: `MantineProvider` (theme and page background), `Notifications`, `QueryClientProvider` (retry 1, no refetch on window focus) and the browser router | `App`, `AppProviders`, `createQueryClient` | `App.test.tsx` |
-| `src/routes.tsx` | The route table; for now a placeholder home that shows the app name in a `<main>` | `routes` | `App.test.tsx` |
+| `src/routes.tsx` | The route table: everything inside `SessionProvider`; `/sign-in`; `/` is the shell behind `RequireRole` (any signed-in user) with `/` redirecting to the role's home and each screen behind `RequireRole roles=[...]` (`/licensee/*` licensee, `/personnel/*` personnel, `/authority/*` Licensing Authority, `/head` Head Authority, `/overview` Software Owner, `/rule-changes/*` Licensing Authority, personnel and Head); unknown paths go to `/`. Screens later tasks build are `PlaceholderPage`s for now | `routes` | `RequireRole.test.tsx`, `App.test.tsx` |
+| `src/auth/session.ts` | The fixed role → landing table (never a path from input or the server: no `?next=`), the expiry path `/sign-in?expired=1`, `clearDrafts()` (removes every `gj.draft.*` key from `sessionStorage`, other keys stay), `holdsDistrictPosition` | `LANDING`, `landingFor`, `EXPIRED_PATH`, `clearDrafts`, `holdsDistrictPosition` | `SessionProvider.test.tsx`, `RequireRole.test.tsx` |
+| `src/auth/SessionProvider.tsx` | Who is signed in (`useMe`; in mock mode the persona's `me_*` contract), `loading` until `me` answers, `signOut()` (`POST /api/auth/logout`, then ends the session even if that failed) and the client's expiry handler; ending a session clears the query cache and drafts and navigates to `/sign-in` (or `/sign-in?expired=1` on expiry) | `SessionProvider`, `useSession`, `Session` | `SessionProvider.test.tsx` |
+| `src/auth/RequireRole.tsx` | Route guard: a loader while `me` is loading, signed-out visitors to `/sign-in`, the wrong role to its own home; `LandingRedirect` for `/` | `RequireRole`, `LandingRedirect` | `RequireRole.test.tsx` |
+| `src/auth/SignInPage.tsx`, `PasswordStep.tsx`, `CodeStep.tsx`, `signInError.ts` | Sign-in in two steps; the challenge ID stays in component state (never the URL). Step 1: user ID and password (`POST /api/auth/login`), required-field errors linked to the fields. Step 2: the six-digit code in a `PinInput` (paste works; focus moves to the first digit; a fixed `id` keeps the inputs from being re-created), `POST /api/auth/login/verify`, then the landing route for the returned role after `me` is refetched; "Send a new code" goes back to step 1 keeping the user ID. Errors: 401 on the code step "That code didn't match…", 429 "Too many tries…", 5xx "Something went wrong…", otherwise the server's `detail` (e.g. "Invalid credentials"). `?expired=1` shows the expiry notice as `role="status"` | `SignInPage`, `PasswordStep`, `CodeStep`, `signInError` | `SignInPage.test.tsx` |
+| `src/layout/AppShell.tsx` | Mantine `AppShell`: navy header (app name, `display_name` and role label, the bell for PERSONNEL and HEAD_AUTHORITY only, Sign out), the role's navigation (burger under 768 px, closes on navigating), the skip link and the page in `<main id="main">` | `AppShell` | `AppShell.test.tsx` |
+| `src/layout/navigation.ts`, `NavLinks.tsx`, `NavLinks.module.css` | Each role's links (fixed paths; batches and rule changes only for personnel holding a district or state position); React Router marks the current link `aria-current="page"` | `navItems`, `NavItem`, `NavLinks` | `AppShell.test.tsx` |
+| `src/layout/Bell.tsx`, `AlertsDrawer.tsx` | The bell: `home.counts.unacknowledged_alerts` (polled with home) in a saffron indicator, labelled "Alerts, N unacknowledged"; opens `AlertsDrawer`, a stub Task 7 fills | `Bell`, `AlertsDrawer` | `AppShell.test.tsx` |
+| `src/layout/SkipLink.tsx`, `SkipLink.module.css` | "Skip to main content" link to `#main`, off screen until focused | `SkipLink` | `AppShell.test.tsx` |
+| `src/layout/PlaceholderPage.tsx` | A titled "being built" page for routes later tasks fill, so they exist and are guarded now | `PlaceholderPage`, `PageKey` | `RequireRole.test.tsx` |
 | `src/theme.ts` | Design W2, the only place for colours: `navy` 10-shade palette as the primary colour (brand shade 6, `#1B365D`), `saffron` for attention only, page `#F5F7FA` (`cssVariablesResolver`), radius `sm`, system font stack, `autoContrast` for readable text on saffron | `theme`, `cssVariablesResolver`, `STATUS_COLORS`, `StatusTone`, `NAVY`, `SAFFRON`, `PAGE_BACKGROUND` | `App.test.tsx` (axe) |
 | `src/i18n/index.ts`, `src/i18n/en.json`, `src/i18n/i18next.d.ts` | i18next with English only, no detection, `escapeValue: false` (React escapes); every user-visible string is a key in `en.json`; `t()` keys are type-checked | `resources`, `defaultNS` | `App.test.tsx`, `render.test.tsx` |
 | `src/test/setup.ts` | jest-dom and `vitest-axe` matchers; the MSW server with `onUnhandledRequest: "error"` (reset after each test); clears `sessionStorage`, the CSRF cookie and the client's state (`resetClientState`); `matchMedia`, `ResizeObserver`, `scrollIntoView` and canvas stubs for Mantine and axe in jsdom | — | every test |
@@ -247,7 +256,7 @@ Paths are relative to `frontend/`. Stack: React 18, TypeScript (strict), Vite 6,
 | `src/api/auth.ts`, `home.ts`, `transactions.ts`, `alerts.ts`, `oversight.ts`, `licensing.ts`, `catalogue.ts`, `governance.ts` | Typed functions, one per endpoint. GSTINs, transport details and codes travel only in POST bodies, except the register's exact GSTIN search, which the backend offers only as a GET query (`searchRegister`) | `startLogin`, `verifyLogin`, `logout`, `getMe`, `getHome`, `listTransactions`, `getTransaction`, `checkSale`, `lookupBuyer`, `startSale`, `requestDecisionCode`, `decideTransaction`, `cancelTransaction`, `listAlerts`, `acknowledgeAlert`, `listBatches`, `getBatch`, `flagItem`, `requestSignOffCode`, `signOff`, `listReviewSettings`, `saveReviewSetting`, `myLicences`, `myStock`, `searchRegister`, `getLicence`, `listSubstances`, `listClasses`, `listLicenceTypes`, `listApprovalThresholds`, `listReasonCodes`, `listRuleChanges`, `getRuleChange`, `draftRuleChange`, `withdrawRuleChange`, `requestRuleChangeCode`, `decideRuleChange` | `hooks.test.tsx`, `client.test.ts` |
 | `src/api/hooks/keys.ts` | Every query key as a constant (keys with arguments start with their area's key, so invalidating the area refreshes all of them); `POLL_MS` (30 s, W7); `invalidate(client, ...keys)` always adds `["home"]` | `keys`, `POLL_MS`, `invalidate` | `hooks.test.tsx` |
 | `src/api/hooks/*.ts` | TanStack Query hooks per area. `useHome` and `useAlerts` poll every 30 s. Mutations store the returned object in its detail key, then invalidate the related lists and home (a decision also alerts; a flag also alerts; an approved rule change also the catalogue); `useLogout` clears the cache. The catalogue is kept fresh for 5 minutes | `useMe`, `useStartLogin`, `useVerifyLogin`, `useLogout`, `useHome`, `useTransactions`, `useTransaction`, `useCheckSale`, `useLookupBuyer`, `useStartSale`, `useRequestDecisionCode`, `useDecideTransaction`, `useCancelTransaction`, `useAlerts`, `useAcknowledgeAlert`, `useBatches`, `useBatch`, `useFlagItem`, `useRequestSignOffCode`, `useSignOff`, `useReviewSettings`, `useSaveReviewSetting`, `useMyLicences`, `useMyStock`, `useRegister`, `useLicence`, `useSubstances`, `useClasses`, `useLicenceTypes`, `useApprovalThresholds`, `useReasonCodes`, `useRuleChanges`, `useRuleChange`, `useDraftRuleChange`, `useWithdrawRuleChange`, `useRequestRuleChangeCode`, `useDecideRuleChange` | `hooks.test.tsx` |
-| `src/test/render.tsx` | `renderWithProviders(ui, {route, path})`: the real providers, a fresh query cache and a memory router; returns a `user` (user-event) and the `router` | `renderWithProviders` | `render.test.tsx` |
+| `src/test/render.tsx` | `renderWithProviders(ui, {route, path})`: the real providers, a fresh query cache and a memory router; `renderApp(route, {contracts, signedOut})`: the whole route table (session, guards, shell) signed in as the contracts' person (licensee by default) or signed out; `serveSignedOut()` makes `me` answer 403. Both return a `user` (user-event), the `router` and the `queryClient` | `renderWithProviders`, `renderApp`, `serveSignedOut` | `render.test.tsx`, the auth and layout tests |
 | `src/test/vitest-axe.d.ts` | Declares `toHaveNoViolations` on Vitest's `Assertion` (vitest-axe 0.1.0 only types the legacy `Vi` namespace) | — | `npm run typecheck` |
 
 ### Repository, CI and local setup
@@ -870,7 +879,7 @@ Run all: `cd frontend && npm test`. Run one: `npx vitest run src/App.test.tsx`. 
 
 | Test | Proves |
 |---|---|
-| `renders the app name` | The app mounts with all providers and shows "Gujarat Restricted Goods" as the level-1 heading (from `en.json`) |
+| `renders the app name and, signed in, the role's home` | The app mounts with all providers and the browser router, shows "Gujarat Restricted Goods" in the header and sends the (mock) licensee from `/` to `/licensee` |
 | `has no accessibility violations` | axe finds no violations on the rendered app |
 
 #### `src/test/render.test.tsx`: the test render helper
@@ -920,6 +929,46 @@ Run all: `cd frontend && npm test`. Run one: `npx vitest run src/App.test.tsx`. 
 | `every persona names captured contracts` | Each `?as=` persona uses existing contracts |
 | `?as= picks the persona and keeps it for the tab; seller by default` | Persona selection, its `sessionStorage` memory and the default |
 | `the officer persona is answered as the officer` | `createHandlers(PERSONAS.officer)` serves `me_personnel` |
+
+#### `src/auth/SignInPage.test.tsx`: signing in
+
+| Test | Proves |
+|---|---|
+| `signs in with a password and a pasted code, then lands on the role's home` | The full flow with MSW: the exact login and verify bodies, focus on the first digit after step 1, a pasted code, `me` refetched, then `/licensee` with the user's name in the header |
+| `asks for both fields before calling the server` | Required-field errors are linked to their fields (accessible description) |
+| `a wrong password shows the server's detail` | A 401 on step 1 shows "Invalid credentials" as sent |
+| `too many tries shows the wait text` | A 429 shows "Too many tries. Wait a minute and try again." |
+| `a wrong code shows the 401 text, and Send a new code goes back to step 1` | A 401 on step 2 shows "That code didn't match…", the user stays on sign-in; going back keeps the user ID and clears the password |
+| `shows the session-expired notice after ?expired=1`, `has no expiry notice on a plain visit` | The notice appears (`role="status"`) only after expiry |
+| `has no accessibility violations on either step` | axe passes on both steps |
+
+#### `src/auth/SessionProvider.test.tsx`: sign-out and session expiry
+
+| Test | Proves |
+|---|---|
+| `signing out calls the server, clears drafts and the cache, and goes to sign-in` | `POST /api/auth/logout` is sent, `gj.draft.sale` is removed (other keys stay), the query cache is empty, and the user is on `/sign-in` without the expiry notice |
+| `when the session ends, clears drafts and the cache and shows the expiry notice` | A 403 whose `me` check also fails (client expiry handler) clears the draft and the cache and lands on `/sign-in?expired=1` with the notice |
+
+#### `src/auth/RequireRole.test.tsx`: landing and guards
+
+| Test | Proves |
+|---|---|
+| `the <role> lands on their home` (6 cases) | `/` sends licensee → `/licensee`, officer and superintendent → `/personnel`, Licensing Authority → `/authority`, Head Authority → `/head`, Software Owner → `/overview` |
+| `sends a signed-out visitor to sign-in, without an expiry notice` | A guarded page without a session goes to `/sign-in` (no `?expired`, no `?next=`) |
+| `sends the wrong role to their own home` | A licensee at `/authority/licences` lands on `/licensee` |
+| `lets a role shared screen through (rule changes for personnel)` | `/rule-changes` is open to personnel |
+| `sends an unknown path home` | Unknown paths go to `/`, then the role's home |
+
+#### `src/layout/AppShell.test.tsx`: the app shell
+
+| Test | Proves |
+|---|---|
+| `shows the app name, who is signed in, a skip link and the licensee's links` | Header content, the skip link to `#main`, `<main id="main">`, the licensee's links in order with the current one marked |
+| `has no bell for a licensee`, `shows the bell to the Head Authority` | The bell only for personnel and the Head Authority |
+| `shows the bell with the unacknowledged count to personnel and opens the drawer` | The count from `home` in the bell's name; clicking opens the Alerts drawer |
+| `gives a superintendent the batch and rule-change links`, `gives an area officer no batch links` | Navigation follows the positions held |
+| `has a burger to open the navigation on small screens` | The burger is there (shown under 768 px) |
+| `has no accessibility violations` | axe passes on the shell with the bell |
 
 ---
 

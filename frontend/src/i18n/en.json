@@ -10,5 +10,75 @@
     "continue": "Continue",
     "close": "Close",
     "skipToContent": "Skip to main content"
+  },
+  "errors": {
+    "wrongCode": "That code didn't match. Check the SMS or send a new code.",
+    "tooManyTries": "Too many tries. Wait a minute and try again.",
+    "somethingWrong": "Something went wrong. Try again."
+  },
+  "signIn": {
+    "title": "Sign in",
+    "userId": "User ID",
+    "password": "Password",
+    "userIdRequired": "Enter your user ID.",
+    "passwordRequired": "Enter your password.",
+    "codeIntro": "Enter the 6-digit code we sent by SMS to your registered mobile number.",
+    "code": "One-time code",
+    "codeDigit": "Digit {{position}} of 6",
+    "codeIncomplete": "Enter all 6 digits.",
+    "submit": "Sign in",
+    "newCode": "Send a new code",
+    "expired": "Your session ended after 15 minutes without activity. Sign in again."
+  },
+  "session": {
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as"
+  },
+  "roles": {
+    "LICENSEE": "Licensee",
+    "PERSONNEL": "Personnel",
+    "LICENSING_AUTHORITY": "Licensing Authority",
+    "HEAD_AUTHORITY": "Head Authority",
+    "SOFTWARE_OWNER": "Software Owner"
+  },
+  "nav": {
+    "label": "Main navigation",
+    "openMenu": "Open navigation",
+    "closeMenu": "Close navigation",
+    "home": "Home",
+    "transactions": "Transactions",
+    "newSale": "New sale",
+    "batches": "Batches",
+    "ruleChanges": "Rule changes",
+    "licences": "Licences",
+    "licenceTypes": "Licence types",
+    "reviewPeriods": "Review periods",
+    "overview": "Overview"
+  },
+  "alerts": {
+    "title": "Alerts",
+    "bell": "Alerts, {{number}} unacknowledged",
+    "comingSoon": "The alert list appears here."
+  },
+  "pages": {
+    "comingSoon": "This screen is being built.",
+    "licenseeHome": "Home",
+    "licenseeTransactions": "Transactions",
+    "transactionDetail": "Transaction",
+    "newSale": "New sale",
+    "personnelHome": "Home",
+    "personnelTransactions": "Transactions",
+    "batches": "Batches",
+    "batchDetail": "Batch",
+    "authorityHome": "Home",
+    "licences": "Licences",
+    "licenceDetail": "Licence",
+    "licenceTypes": "Licence types",
+    "reviewPeriods": "Review periods",
+    "headHome": "Home",
+    "overview": "Overview",
+    "ruleChanges": "Rule changes",
+    "newRuleChange": "New rule change",
+    "ruleChangeDetail": "Rule change"
   }
 }

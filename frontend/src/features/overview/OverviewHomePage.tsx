@@ -1,10 +1,11 @@
-import { Anchor, Button, Card, Group, Loader, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Button, Card, Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useHome } from "@/api/hooks/home";
 import { useSession } from "@/auth/SessionProvider";
 import { ActionButton, type CardAction } from "@/components/Action";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Section } from "@/components/Section";
 import { WhatsNextCard } from "@/components/WhatsNextCard";
 import { RULE_CHANGES_PATH } from "@/features/governance/paths";
@@ -20,7 +21,7 @@ function WhatsNext({ paths }: { paths: OverviewPaths }) {
   const { t } = useTranslation();
   const home = useHome();
   const drawer = useAlertsDrawer();
-  if (home.isPending) return <Loader size="sm" role="status" aria-label={t("common.loading")} />;
+  if (home.isPending) return <LoadingSkeleton />;
   if (home.isError) return <ErrorNotice error={home.error} />;
 
   const counts = home.data.counts;

@@ -77,4 +77,19 @@ describe("StatusBadge", () => {
     expect(toneOf(await screen.findByText("Waiting for a decision"))).toBe("waiting");
     expect(await axe(container)).toHaveNoViolations();
   });
+
+  it("keeps the whole word: a badge in a narrow cell never cuts the status short", async () => {
+    renderWithProviders(
+      <>
+        <StatusBadge status="AWAITING_SUPERINTENDENT" />
+        <StatusBadge status="AWAITING_OFFICER" awaitingYou />
+        <BatchStatusBadge status="OPEN" />
+        <ProposalStatusBadge status="SUBMITTED" />
+      </>,
+    );
+    await screen.findByText("Waiting for a decision");
+    const badges = document.querySelectorAll<HTMLElement>(".mantine-Badge-root");
+    expect(badges).toHaveLength(4);
+    badges.forEach((badge) => expect(badge).toHaveStyle({ minWidth: "max-content" }));
+  });
 });

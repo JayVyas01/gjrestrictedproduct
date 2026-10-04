@@ -1,4 +1,4 @@
-import { Button, Loader, Stack, Table, Text, Title } from "@mantine/core";
+import { Button, Stack, Table, Text, Title } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useReviewSettings } from "@/api/hooks/oversight";
@@ -6,6 +6,7 @@ import type { ReviewSetting } from "@/api/types";
 import { DateText } from "@/components/DateText";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ReviewPeriodDialog } from "./ReviewPeriodDialog";
 
 interface Props {
@@ -33,7 +34,7 @@ export function ReviewPeriodsPage({ readOnly = false }: Props) {
       <Text>{t("reviewPeriods.intro")}</Text>
       {readOnly && <Text c="dimmed">{t("reviewPeriods.readOnly")}</Text>}
       {settings.isPending ? (
-        <Loader role="status" aria-label={t("common.loading")} />
+        <LoadingSkeleton />
       ) : settings.isError ? (
         <ErrorNotice error={settings.error} />
       ) : settings.data.length === 0 ? (

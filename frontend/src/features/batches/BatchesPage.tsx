@@ -1,10 +1,11 @@
-import { Anchor, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useBatches } from "@/api/hooks/oversight";
 import { formatDate } from "@/components/DateText";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { BatchStatusBadge } from "@/components/StatusBadge";
 import { BATCHES_PATH } from "@/features/personnel/paths";
 import { batchCounts, batchPeriod, signedLine } from "./period";
@@ -25,7 +26,7 @@ export function BatchesPage({ basePath = BATCHES_PATH }: Props) {
     <Stack>
       <Title order={1}>{t("pages.batches")}</Title>
       {batches.isPending ? (
-        <Loader role="status" aria-label={t("common.loading")} />
+        <LoadingSkeleton />
       ) : batches.isError ? (
         <ErrorNotice error={batches.error} />
       ) : batches.data.length === 0 ? (

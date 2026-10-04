@@ -3,6 +3,10 @@ import { useTranslation } from "react-i18next";
 import type { BatchStatus, ProposalStatus, TransactionStatus } from "@/api/types";
 import { AWAITING_YOU_COLOR, STATUS_COLORS, type StatusTone } from "@/theme";
 
+/** A status badge keeps its whole word: in a narrow table cell it widens the cell instead of
+ * cutting the status off with an ellipsis. */
+const WHOLE_WORD = { miw: "max-content" } as const;
+
 export function statusTone(status: TransactionStatus): StatusTone {
   if (status === "APPROVED") return "approved";
   if (status === "CANCELLED") return "cancelled";
@@ -21,13 +25,13 @@ export function StatusBadge({ status, awaitingYou = false }: Props) {
   const { t } = useTranslation();
   if (awaitingYou) {
     return (
-      <Badge color={AWAITING_YOU_COLOR} variant="filled" tt="none">
+      <Badge color={AWAITING_YOU_COLOR} variant="filled" tt="none" {...WHOLE_WORD}>
         {t("status.awaitingYou")}
       </Badge>
     );
   }
   return (
-    <Badge color={STATUS_COLORS[statusTone(status)]} variant="filled" tt="none">
+    <Badge color={STATUS_COLORS[statusTone(status)]} variant="filled" tt="none" {...WHOLE_WORD}>
       {t(`status.${status}`)}
     </Badge>
   );
@@ -46,7 +50,7 @@ export function BatchStatusBadge({ status }: { status: BatchStatus }) {
   const { t } = useTranslation();
   const tone = batchTone(status);
   return (
-    <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" data-tone={tone}>
+    <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" {...WHOLE_WORD} data-tone={tone}>
       {t(`batchStatus.${status}`)}
     </Badge>
   );
@@ -65,7 +69,7 @@ export function ProposalStatusBadge({ status }: { status: ProposalStatus }) {
   const { t } = useTranslation();
   const tone = proposalTone(status);
   return (
-    <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" data-tone={tone}>
+    <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" {...WHOLE_WORD} data-tone={tone}>
       {t(`proposalStatus.${status}`)}
     </Badge>
   );

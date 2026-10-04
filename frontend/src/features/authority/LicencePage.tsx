@@ -1,18 +1,19 @@
-import { Anchor, Card, Loader, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
+import { Anchor, Card, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "@/api/client";
 import { useLicence } from "@/api/hooks/licensing";
-import type { LicenceCard, LicenceDetail } from "@/api/types";
+import type { LicenceDetail } from "@/api/types";
 import { DateText } from "@/components/DateText";
 import { ErrorNotice } from "@/components/ErrorNotice";
-import { PermissionCard } from "@/components/PermissionCard";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { PermissionCard, type PermissionCardLicence } from "@/components/PermissionCard";
 import { Section } from "@/components/Section";
 import { LICENCES_PATH } from "./paths";
 
 /** The permissions card's view of a register entry. */
-function cardOf(licence: LicenceDetail): LicenceCard {
+function cardOf(licence: LicenceDetail): PermissionCardLicence {
   return {
     licence_number: licence.licence_number,
     holder_name: licence.holder_name,
@@ -109,7 +110,7 @@ export function LicencePage({ listPath = LICENCES_PATH }: Props) {
           ) : licence.isError ? (
             <ErrorNotice error={licence.error} />
           ) : (
-            <Loader role="status" aria-label={t("common.loading")} />
+            <LoadingSkeleton />
           )}
         </>
       )}

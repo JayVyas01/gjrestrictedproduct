@@ -211,8 +211,9 @@ def test_detail_has_periods_and_permissions_but_no_contact_or_stock(
         "may_transport": False,
         "max_stock_qty": "1000.000",
         "max_per_transaction_qty": "500.000",
-        # What the permissions card needs as well: the unit and the current period.
-        "unit": None,
+        # What the permissions card needs as well: the unit (the class's, for a class
+        # licence) and the current period.
+        "unit": "L",
         "trading_permitted": True,
         "valid_from": "2026-01-01",
         "valid_to": "2047-12-31",

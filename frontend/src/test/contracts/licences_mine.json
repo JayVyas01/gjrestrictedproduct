@@ -9,9 +9,10 @@
     "may_sell": true,
     "may_transport": false,
     "scope": "Spirits",
+    "scope_kind": "class",
     "status": "ACTIVE",
     "trading_permitted": true,
-    "unit": null,
+    "unit": "L",
     "valid_from": "2026-01-01",
     "valid_to": "2047-12-31"
   }

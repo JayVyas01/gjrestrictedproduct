@@ -124,6 +124,9 @@ const GUARDS: Record<string, Guard> = {
     keys: [
       "licence_number",
       "holder_name",
+      "scope",
+      "scope_kind",
+      "unit",
       "status",
       "valid_to",
       "trading_permitted",

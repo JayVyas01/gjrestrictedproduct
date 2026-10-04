@@ -41,6 +41,7 @@ def test_licensee_sees_own_licence_card(app_db, client, catalogue, make_licence,
     assert card["licence_type"] == "Retail"
     assert card["scope"] == "Whisky"
     assert card["unit"] == "L"
+    assert card["scope_kind"] == "substance"
     assert card["may_sell"] is True
     assert card["max_per_transaction_qty"] == "500.000"
     assert card["valid_from"] == "2026-01-01" and card["valid_to"] == "2047-12-31"
@@ -49,6 +50,7 @@ def test_licensee_sees_own_licence_card(app_db, client, catalogue, make_licence,
         "holder_name",
         "licence_type",
         "scope",
+        "scope_kind",
         "unit",
         "status",
         "valid_from",
@@ -60,6 +62,19 @@ def test_licensee_sees_own_licence_card(app_db, client, catalogue, make_licence,
         "max_stock_qty",
         "max_per_transaction_qty",
     }
+
+
+def test_class_licence_card_carries_the_class_unit(
+    app_db, client, catalogue, make_licence, otp_outbox
+):
+    licence = make_licence(substance_class=catalogue.spirits)
+    log_in(client, licensee_for(licence), otp_outbox)
+
+    (card,) = client.get("/api/licences/mine").json()
+    assert card["scope"] == "Spirits"
+    assert card["scope_kind"] == "class"
+    # A class shares one unit, so its limits show with it (catalogue.service.class_unit).
+    assert card["unit"] == "L"
 
 
 @pytest.mark.parametrize("role", [Role.PERSONNEL, Role.LICENSING_AUTHORITY, Role.HEAD_AUTHORITY])

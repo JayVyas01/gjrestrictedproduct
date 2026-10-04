@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   NativeSelect,
   Pagination,
   Radio,
@@ -23,6 +22,7 @@ import type { LicenceRegister, LicenceStatus } from "@/api/types";
 import { DateText } from "@/components/DateText";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ALLOWED_COLOR, NOT_ALLOWED_COLOR } from "@/theme";
 import { LICENCES_PATH } from "./paths";
 
@@ -238,7 +238,7 @@ export function LicencesPage({ basePath = LICENCES_PATH }: Props) {
         }}
       />
       {register.isPending ? (
-        <Loader role="status" aria-label={t("common.loading")} />
+        <LoadingSkeleton />
       ) : register.isError ? (
         <ErrorNotice error={register.error} />
       ) : register.data.count === 0 ? (

@@ -1,10 +1,11 @@
-import { Anchor, Button, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
+import { Anchor, Button, Group, Stack, Table, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useHome } from "@/api/hooks/home";
 import { useMyLicences, useMyStock } from "@/api/hooks/licensing";
 import { useTransactions } from "@/api/hooks/transactions";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { PermissionCard } from "@/components/PermissionCard";
 import { Loaded, Section } from "@/components/Section";
 import { Qty } from "@/components/Qty";
@@ -17,7 +18,7 @@ const RECENT = 5;
 function WhatsNext() {
   const { t } = useTranslation();
   const home = useHome();
-  if (home.isPending) return <Loader size="sm" role="status" aria-label={t("common.loading")} />;
+  if (home.isPending) return <LoadingSkeleton />;
   if (home.isError) return <ErrorNotice error={home.error} />;
   const waiting = home.data.counts.awaiting_your_decision ?? 0;
   return waiting > 0 ? (

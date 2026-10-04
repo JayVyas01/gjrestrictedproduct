@@ -1,4 +1,4 @@
-import { Alert, Anchor, Card, Loader, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Alert, Anchor, Card, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
@@ -8,6 +8,7 @@ import type { Me, RuleChange } from "@/api/types";
 import { useSession } from "@/auth/SessionProvider";
 import { DateText } from "@/components/DateText";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ProposalStatusBadge } from "@/components/StatusBadge";
 import { Comparison } from "./Comparison";
 import { drafterText } from "./drafting";
@@ -130,7 +131,7 @@ export function RuleChangePage() {
           ) : change.isError ? (
             <ErrorNotice error={change.error} />
           ) : (
-            <Loader role="status" aria-label={t("common.loading")} />
+            <LoadingSkeleton />
           )}
         </>
       )}

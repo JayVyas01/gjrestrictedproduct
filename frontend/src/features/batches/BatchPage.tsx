@@ -1,4 +1,4 @@
-import { Anchor, Button, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Button, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,6 +8,7 @@ import type { BatchDetail, BatchItem } from "@/api/types";
 import { CodeDialog } from "@/components/CodeDialog";
 import { formatDate } from "@/components/DateText";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Section } from "@/components/Section";
 import { BatchStatusBadge } from "@/components/StatusBadge";
 import { BatchItems } from "./BatchItems";
@@ -105,7 +106,7 @@ export function BatchPage({ listPath, readOnly = false }: Props) {
       {batch.isPending ? (
         <>
           <Title order={1}>{t("pages.batchDetail")}</Title>
-          <Loader role="status" aria-label={t("common.loading")} />
+          <LoadingSkeleton />
         </>
       ) : batch.isError ? (
         <>

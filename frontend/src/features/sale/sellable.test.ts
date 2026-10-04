@@ -4,7 +4,7 @@ import { contract } from "@/test/handlers";
 import { sellableSubstances } from "./sellable";
 
 const SUBSTANCES = contract<Substance[]>("catalogue_substances"); // Rum and Whisky, class Spirits
-// Scope Spirits, unit null.
+// Scope Spirits, scope_kind "class", unit L (the class's unit).
 const CLASS_LICENCE = contract<LicenceCard[]>("licences_mine")[0] as LicenceCard;
 
 const codes = (licences: LicenceCard[]) =>
@@ -16,11 +16,18 @@ describe("sellableSubstances", () => {
   });
 
   it("a substance licence covers only that substance", () => {
-    expect(codes([{ ...CLASS_LICENCE, scope: "Whisky", unit: "L" }])).toEqual(["WHISKY"]);
+    expect(codes([{ ...CLASS_LICENCE, scope: "Whisky", scope_kind: "substance" }])).toEqual([
+      "WHISKY",
+    ]);
   });
 
   it("a substance licence does not cover a class of the same name", () => {
-    expect(codes([{ ...CLASS_LICENCE, scope: "Spirits", unit: "L" }])).toEqual([]);
+    expect(codes([{ ...CLASS_LICENCE, scope: "Spirits", scope_kind: "substance" }])).toEqual([]);
+  });
+
+  it("reads the scope kind, not the unit: a class licence has its class's unit", () => {
+    expect(CLASS_LICENCE.unit).toBe("L");
+    expect(codes([{ ...CLASS_LICENCE, unit: null }])).toEqual(["RUM", "WHISKY"]);
   });
 
   it("skips licences that may not sell, are not trading today, or are not active", () => {

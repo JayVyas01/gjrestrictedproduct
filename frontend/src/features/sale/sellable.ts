@@ -6,11 +6,11 @@ function sellsToday(licence: LicenceCard): boolean {
 }
 
 /**
- * Does `licence` cover `substance`? The card names its scope: a substance licence has the
- * substance's unit and names the substance; a class licence has no unit and names the class.
+ * Does `licence` cover `substance`? The card names its scope and says what kind it is: a
+ * substance licence names the substance, a class licence names the class.
  */
 function covers(licence: LicenceCard, substance: Substance): boolean {
-  return licence.unit !== null
+  return licence.scope_kind === "substance"
     ? licence.scope === substance.name
     : licence.scope === substance.substance_class;
 }

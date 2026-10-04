@@ -162,7 +162,7 @@ describe("NewSalePage", () => {
       const whiskyOnly: LicenceCard = {
         ...(contract<LicenceCard[]>("licences_mine")[0] as LicenceCard),
         scope: "Whisky",
-        unit: "L",
+        scope_kind: "substance",
       };
       server.use(http.get("/api/licences/mine", () => HttpResponse.json([whiskyOnly])));
       const { user } = await open();

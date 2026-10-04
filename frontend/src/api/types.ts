@@ -121,6 +121,9 @@ export interface LicenceCard {
   holder_name: string;
   licence_type: string;
   scope: string;
+  /** Whether `scope` names a substance or a class. */
+  scope_kind: ScopeKind;
+  /** The substance's unit, or the class's shared unit (null only for a class with no substances). */
   unit: string | null;
   status: LicenceStatus;
   valid_from: string | null;

@@ -1,7 +1,7 @@
-import { Loader, Stack, Title } from "@mantine/core";
+import { Stack, Title } from "@mantine/core";
 import { useId, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import { ErrorNotice } from "./ErrorNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 
 // A titled page section (a region named by its heading), as on the home pages.
 export function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -23,8 +23,7 @@ interface LoadedProps<T> {
 
 /** Loading, a failure, or the content of a query-backed section. */
 export function Loaded<T>({ query, children }: LoadedProps<T>) {
-  const { t } = useTranslation();
-  if (query.isPending) return <Loader size="sm" role="status" aria-label={t("common.loading")} />;
+  if (query.isPending) return <LoadingSkeleton lines={2} />;
   if (query.isError || query.data === undefined) return <ErrorNotice error={query.error} />;
   return <>{children(query.data)}</>;
 }

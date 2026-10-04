@@ -1,10 +1,11 @@
-import { Loader, Stack, Tabs, Title } from "@mantine/core";
+import { Stack, Tabs, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useTransactions } from "@/api/hooks/transactions";
 import type { TransactionFilters } from "@/api/transactions";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TransactionList } from "@/features/transactions/TransactionList";
 import { NEW_SALE_PATH, TRANSACTIONS_PATH } from "./paths";
 
@@ -35,7 +36,7 @@ function tabFor(filters: TransactionFilters): Tab {
 function Results({ filters }: { filters: TransactionFilters }) {
   const { t } = useTranslation();
   const list = useTransactions(filters);
-  if (list.isPending) return <Loader role="status" aria-label={t("common.loading")} />;
+  if (list.isPending) return <LoadingSkeleton />;
   if (list.isError) return <ErrorNotice error={list.error} />;
   if (list.data.length === 0) {
     return filters.awaiting === "me" ? (

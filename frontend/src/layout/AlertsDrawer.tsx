@@ -6,7 +6,6 @@ import {
   Card,
   Drawer,
   Group,
-  Loader,
   Stack,
   Text,
   Textarea,
@@ -25,6 +24,7 @@ import { useSession } from "@/auth/SessionProvider";
 import { DateText } from "@/components/DateText";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { COMMENT_MAX } from "@/components/ReasonPicker";
 import { Qty } from "@/components/Qty";
 import { HEAD_PATHS, OWNER_PATHS } from "@/features/overview/paths";
@@ -205,7 +205,7 @@ function AlertsList({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const { user } = useSession();
   const alerts = useAlerts();
-  if (alerts.isPending) return <Loader size="sm" role="status" aria-label={t("common.loading")} />;
+  if (alerts.isPending) return <LoadingSkeleton />;
   if (alerts.isError) return <ErrorNotice error={alerts.error} />;
   if (alerts.data.alerts.length === 0) {
     return <EmptyState title={t("alerts.empty")} body={t("alerts.emptyBody")} />;

@@ -1,4 +1,4 @@
-import { Anchor, Button, Group, Loader, Stack, Table, Tabs, Text, Title } from "@mantine/core";
+import { Anchor, Button, Group, Stack, Table, Tabs, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import { useRuleChanges } from "@/api/hooks/governance";
@@ -7,6 +7,7 @@ import { useSession } from "@/auth/SessionProvider";
 import { DateText } from "@/components/DateText";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ProposalStatusBadge } from "@/components/StatusBadge";
 import { canDraft, drafterText, scopeSummary } from "./drafting";
 import { NEW_RULE_CHANGE_PATH, ruleChangePath } from "./paths";
@@ -20,7 +21,7 @@ function statusFrom(value: string | null): ProposalStatus {
 function Results({ status }: { status: ProposalStatus }) {
   const { t } = useTranslation();
   const list = useRuleChanges(status);
-  if (list.isPending) return <Loader role="status" aria-label={t("common.loading")} />;
+  if (list.isPending) return <LoadingSkeleton />;
   if (list.isError) return <ErrorNotice error={list.error} />;
   if (list.data.length === 0) {
     return <EmptyState title={t("ruleChanges.empty")} body={t(`ruleChanges.emptyBody.${status}`)} />;

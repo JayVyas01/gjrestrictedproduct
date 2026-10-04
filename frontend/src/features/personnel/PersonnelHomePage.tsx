@@ -1,4 +1,4 @@
-import { Anchor, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAlerts } from "@/api/hooks/alerts";
@@ -9,6 +9,7 @@ import { useSession } from "@/auth/SessionProvider";
 import { ActionButton, type CardAction } from "@/components/Action";
 import { DateText, formatDate } from "@/components/DateText";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Qty } from "@/components/Qty";
 import { Loaded, Section } from "@/components/Section";
 import { WhatsNextCard } from "@/components/WhatsNextCard";
@@ -32,7 +33,7 @@ function WhatsNext() {
   const { user } = useSession();
   const home = useHome();
   const drawer = useAlertsDrawer();
-  if (home.isPending) return <Loader size="sm" role="status" aria-label={t("common.loading")} />;
+  if (home.isPending) return <LoadingSkeleton />;
   if (home.isError) return <ErrorNotice error={home.error} />;
 
   const counts = home.data.counts;

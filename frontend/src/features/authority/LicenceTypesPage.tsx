@@ -1,10 +1,11 @@
-import { Accordion, Loader, Stack, Table, Text, Title } from "@mantine/core";
+import { Accordion, Stack, Table, Text, Title } from "@mantine/core";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useApprovalThresholds, useLicenceTypes } from "@/api/hooks/catalogue";
 import type { LicenceType, LicenceTypeRule, ScopeKind } from "@/api/types";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Qty } from "@/components/Qty";
 import { Loaded, Section } from "@/components/Section";
 
@@ -64,7 +65,7 @@ function Rules({ type }: { type: LicenceType }) {
 function Types() {
   const { t } = useTranslation();
   const types = useLicenceTypes();
-  if (types.isPending) return <Loader role="status" aria-label={t("common.loading")} />;
+  if (types.isPending) return <LoadingSkeleton />;
   if (types.isError) return <ErrorNotice error={types.error} />;
   if (types.data.length === 0) {
     return <EmptyState title={t("licenceTypes.empty")} body={t("licenceTypes.emptyBody")} />;

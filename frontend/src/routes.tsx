@@ -4,28 +4,66 @@ import type { Role } from "@/api/types";
 import { LandingRedirect, RequireRole } from "@/auth/RequireRole";
 import { SessionProvider } from "@/auth/SessionProvider";
 import { SignInPage } from "@/auth/SignInPage";
-import { AuthorityHomePage } from "@/features/authority/AuthorityHomePage";
-import { LicencePage } from "@/features/authority/LicencePage";
-import { LicencesPage } from "@/features/authority/LicencesPage";
-import { LicenceTypesPage } from "@/features/authority/LicenceTypesPage";
-import { ReviewPeriodsPage } from "@/features/authority/ReviewPeriodsPage";
-import { BatchesPage } from "@/features/batches/BatchesPage";
-import { BatchPage } from "@/features/batches/BatchPage";
-import { LicenseeHomePage } from "@/features/licensee/LicenseeHomePage";
-import { LicenseeTransactionsPage } from "@/features/licensee/LicenseeTransactionsPage";
 import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
 import { BATCHES_PATH, PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
-import { PersonnelHomePage } from "@/features/personnel/PersonnelHomePage";
-import { PersonnelTransactionsPage } from "@/features/personnel/PersonnelTransactionsPage";
-import { NewRuleChangePage } from "@/features/governance/NewRuleChangePage";
-import { RuleChangePage } from "@/features/governance/RuleChangePage";
-import { RuleChangesPage } from "@/features/governance/RuleChangesPage";
-import { OverviewHomePage } from "@/features/overview/OverviewHomePage";
-import { OverviewTransactionsPage } from "@/features/overview/OverviewTransactionsPage";
 import { HEAD_PATHS, OWNER_PATHS, type OverviewPaths } from "@/features/overview/paths";
-import { NewSalePage } from "@/features/sale/NewSalePage";
-import { TransactionPage } from "@/features/transactions/TransactionPage";
 import { AppShell } from "@/layout/AppShell";
+import { lazyPage } from "@/lazyPage";
+
+// Each page's code loads on first visit, in a chunk per feature area (vite.config.ts), so the
+// first download carries only the shell and sign-in.
+const AuthorityHomePage = lazyPage(() =>
+  import("@/features/authority/AuthorityHomePage").then((m) => m.AuthorityHomePage),
+);
+const LicencePage = lazyPage(() =>
+  import("@/features/authority/LicencePage").then((m) => m.LicencePage),
+);
+const LicencesPage = lazyPage(() =>
+  import("@/features/authority/LicencesPage").then((m) => m.LicencesPage),
+);
+const LicenceTypesPage = lazyPage(() =>
+  import("@/features/authority/LicenceTypesPage").then((m) => m.LicenceTypesPage),
+);
+const ReviewPeriodsPage = lazyPage(() =>
+  import("@/features/authority/ReviewPeriodsPage").then((m) => m.ReviewPeriodsPage),
+);
+const BatchesPage = lazyPage(() =>
+  import("@/features/batches/BatchesPage").then((m) => m.BatchesPage),
+);
+const BatchPage = lazyPage(() => import("@/features/batches/BatchPage").then((m) => m.BatchPage));
+const LicenseeHomePage = lazyPage(() =>
+  import("@/features/licensee/LicenseeHomePage").then((m) => m.LicenseeHomePage),
+);
+const LicenseeTransactionsPage = lazyPage(() =>
+  import("@/features/licensee/LicenseeTransactionsPage").then((m) => m.LicenseeTransactionsPage),
+);
+const PersonnelHomePage = lazyPage(() =>
+  import("@/features/personnel/PersonnelHomePage").then((m) => m.PersonnelHomePage),
+);
+const PersonnelTransactionsPage = lazyPage(() =>
+  import("@/features/personnel/PersonnelTransactionsPage").then((m) => m.PersonnelTransactionsPage),
+);
+const NewRuleChangePage = lazyPage(() =>
+  import("@/features/governance/NewRuleChangePage").then((m) => m.NewRuleChangePage),
+);
+const RuleChangePage = lazyPage(() =>
+  import("@/features/governance/RuleChangePage").then((m) => m.RuleChangePage),
+);
+const RuleChangesPage = lazyPage(() =>
+  import("@/features/governance/RuleChangesPage").then((m) => m.RuleChangesPage),
+);
+const OverviewHomePage = lazyPage(() =>
+  import("@/features/overview/OverviewHomePage").then((m) => m.OverviewHomePage),
+);
+const OverviewTransactionsPage = lazyPage(() =>
+  import("@/features/overview/OverviewTransactionsPage").then((m) => m.OverviewTransactionsPage),
+);
+const NewSalePage = lazyPage(() =>
+  import("@/features/sale/NewSalePage").then((m) => m.NewSalePage),
+);
+const TransactionPage = lazyPage(() =>
+  import("@/features/transactions/TransactionPage").then((m) => m.TransactionPage),
+);
 
 function SessionRoot() {
   return (

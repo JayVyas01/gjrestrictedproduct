@@ -22,17 +22,18 @@ describe("PermissionCard", () => {
         .getAllByRole("listitem")
         .map((item) => item.textContent),
     ).toEqual(["Can buy", "Can sell", "Cannot transport"]);
-    expect(screen.getByText("1,000")).toBeInTheDocument();
-    expect(screen.getByText("500")).toBeInTheDocument();
+    // A class licence carries its class's unit (L for Spirits).
+    expect(screen.getByText("1,000 L")).toBeInTheDocument();
+    expect(screen.getByText("500 L")).toBeInTheDocument();
     expect(screen.getByText("1 Jan 2026")).toBeInTheDocument();
     expect(screen.getByText("31 Dec 2047")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it("shows limits with the unit when the scope has one", async () => {
-    renderWithProviders(<PermissionCard licence={licence({ unit: "L" })} />);
-    expect(await screen.findByText("1,000 L")).toBeInTheDocument();
+  it("shows limits without a unit when the scope has none (a class with no substances)", async () => {
+    renderWithProviders(<PermissionCard licence={licence({ unit: null })} />);
+    expect(await screen.findByText("1,000")).toBeInTheDocument();
   });
 
   it("warns about a suspended licence", async () => {

@@ -1,8 +1,9 @@
-import { Anchor, Loader, Stack, Title } from "@mantine/core";
+import { Anchor, Stack, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { useTransaction } from "@/api/hooks/transactions";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TransactionDetail } from "./TransactionDetail";
 
 interface Props {
@@ -23,7 +24,7 @@ export function TransactionPage({ listPath }: Props) {
       </Anchor>
       <Title order={1}>{t("transaction.title", { reference })}</Title>
       {transaction.isPending ? (
-        <Loader role="status" aria-label={t("common.loading")} />
+        <LoadingSkeleton />
       ) : transaction.isError ? (
         <ErrorNotice error={transaction.error} />
       ) : (

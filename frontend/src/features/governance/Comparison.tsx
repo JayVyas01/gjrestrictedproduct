@@ -108,7 +108,8 @@ export function Comparison({ change }: { change: RuleChange }) {
             : t("ruleChange.decidedNoCompare")}
         </Text>
       )}
-      <Table.ScrollContainer minWidth={420}>
+      {/* Narrow enough that "Proposed" stays in view on a 360 px phone (no sideways scroll). */}
+      <Table.ScrollContainer minWidth={280}>
         <Table aria-label={t("ruleChange.compareTable")} verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
@@ -132,7 +133,7 @@ export function Comparison({ change }: { change: RuleChange }) {
                   >
                     {show(t, kind, proposed[key], unit)}
                     {changed && (
-                      <Badge ml="xs" color="navy" variant="outline" tt="none">
+                      <Badge ml="xs" color="navy" variant="outline" tt="none" miw="max-content">
                         {t("ruleChange.changed")}
                       </Badge>
                     )}

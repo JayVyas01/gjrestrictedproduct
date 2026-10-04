@@ -35,7 +35,10 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function banner(licence: LicenceCard): ParseKeys | null {
+/** What the card shows: a licence card's fields (the scope kind isn't needed). */
+export type PermissionCardLicence = Omit<LicenceCard, "scope_kind">;
+
+function banner(licence: PermissionCardLicence): ParseKeys | null {
   if (licence.status === "SUSPENDED") return "licence.suspended";
   if (licence.status === "REVOKED") return "licence.revoked";
   if (!licence.trading_permitted) return "licence.notValid";
@@ -43,7 +46,7 @@ function banner(licence: LicenceCard): ParseKeys | null {
 }
 
 interface Props {
-  licence: LicenceCard;
+  licence: PermissionCardLicence;
   /** The card title's heading level (3 under a page section heading). */
   titleOrder?: 2 | 3;
 }

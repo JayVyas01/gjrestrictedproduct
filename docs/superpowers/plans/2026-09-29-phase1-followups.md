@@ -172,7 +172,7 @@ Open items from the D1 reviews. None of them block D2.
 
 ## Deferred from D2d
 
-- **Licence write APIs:** recording, renewing, suspending and revoking licences over HTTP are still not exposed. D2d built the read-only register (B7); the services (`record_licence`, `record_renewal`, `set_status`) exist.
+- **Licence write APIs: out of scope (owner decision, 2026-10-04).** The government records, renews, suspends and revokes licences in a separate tool, so this product never does. Licences reach it through the existing services (`record_licence`, `record_renewal`, `set_status`): the seed and a future import from that tool. The register (B7) stays read-only.
 
 ## For D3 (screens) and D4 (demo tooling)
 

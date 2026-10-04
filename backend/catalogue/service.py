@@ -3,6 +3,8 @@ threshold that decides who gives final approval."""
 
 from decimal import Decimal
 
+from django.db import IntegrityError, transaction
+
 from catalogue.models import (
     ApprovalThreshold,
     ApprovalThresholdVersion,
@@ -14,7 +16,32 @@ from catalogue.models import (
 )
 
 
-def _latest(rule: LicenceTypeRule | None) -> LicenceTypeRuleVersion | None:
+class LicenceTypeExists(Exception):
+    def __init__(self, code: str):
+        super().__init__(f"A licence type with code {code} already exists.")
+        self.code = code
+
+
+def add_licence_type(*, code: str, name: str, description: str) -> LicenceType:
+    """A new licence type, refused when the code is taken (also by a concurrent insert).
+    The decision that applied it records who did."""
+    if LicenceType.objects.filter(code=code).exists():
+        raise LicenceTypeExists(code)
+    try:
+        with transaction.atomic():
+            return LicenceType.objects.create(code=code, name=name, description=description)
+    except IntegrityError:
+        raise LicenceTypeExists(code) from None
+
+
+def class_unit(substance_class: SubstanceClass) -> str | None:
+    """A class shares one unit (CODEMAP convention), so any of its substances gives it.
+    None while the class has no substances."""
+    first = substance_class.substances.order_by("id").first()
+    return first.unit if first else None
+
+
+def latest_rule_version(rule: LicenceTypeRule | None) -> LicenceTypeRuleVersion | None:
     if rule is None:
         return None
     return rule.versions.order_by("-version").first()
@@ -29,13 +56,13 @@ def resolve_rule(
     """Specific substance beats its class. No rule means the licence type is not permitted."""
     rules = LicenceTypeRule.objects.filter(licence_type=licence_type)
     if substance is not None:
-        specific = _latest(rules.filter(substance=substance).first())
+        specific = latest_rule_version(rules.filter(substance=substance).first())
         if specific is not None:
             return specific
         substance_class = substance.substance_class
     if substance_class is None:
         return None
-    return _latest(rules.filter(substance_class=substance_class).first())
+    return latest_rule_version(rules.filter(substance_class=substance_class).first())
 
 
 def substance_overrides(
@@ -45,7 +72,7 @@ def substance_overrides(
     rules = LicenceTypeRule.objects.filter(
         licence_type=licence_type, substance__substance_class=substance_class
     ).order_by("id")
-    return [version for rule in rules if (version := _latest(rule)) is not None]
+    return [version for rule in rules if (version := latest_rule_version(rule)) is not None]
 
 
 def add_rule_version(
@@ -61,7 +88,7 @@ def add_rule_version(
 ) -> LicenceTypeRuleVersion:
     # Lock the rule row so concurrent additions can't compute the same version number.
     rule = LicenceTypeRule.objects.select_for_update().get(pk=rule.pk)
-    latest = _latest(rule)
+    latest = latest_rule_version(rule)
     return LicenceTypeRuleVersion.objects.create(
         rule=rule,
         version=(latest.version + 1) if latest else 1,

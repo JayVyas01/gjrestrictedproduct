@@ -12,3 +12,8 @@ class FlagSerializer(serializers.Serializer):
 class SignOffSerializer(serializers.Serializer):
     challenge_id = serializers.UUIDField()
     code = serializers.RegexField(r"^\d{6}$")
+
+
+class ReviewPeriodSerializer(serializers.Serializer):
+    period_days = serializers.IntegerField()
+    starts_on = serializers.DateField(required=False, allow_null=True, default=None)

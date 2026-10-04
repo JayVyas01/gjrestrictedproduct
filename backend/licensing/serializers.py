@@ -25,7 +25,8 @@ class EnrolmentCompleteSerializer(serializers.Serializer):
 
 
 def licence_card(licence: Licence, today: date) -> dict:
-    """Everything the permissions card shows. Only ever called for the holder's own licences."""
+    """Everything the permissions card shows: the holder's own licences, and the permission
+    fields of the authorities' licence register (`licensing.register`)."""
     permissions = current_permissions(licence)
     period = current_period(licence, today)
     return {

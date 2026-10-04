@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "transactions",
     "alerts",
     "oversight",
+    "governance",
 ]
 
 AUTH_USER_MODEL = "identity.User"

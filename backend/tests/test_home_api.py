@@ -6,6 +6,7 @@ import pytest
 
 from core.db_context import acting_as_system, set_actor
 from core.home import home_counts
+from governance.service import draft, withdraw
 from identity.roles import Role
 from licensing.models import LicenceStatus
 from licensing.service import record_renewal, set_status
@@ -95,8 +96,10 @@ def test_personnel_alerts_and_batches(app_db, client, trade, settle, review_sett
         "open_batches": 2,
         "overdue_batches": 1,
         "next_due": "2026-07-30",
+        "your_open_rule_changes": 0,  # holds a district position, so may draft
     }
     officer = counts_for(trade.officer, date(2026, 7, 20))
+    assert "your_open_rule_changes" not in officer  # may not draft
     assert officer["unacknowledged_alerts"] == 1
     assert (officer["open_batches"], officer["overdue_batches"], officer["next_due"]) == (
         0,
@@ -134,12 +137,20 @@ def test_licensing_authority_counts(app_db, org, make_licence, make_user):
     assert counts_for(authority, today) == {
         "expiring_licences_30d": 2,
         "districts_without_review_period": 1,
+        "your_open_rule_changes": 0,
+        "rule_changes_submitted": 0,
     }
 
 
-@pytest.mark.parametrize("role", [Role.HEAD_AUTHORITY, Role.SOFTWARE_OWNER])
+@pytest.mark.parametrize(
+    "role, extra",
+    [
+        (Role.HEAD_AUTHORITY, {"rule_changes_awaiting_you": 0, "your_open_rule_changes": 0}),
+        (Role.SOFTWARE_OWNER, {}),
+    ],
+)
 def test_head_authority_and_owner_counts(
-    app_db, client, catalogue, trade, threshold, settle, make_user, otp_outbox, role
+    app_db, client, catalogue, trade, threshold, settle, make_user, otp_outbox, role, extra
 ):
     settle(buyer="REJECT", reason_code="NOT_ORDERED")  # two alerts
     settle("250", officer="RECOMMEND")  # waiting for the superintendent
@@ -147,5 +158,43 @@ def test_head_authority_and_owner_counts(
     login(client, viewer, otp_outbox)
     assert client.get("/api/home").json() == {
         "role": role,
-        "counts": {"unacknowledged_alerts": 2, "awaiting_superintendent": 1},
+        "counts": {"unacknowledged_alerts": 2, "awaiting_superintendent": 1, **extra},
     }
+
+
+def test_rule_change_counts(app_db, client, catalogue, org, make_user, otp_outbox):
+    licensing = make_user(role=Role.LICENSING_AUTHORITY, contact="+919800000801")
+    head = make_user(role=Role.HEAD_AUTHORITY, contact="+919800000802")
+    head_b = make_user(role=Role.HEAD_AUTHORITY, contact="+919800000803")
+    superintendent = make_user(role=Role.PERSONNEL, contact="+919800000804")
+    assign(org.district_officer, superintendent, by="test")
+
+    def drafted(user, code):
+        set_actor(user_id=user.user_id, role=user.role)
+        return draft(
+            user=user,
+            kind="NEW_LICENCE_TYPE",
+            payload={"code": code, "name": "New type"},
+            justification="A new kind of outlet has opened.",
+        )
+
+    drafted(licensing, "TYPE_A")
+    drafted(licensing, "TYPE_B")
+    drafted(head, "TYPE_C")
+    drafted(superintendent, "TYPE_D")
+    gone = drafted(superintendent, "TYPE_E")
+    set_actor(user_id=superintendent.user_id, role=superintendent.role)
+    withdraw(proposal_id=gone.id, user=superintendent)
+    today = date(2026, 10, 4)
+
+    def rule_counts(user):
+        counts = counts_for(user, today)
+        return {k: v for k, v in counts.items() if "rule_change" in k}
+
+    assert rule_counts(licensing) == {"your_open_rule_changes": 2, "rule_changes_submitted": 4}
+    assert rule_counts(head) == {"rule_changes_awaiting_you": 3, "your_open_rule_changes": 1}
+    assert rule_counts(head_b) == {"rule_changes_awaiting_you": 4, "your_open_rule_changes": 0}
+    assert rule_counts(superintendent) == {"your_open_rule_changes": 1}
+
+    login(client, head, otp_outbox)
+    assert client.get("/api/home").json()["counts"]["rule_changes_awaiting_you"] == 3

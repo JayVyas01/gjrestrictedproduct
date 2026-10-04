@@ -94,13 +94,32 @@ PAYLOADS = {
 }
 
 
+# How each payload field is named to the officer in a field error ("<label>: <message>").
+FIELD_LABELS = {
+    "code": "Code",
+    "name": "Name",
+    "description": "Description",
+    "licence_type_code": "Licence type",
+    "substance_code": "Substance",
+    "class_code": "Substance class",
+    "may_buy": "May buy",
+    "may_sell": "May sell",
+    "may_transport": "May transport",
+    "max_stock_qty": "Stock limit",
+    "max_per_transaction_qty": "Per-transaction limit",
+    "validity_months": "Validity (months)",
+    "superintendent_above_qty": "Superintendent approval above",
+}
+
+
 def _reasons(errors) -> list[str]:
-    """Flatten serializer errors: whole-payload errors as they are, field errors with the field."""
+    """Flatten serializer errors: whole-payload errors as they are, field errors with the
+    field's plain label."""
     if isinstance(errors, list):
         return [str(message) for message in errors]
     reasons = []
     for field, messages in errors.items():
-        prefix = "" if field == "non_field_errors" else f"{field}: "
+        prefix = "" if field == "non_field_errors" else f"{FIELD_LABELS.get(field, field)}: "
         reasons += [f"{prefix}{message}" for message in _reasons(messages)]
     return reasons
 

@@ -50,12 +50,45 @@ REJECT = "REJECT"
 
 
 class NotAllowed(Exception):
-    pass
+    """A refusal. Each case is its own subclass with a fixed `message`, so the API can answer
+    with that constant (and its own status) without ever echoing the exception's text."""
+
+    message = "This action is not allowed."
+
+    def __init__(self):
+        super().__init__(self.message)
 
 
 class ProposalNotFound(NotAllowed):
-    def __init__(self):
-        super().__init__("Rule change not found.")
+    message = "Rule change not found."
+
+
+class NotADrafter(NotAllowed):
+    message = NOT_A_DRAFTER
+
+
+class AlreadyDecided(NotAllowed):
+    message = ALREADY_DECIDED
+
+
+class NotTheDrafter(NotAllowed):
+    message = NOT_THE_DRAFTER
+
+
+class NotHead(NotAllowed):
+    message = NOT_HEAD
+
+
+class OwnChange(NotAllowed):
+    message = OWN_CHANGE
+
+
+class UnknownOutcome(NotAllowed):
+    message = UNKNOWN_OUTCOME
+
+
+class SomeoneElsesCode(NotAllowed):
+    message = SOMEONE_ELSES_CODE
 
 
 def may_draft(user: User) -> bool:
@@ -84,7 +117,7 @@ def _audit(action: str, proposal: RuleChangeProposal, actor: str, **extra) -> No
 
 def draft(*, user: User, kind: str, payload: dict, justification: str) -> RuleChangeProposal:
     if not may_draft(user):
-        raise NotAllowed(NOT_A_DRAFTER)
+        raise NotADrafter()
     cleaned = validate_payload(kind, payload)
     justification = justification.strip()
     if not 10 <= len(justification) <= 1000:
@@ -107,11 +140,11 @@ def withdraw(*, proposal_id: int, user: User) -> RuleChangeProposal:
     if proposal is None:
         raise ProposalNotFound()
     if proposal.drafted_by != user.user_id:
-        raise NotAllowed(NOT_THE_DRAFTER)
+        raise NotTheDrafter()
     with acting_as_system("withdraw_rule_change"):
         locked = RuleChangeProposal.objects.select_for_update().get(pk=proposal.pk)
         if locked.status != ProposalStatus.SUBMITTED:
-            raise NotAllowed(ALREADY_DECIDED)
+            raise AlreadyDecided()
         locked.status = ProposalStatus.WITHDRAWN
         locked.decided_by = user.user_id
         locked.decided_at = timezone.now()
@@ -122,16 +155,16 @@ def withdraw(*, proposal_id: int, user: User) -> RuleChangeProposal:
 
 def _check_decider(proposal: RuleChangeProposal, user: User) -> None:
     if user.role != Role.HEAD_AUTHORITY:
-        raise NotAllowed(NOT_HEAD)
+        raise NotHead()
     if proposal.drafted_by == user.user_id:
-        raise NotAllowed(OWN_CHANGE)
+        raise OwnChange()
     if proposal.status != ProposalStatus.SUBMITTED:
-        raise NotAllowed(ALREADY_DECIDED)
+        raise AlreadyDecided()
 
 
 def _for_decision(proposal_id: int, user: User) -> RuleChangeProposal:
     if user.role != Role.HEAD_AUTHORITY:
-        raise NotAllowed(NOT_HEAD)
+        raise NotHead()
     # Read under the caller's own RLS: None means not found OR not theirs to see.
     proposal = RuleChangeProposal.objects.filter(pk=proposal_id).first()
     if proposal is None:
@@ -166,7 +199,7 @@ def decide(
     note: str = "",
 ) -> RuleChangeProposal | None:
     if outcome not in (APPROVE, REJECT):
-        raise NotAllowed(UNKNOWN_OUTCOME)
+        raise UnknownOutcome()
     # Every check that can fail before the code is spent, so a refusal keeps the code usable.
     note = _clean_note(outcome, note)
     proposal = _for_decision(proposal_id, user)
@@ -174,7 +207,7 @@ def decide(
     if signer is None:
         return None  # wrong or expired code: the attempt counts, nothing else changes
     if signer.pk != user.pk:
-        raise NotAllowed(SOMEONE_ELSES_CODE)
+        raise SomeoneElsesCode()
     try:
         with acting_as_system("decide_rule_change"):
             return _decide_locked(proposal.pk, user, outcome, note)

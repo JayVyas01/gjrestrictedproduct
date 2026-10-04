@@ -54,6 +54,8 @@ def transaction_summary(tx: Transaction, viewer: User) -> dict:
         "buyer_name": buyer_name,
         "created_at": tx.created_at.isoformat(),
         "your_role": _role(tx, viewer),
+        "approval_chain": tx.approval_chain,
+        "approval_chain_label": tx.get_approval_chain_display(),
     }
 
 
@@ -109,8 +111,6 @@ def transaction_detail(tx: Transaction, viewer: User) -> dict:
             "route": tx.route,
         },
         "designated_officer": tx.designated_position.title,
-        "approval_chain": tx.approval_chain,
-        "approval_chain_label": tx.get_approval_chain_display(),
         "timeline": _timeline(tx, for_authority),
         "next_action": _next_action(tx, deciding_as),
         "can_decide": deciding_as is not None,

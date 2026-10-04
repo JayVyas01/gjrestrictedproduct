@@ -32,9 +32,9 @@ describe("LicenseeTransactionsPage", () => {
     ).toBeInTheDocument();
     const table = await screen.findByRole("table", { name: "Transactions" });
     const row = within(table).getAllByRole("row")[1]!;
-    expect(within(row).getByRole("link", { name: "TXEYGJNLXQDX" })).toHaveAttribute(
+    expect(within(row).getByRole("link", { name: "TXGTPGD3K3KZ" })).toHaveAttribute(
       "href",
-      "/licensee/transactions/TXEYGJNLXQDX",
+      "/licensee/transactions/TXGTPGD3K3KZ",
     );
     expect(within(row).getByText("Whisky")).toBeInTheDocument();
     expect(within(row).getByText("10 L")).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("LicenseeTransactionsPage", () => {
     const list = await screen.findByRole("list", { name: "Transactions" });
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     const card = within(list).getAllByRole("listitem")[0]!;
-    expect(within(card).getByRole("link", { name: "TXEYGJNLXQDX" })).toBeInTheDocument();
+    expect(within(card).getByRole("link", { name: "TXGTPGD3K3KZ" })).toBeInTheDocument();
     expect(within(card).getByText("Approved")).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
   });

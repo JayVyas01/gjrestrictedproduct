@@ -12,6 +12,7 @@ def alert_view(alert: AuthorityAlert) -> dict:
     with acting_as_system("alert_view"):
         seller_name, buyer_name = tx.seller_licence.holder_name, tx.buyer_licence.holder_name
     ack = getattr(alert, "acknowledgement", None)
+    buyer_rejection = alert.kind == AlertKind.BUYER_REJECTION
     return {
         "id": alert.id,
         "kind": alert.kind,
@@ -25,9 +26,9 @@ def alert_view(alert: AuthorityAlert) -> dict:
         "buyer_name": buyer_name,
         "reason": alert.reason.label,
         "comment": alert.comment or None,
-        "pattern": (
-            pattern_text(alert.pattern_count) if alert.kind == AlertKind.BUYER_REJECTION else None
-        ),
+        "pattern": pattern_text(alert.pattern_count) if buyer_rejection else None,
+        # The number behind `pattern`, so the web app can highlight a repeat (2 or more).
+        "pattern_count": alert.pattern_count if buyer_rejection else None,
         "acknowledged": ack is not None,
         "acknowledged_by": ack.user_id if ack else None,
         "acknowledged_at": ack.created_at.isoformat() if ack else None,

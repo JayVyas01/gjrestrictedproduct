@@ -63,7 +63,21 @@
   "alerts": {
     "title": "Alerts",
     "bell": "Alerts, {{number}} unacknowledged",
-    "comingSoon": "The alert list appears here."
+    "empty": "No alerts",
+    "emptyBody": "Buyer rejections and superintendent flags for your positions appear here.",
+    "raised": "Raised",
+    "reference": "Transaction",
+    "reason": "Reason: {{reason}}",
+    "comment": "Comment: {{comment}}",
+    "repeat": "Repeat",
+    "acknowledge": "Acknowledge",
+    "note": "Note (optional)",
+    "noteHint": "What you did about it, if anything. Up to 500 characters.",
+    "confirm": "Acknowledge alert",
+    "acknowledged": "Acknowledged",
+    "acknowledgedNote": "Note: {{note}}",
+    "done": "Alert acknowledged.",
+    "readOnly": "Only the officer holding the position can acknowledge an alert."
   },
   "pages": {
     "comingSoon": "This screen is being built.",
@@ -174,6 +188,24 @@
     "recent": "Recent transactions",
     "allTransactions": "All transactions"
   },
+  "personnel": {
+    "awaiting_one": "1 transaction waits for your decision.",
+    "awaiting_other": "{{count}} transactions wait for your decision.",
+    "reviewQueue": "Review the queue",
+    "alerts_one": "1 unacknowledged alert.",
+    "alerts_other": "{{count}} unacknowledged alerts.",
+    "openAlerts": "Open alerts",
+    "batchDue": "Batch due on {{date}}.",
+    "overdue_one": "1 batch overdue.",
+    "overdue_other": "{{count}} batches overdue.",
+    "reviewBatches": "Review batches",
+    "nothing": "Nothing waits for you.",
+    "queue": "Decision queue",
+    "queueEmpty": "Nothing waits for your decision.",
+    "latestAlerts": "Unacknowledged alerts",
+    "noAlerts": "No unacknowledged alerts.",
+    "allTransactions": "All transactions"
+  },
   "transactions": {
     "filter": "Show",
     "all": "All",
@@ -189,7 +221,10 @@
     "between": "{{seller}} to {{buyer}}",
     "empty": "No transactions here",
     "emptyBody": "Sales and purchases you take part in appear here.",
-    "emptyWaiting": "Nothing waits for your decision."
+    "emptyWaiting": "Nothing waits for your decision.",
+    "approval": "Approval by",
+    "finalApproval": "Final approval",
+    "awaitingTitle": "Waiting for your decision"
   },
   "transaction": {
     "title": "Transaction {{reference}}",
@@ -213,20 +248,23 @@
     "outcome": {
       "CONFIRM": "Confirm purchase",
       "APPROVE": "Approve",
-      "RECOMMEND": "Recommend approval",
-      "REJECT": "Reject"
+      "RECOMMEND": "Recommend for approval",
+      "REJECT": "Reject",
+      "FINAL_APPROVE": "Give final approval"
     },
     "dialog": {
       "CONFIRM": "Confirm this purchase",
       "APPROVE": "Approve this transaction",
       "RECOMMEND": "Recommend this transaction",
-      "REJECT": "Reject this transaction"
+      "REJECT": "Reject this transaction",
+      "FINAL_APPROVE": "Give final approval"
     },
     "done": {
       "CONFIRM": "You confirmed the purchase.",
       "APPROVE": "You approved the transaction.",
       "RECOMMEND": "You recommended the transaction.",
-      "REJECT": "You rejected the transaction."
+      "REJECT": "You rejected the transaction.",
+      "FINAL_APPROVE": "You gave final approval."
     },
     "rejectTitle": "Why are you rejecting it?",
     "continueReject": "Continue to reject",

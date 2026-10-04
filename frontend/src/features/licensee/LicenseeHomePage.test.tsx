@@ -33,9 +33,9 @@ describe("LicenseeHomePage", () => {
     expect(within(stock).getByRole("cell", { name: "Whisky" })).toBeInTheDocument();
     expect(within(stock).getByRole("cell", { name: "400 L" })).toBeInTheDocument();
     const recent = await screen.findByRole("table", { name: "Recent transactions" });
-    expect(within(recent).getByRole("link", { name: "TXEYGJNLXQDX" })).toHaveAttribute(
+    expect(within(recent).getByRole("link", { name: "TXGTPGD3K3KZ" })).toHaveAttribute(
       "href",
-      "/licensee/transactions/TXEYGJNLXQDX",
+      "/licensee/transactions/TXGTPGD3K3KZ",
     );
     expect(within(recent).getByText("Bopal Bar & Kitchen")).toBeInTheDocument();
 

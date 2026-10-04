@@ -7,6 +7,9 @@ import { SignInPage } from "@/auth/SignInPage";
 import { LicenseeHomePage } from "@/features/licensee/LicenseeHomePage";
 import { LicenseeTransactionsPage } from "@/features/licensee/LicenseeTransactionsPage";
 import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
+import { PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
+import { PersonnelHomePage } from "@/features/personnel/PersonnelHomePage";
+import { PersonnelTransactionsPage } from "@/features/personnel/PersonnelTransactionsPage";
 import { NewSalePage } from "@/features/sale/NewSalePage";
 import { TransactionPage } from "@/features/transactions/TransactionPage";
 import { AppShell } from "@/layout/AppShell";
@@ -57,9 +60,13 @@ export const routes: RouteObject[] = [
             <TransactionPage listPath={TRANSACTIONS_PATH} />,
           ),
           screen("licensee/sale/new", L, <NewSalePage />),
-          page("personnel", P, "personnelHome"),
-          page("personnel/transactions", P, "personnelTransactions"),
-          page("personnel/transactions/:reference", P, "transactionDetail"),
+          screen("personnel", P, <PersonnelHomePage />),
+          screen("personnel/transactions", P, <PersonnelTransactionsPage />),
+          screen(
+            "personnel/transactions/:reference",
+            P,
+            <TransactionPage listPath={PERSONNEL_TRANSACTIONS_PATH} />,
+          ),
           page("personnel/batches", P, "batches"),
           page("personnel/batches/:id", P, "batchDetail"),
           page("authority", LA, "authorityHome"),

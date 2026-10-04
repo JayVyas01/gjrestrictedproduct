@@ -1,5 +1,4 @@
 import { Anchor, Button, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
-import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useHome } from "@/api/hooks/home";
@@ -7,37 +6,13 @@ import { useMyLicences, useMyStock } from "@/api/hooks/licensing";
 import { useTransactions } from "@/api/hooks/transactions";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { PermissionCard } from "@/components/PermissionCard";
+import { Loaded, Section } from "@/components/Section";
 import { Qty } from "@/components/Qty";
 import { WhatsNextCard } from "@/components/WhatsNextCard";
 import { TransactionList } from "@/features/transactions/TransactionList";
 import { AWAITING_PURCHASES_PATH, NEW_SALE_PATH, TRANSACTIONS_PATH } from "./paths";
+
 const RECENT = 5;
-
-/** Loading, a failure, or the content of a query-backed section. */
-function Loaded<T>({
-  query,
-  children,
-}: {
-  query: { isPending: boolean; isError: boolean; error: unknown; data: T | undefined };
-  children: (data: T) => ReactNode;
-}) {
-  const { t } = useTranslation();
-  if (query.isPending) return <Loader size="sm" role="status" aria-label={t("common.loading")} />;
-  if (query.isError || query.data === undefined) return <ErrorNotice error={query.error} />;
-  return <>{children(query.data)}</>;
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  const id = useId();
-  return (
-    <Stack component="section" aria-labelledby={id} gap="sm">
-      <Title order={2} id={id}>
-        {title}
-      </Title>
-      {children}
-    </Stack>
-  );
-}
 
 function WhatsNext() {
   const { t } = useTranslation();

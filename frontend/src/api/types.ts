@@ -77,6 +77,8 @@ export interface TransactionSummary {
   buyer_name: string;
   created_at: string;
   your_role: ViewerRole;
+  approval_chain: ApprovalChain;
+  approval_chain_label: string;
 }
 
 export interface TimelineEvent {
@@ -92,8 +94,6 @@ export interface TimelineEvent {
 export interface TransactionDetail extends TransactionSummary {
   transport: { name: string; id_number: string; vehicle_number: string; route: string };
   designated_officer: string;
-  approval_chain: ApprovalChain;
-  approval_chain_label: string;
   timeline: TimelineEvent[];
   next_action: string | null;
   can_decide: boolean;
@@ -210,6 +210,8 @@ export interface Alert {
   reason: string;
   comment: string | null;
   pattern: string | null;
+  /** The count behind `pattern` (buyer rejections only); 2 or more is a repeat. */
+  pattern_count: number | null;
   acknowledged: boolean;
   acknowledged_by: string | null;
   acknowledged_at: string | null;

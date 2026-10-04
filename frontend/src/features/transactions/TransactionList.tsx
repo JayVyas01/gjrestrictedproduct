@@ -1,4 +1,4 @@
-import { Anchor, Card, Group, Stack, Table, Text } from "@mantine/core";
+import { Anchor, Badge, Card, Group, Stack, Table, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -26,11 +26,34 @@ interface Props {
   basePath: string;
   /** Every row waits for the viewer (the "Waiting for you" filter). */
   awaitingYou?: boolean;
+  /** Adds each row's approval chain, tagged "Final approval" while it waits for the superintendent. */
+  showChain?: boolean;
+}
+
+/** The approval chain label, with the "Final approval" tag at the superintendent's step. */
+function Chain({ tx }: { tx: TransactionSummary }) {
+  const { t } = useTranslation();
+  return (
+    <Group gap="xs" wrap="wrap">
+      <span>{tx.approval_chain_label}</span>
+      {tx.status === "AWAITING_SUPERINTENDENT" && (
+        <Badge color="navy" variant="light" tt="none">
+          {t("transactions.finalApproval")}
+        </Badge>
+      )}
+    </Group>
+  );
 }
 
 // Transactions as a table (reference, substance, quantity, other party, status, date), or as
 // stacked cards on a narrow screen. Only one of the two is rendered.
-export function TransactionList({ transactions, label, basePath, awaitingYou = false }: Props) {
+export function TransactionList({
+  transactions,
+  label,
+  basePath,
+  awaitingYou = false,
+  showChain = false,
+}: Props) {
   const { t } = useTranslation();
   const stacked = useMediaQuery(STACKED);
   const href = (tx: TransactionSummary) => `${basePath}/${encodeURIComponent(tx.reference)}`;
@@ -53,6 +76,11 @@ export function TransactionList({ transactions, label, basePath, awaitingYou = f
               {tx.substance}, <Qty value={tx.quantity} unit={tx.unit} />
             </Text>
             <Text size="sm">{otherParty(t, tx)}</Text>
+            {showChain && (
+              <Text size="sm" component="div">
+                <Chain tx={tx} />
+              </Text>
+            )}
             <Text size="sm" c="dimmed">
               <DateText iso={tx.created_at} />
             </Text>
@@ -71,6 +99,7 @@ export function TransactionList({ transactions, label, basePath, awaitingYou = f
             <Table.Th scope="col">{t("transactions.substance")}</Table.Th>
             <Table.Th scope="col">{t("transactions.quantity")}</Table.Th>
             <Table.Th scope="col">{t("transactions.otherParty")}</Table.Th>
+            {showChain && <Table.Th scope="col">{t("transactions.approval")}</Table.Th>}
             <Table.Th scope="col">{t("transactions.status")}</Table.Th>
             <Table.Th scope="col">{t("transactions.date")}</Table.Th>
           </Table.Tr>
@@ -84,6 +113,11 @@ export function TransactionList({ transactions, label, basePath, awaitingYou = f
                 <Qty value={tx.quantity} unit={tx.unit} />
               </Table.Td>
               <Table.Td>{otherParty(t, tx)}</Table.Td>
+              {showChain && (
+                <Table.Td>
+                  <Chain tx={tx} />
+                </Table.Td>
+              )}
               <Table.Td>
                 <StatusBadge status={tx.status} awaitingYou={awaitingYou} />
               </Table.Td>

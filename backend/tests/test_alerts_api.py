@@ -30,6 +30,7 @@ def test_officer_sees_alert_with_pattern(app_db, client, trade, settle, otp_outb
     assert alert["kind"] == "BUYER_REJECTION"
     assert alert["reason"] == "I did not place this order"
     assert alert["pattern"] == "1st buyer rejection for this seller in the last 30 days"
+    assert alert["pattern_count"] == 1  # the web app highlights a repeat (2 or more)
     assert alert["seller_name"] == "Sanand Spirits Pvt Ltd"
     assert alert["buyer_name"] == "Bopal Bar & Kitchen"
     assert alert["acknowledged"] is False

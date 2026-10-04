@@ -80,6 +80,7 @@ def test_flag_reaches_the_officer_as_an_alert(app_db, client, trade, batch_id, o
     login(client, trade.officer, otp_outbox)
     alerts = client.get("/api/alerts").json()["alerts"]
     assert [a["kind"] for a in alerts] == ["SUPERINTENDENT_FLAG"] and alerts[0]["pattern"] is None
+    assert alerts[0]["pattern_count"] is None
 
 
 def test_others_cannot_see_or_act_on_batches(app_db, client, trade, batch_id, otp_outbox):

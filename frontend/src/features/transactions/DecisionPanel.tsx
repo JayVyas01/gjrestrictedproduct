@@ -36,6 +36,18 @@ export function offeredOutcomes(tx: TransactionDetail): Outcome[] {
   return tx.allowed_outcomes;
 }
 
+/**
+ * The words for an outcome: APPROVE is the superintendent's "Give final approval" while the
+ * transaction waits at that step, and plain "Approve" on the officer chain or for a dual holder.
+ */
+export type OutcomeWords = Outcome | "FINAL_APPROVE";
+
+export function outcomeKey(outcome: Outcome, tx: TransactionDetail): OutcomeWords {
+  return outcome === "APPROVE" && tx.status === "AWAITING_SUPERINTENDENT"
+    ? "FINAL_APPROVE"
+    : outcome;
+}
+
 // A refusal that means the transaction changed under the viewer: shown on the page, not in the
 // code dialog, and the transaction is fetched again.
 function isRefusal(error: unknown): error is ApiError {
@@ -87,8 +99,10 @@ export function DecisionPanel({ transaction }: Props) {
 
   const submit = (input: CodeSubmission) => {
     const outcome = pending ?? "REJECT";
+    // The words are fixed now: once decided, the transaction is no longer at this step.
+    const words = outcomeKey(outcome, transaction);
     return decide.mutateAsync(decision(outcome, input)).then(
-      () => outcome,
+      () => words,
       (error: unknown) => {
         if (isRefusal(error)) {
           setRefusal(error);
@@ -100,10 +114,10 @@ export function DecisionPanel({ transaction }: Props) {
     );
   };
 
-  const done = (outcome: Outcome) => {
+  const done = (words: OutcomeWords) => {
     setPending(null);
     setRejecting(stockLimit && canReject);
-    notifications.show({ message: t(`transaction.done.${outcome}`) });
+    notifications.show({ message: t(`transaction.done.${words}`) });
   };
 
   return (
@@ -118,7 +132,7 @@ export function DecisionPanel({ transaction }: Props) {
               variant={outcome === "REJECT" ? "outline" : "filled"}
               onClick={() => (outcome === "REJECT" ? setRejecting(true) : open(outcome))}
             >
-              {t(`transaction.outcome.${outcome}`)}
+              {t(`transaction.outcome.${outcomeKey(outcome, transaction)}`)}
             </Button>
           ))}
         </Group>
@@ -154,7 +168,7 @@ export function DecisionPanel({ transaction }: Props) {
       <CodeDialog
         opened={pending !== null}
         onClose={() => setPending(null)}
-        title={t(`transaction.dialog.${pending ?? "REJECT"}`)}
+        title={t(`transaction.dialog.${outcomeKey(pending ?? "REJECT", transaction)}`)}
         requestCode={() => requestCode.mutateAsync(reference)}
         submit={submit}
         onDone={done}

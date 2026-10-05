@@ -46,7 +46,7 @@ export default tseslint.config(
   {
     // Design W6: user-visible text comes from en.json through t(). Text written straight into
     // JSX (between tags, or in a text-bearing attribute) fails the lint.
-    files: ["src/{features,components,layout,auth}/**/*.tsx"],
+    files: ["src/{features,components,layout,auth,demo}/**/*.tsx"],
     ignores: ["**/*.test.tsx"],
     plugins: { i18next },
     rules: {

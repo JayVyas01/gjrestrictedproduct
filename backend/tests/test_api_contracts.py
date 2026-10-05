@@ -14,9 +14,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 
+from config.checks import DEMO_SENDER
 from core.db_context import acting_as_system
+from demo.dataset import PERSONAS
+from demo.models import DemoPersona
 from identity.roles import Role
 from oversight.service import create_due_batches, set_review_period
 from tests.conftest import BUYER_GSTIN, TEST_PASSWORD, set_decided_on
@@ -155,6 +159,27 @@ def _(ctx):
     challenge = post(ctx.client, "/api/auth/login", body).json()["challenge_id"]
     code = ctx.otp_outbox[-1][1]
     return post(ctx.client, "/api/auth/login/verify", {"challenge_id": challenge, "code": code})
+
+
+# Demo mode (D4): the persona list and the SMS inbox, both anonymous ------------------------
+
+DEMO = {"DEMO_MODE": True, "OTP_SENDER": DEMO_SENDER, "DEMO_PASSWORD": "demo-password-2026"}
+
+
+@contract("demo_personas")
+def _(ctx):
+    for persona, user in zip(PERSONAS, (ctx.trade.seller, ctx.trade.buyer), strict=False):
+        DemoPersona.objects.create(key=persona.key, user_id=user.user_id)
+    with override_settings(**DEMO):
+        return ctx.client.get("/api/demo/personas")
+
+
+@contract("demo_inbox")
+def _(ctx):
+    body = {"user_id": ctx.trade.seller.user_id, "password": TEST_PASSWORD}
+    with override_settings(**DEMO):
+        post(ctx.client, "/api/auth/login", body)
+        return ctx.client.get("/api/demo/inbox")
 
 
 def _awaiting_officer(ctx, qty="10"):

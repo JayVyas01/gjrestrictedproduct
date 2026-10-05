@@ -3,6 +3,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useVerifyLogin } from "@/api/hooks/auth";
+import { DemoCodeHint } from "@/demo/DemoCodeHint";
+import { useDemoCodeFill } from "@/demo/useDemo";
 import { clearDrafts, landingFor } from "./session";
 import { signInError } from "./signInError";
 
@@ -27,6 +29,14 @@ export function CodeStep({ challengeId, onRestart }: Props) {
   // A fixed id: without one, PinInput swaps its generated id after mounting, which re-creates
   // the inputs and drops the focus set below.
   const pinId = useId();
+  const submitButton = useRef<HTMLButtonElement>(null);
+
+  // Demo mode: the SMS inbox's "Use this code" fills the digits; the user still presses Sign in.
+  useDemoCodeFill((filled) => {
+    setCode(filled);
+    setIncomplete(false);
+    window.setTimeout(() => submitButton.current?.focus(), 0);
+  });
 
   // Focus moves to the first digit when this step appears, so the code can be pasted at once.
   useEffect(() => {
@@ -88,11 +98,12 @@ export function CodeStep({ challengeId, onRestart }: Props) {
             })}
           />
         </div>
+        <DemoCodeHint />
         <Group justify="space-between">
           <Button variant="subtle" onClick={onRestart}>
             {t("signIn.newCode")}
           </Button>
-          <Button type="submit" loading={verify.isPending}>
+          <Button ref={submitButton} type="submit" loading={verify.isPending}>
             {t("signIn.submit")}
           </Button>
         </Group>

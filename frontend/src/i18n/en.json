@@ -673,5 +673,25 @@
     "superintendentApproved": "Superintendent-approved",
     "emptyBody": "Transactions across the state appear here.",
     "emptyApproved": "No transaction has had a superintendent's final approval yet."
+  },
+  "demo": {
+    "ribbon": "DEMO — synthetic data",
+    "codeHint": "Your code is in the Demo SMS inbox.",
+    "personas": {
+      "title": "Demo: sign in as",
+      "intro": "Synthetic accounts. The real password and SMS code sign-in still runs."
+    },
+    "inbox": {
+      "title": "Demo SMS inbox",
+      "open": "Open the Demo SMS inbox",
+      "intro": "Codes the app has sent, newest first. Checks for new ones every 3 seconds.",
+      "empty": "No messages yet. Codes appear here when the app sends them.",
+      "to": "Mobile number ending {{last4}}",
+      "code": "Code {{code}}",
+      "newest": "Newest code {{code}}, for {{name}}.",
+      "use": "Use this code",
+      "copied": "Code {{code}} copied.",
+      "copyFailed": "Couldn't copy the code. Type it in: {{code}}"
+    }
   }
 }

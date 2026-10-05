@@ -141,6 +141,25 @@ const ENDPOINTS: Endpoint[] = [
   { method: "get", path: "/api/licences/:id", contract: "licence_detail" },
 ];
 
+// Demo mode only (D4). Outside it both answer 404, as the real server does, so by default the
+// tests and mock mode run as a real deployment; `createHandlers(..., { demo: true })` (mock mode)
+// or `server.use(...serveDemo())` (a test) turns the demo on.
+const DEMO_ENDPOINTS: Endpoint[] = [
+  { method: "get", path: "/api/demo/personas", contract: "demo_personas" },
+  { method: "get", path: "/api/demo/inbox", contract: "demo_inbox" },
+];
+
+/** The demo endpoints, answering as in demo mode. */
+export function serveDemo(): HttpHandler[] {
+  return DEMO_ENDPOINTS.map((endpoint) => serve(endpoint.method, endpoint.path, endpoint.contract));
+}
+
+function notADemo(): HttpHandler[] {
+  return DEMO_ENDPOINTS.map((endpoint) =>
+    serve(endpoint.method, endpoint.path, "error_404_not_found", 404),
+  );
+}
+
 function serve(method: Method, path: string, name: string, status = 200): HttpHandler {
   return http[method](path, () => HttpResponse.json(contract<object>(name), { status }));
 }
@@ -154,7 +173,10 @@ function statusOf(name: string): number | undefined {
  * The default handler for every endpoint the app uses. `selected` swaps in variants, e.g.
  * `createHandlers(["me_personnel", "home_personnel"])` for an officer.
  */
-export function createHandlers(selected: string[] = []): HttpHandler[] {
+export function createHandlers(
+  selected: string[] = [],
+  { demo = false }: { demo?: boolean } = {},
+): HttpHandler[] {
   const fixed: HttpHandler[] = [
     http.get("/api/auth/csrf", () => {
       document.cookie = `csrftoken=${CSRF_TOKEN}; path=/`;
@@ -171,6 +193,7 @@ export function createHandlers(selected: string[] = []): HttpHandler[] {
   ];
   return [
     ...fixed,
+    ...(demo ? serveDemo() : notADemo()),
     ...ENDPOINTS.map((endpoint) => {
       const chosen = selected.find((name) => endpoint.variants?.includes(name));
       return serve(endpoint.method, endpoint.path, chosen ?? endpoint.contract, endpoint.status);
@@ -193,7 +216,10 @@ export function serveContract(
 ): HttpHandler {
   contract(name); // fail early on a typo
   const endpoint =
-    target ?? ENDPOINTS.find((e) => e.contract === name || e.variants?.includes(name));
+    target ??
+    [...ENDPOINTS, ...DEMO_ENDPOINTS].find(
+      (e) => e.contract === name || e.variants?.includes(name),
+    );
   if (!endpoint) throw new Error(`Contract "${name}" has no default endpoint: pass a target`);
   const status = target?.status ?? statusOf(name) ?? endpoint.status;
   return serve(endpoint.method, endpoint.path, name, status);

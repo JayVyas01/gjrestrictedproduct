@@ -229,6 +229,19 @@ const GUARDS: Record<string, Guard> = {
       ] satisfies (keyof T.LicenceDetail["permissions"])[],
     },
   },
+  demo_personas: {
+    keys: ["key", "label", "description", "user_id", "password"] satisfies (keyof T.DemoPersona)[],
+    list: true,
+  },
+  demo_inbox: {
+    keys: [
+      "display_name",
+      "contact_last4",
+      "code",
+      "created_at",
+    ] satisfies (keyof T.DemoInboxMessage)[],
+    list: true,
+  },
   error_400_field_errors: { keys: [] },
   "error_*": { keys: ERROR },
 };

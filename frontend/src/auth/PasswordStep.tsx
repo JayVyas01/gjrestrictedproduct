@@ -1,5 +1,6 @@
 import { Alert, Button, PasswordInput, Stack, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
+import { forwardRef, useImperativeHandle } from "react";
 import { useTranslation } from "react-i18next";
 import { useStartLogin } from "@/api/hooks/auth";
 import { signInError } from "./signInError";
@@ -10,8 +11,16 @@ interface Props {
   onChallenge: (challengeId: string, userId: string) => void;
 }
 
+export interface PasswordStepHandle {
+  /** The demo persona picker: fills both fields and submits, exactly as if typed. */
+  signInAs: (userId: string, password: string) => void;
+}
+
 // Step 1: user ID and password. The server answers with a challenge and sends a code by SMS.
-export function PasswordStep({ initialUserId, onChallenge }: Props) {
+export const PasswordStep = forwardRef<PasswordStepHandle, Props>(function PasswordStep(
+  { initialUserId, onChallenge },
+  ref,
+) {
   const { t } = useTranslation();
   const start = useStartLogin();
   const form = useForm({
@@ -22,13 +31,22 @@ export function PasswordStep({ initialUserId, onChallenge }: Props) {
     },
   });
 
-  const submit = form.onSubmit(({ userId, password }) => {
+  const send = ({ userId, password }: { userId: string; password: string }) => {
     const trimmed = userId.trim();
     start.mutate(
       { userId: trimmed, password },
       { onSuccess: ({ challenge_id }) => onChallenge(challenge_id, trimmed) },
     );
-  });
+  };
+  const submit = form.onSubmit(send);
+
+  useImperativeHandle(ref, () => ({
+    signInAs: (userId, password) => {
+      const values = { userId, password };
+      form.setValues(values);
+      if (!start.isPending) send(values);
+    },
+  }));
 
   return (
     <form onSubmit={submit} noValidate>
@@ -58,4 +76,4 @@ export function PasswordStep({ initialUserId, onChallenge }: Props) {
       </Stack>
     </form>
   );
-}
+});

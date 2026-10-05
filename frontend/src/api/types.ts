@@ -344,3 +344,22 @@ export interface ErrorBody {
   reasons?: string[];
   [field: string]: unknown;
 }
+
+// Demo mode only (D4): both endpoints answer 404 outside demo mode -----------------------------
+
+/** A synthetic account the persona picker signs in as (the shared demo password included). */
+export interface DemoPersona {
+  key: string;
+  label: string;
+  description: string;
+  user_id: string;
+  password: string;
+}
+
+/** A code the demo SMS inbox "sent": the recipient's name and the last 4 digits only. */
+export interface DemoInboxMessage {
+  display_name: string;
+  contact_last4: string;
+  code: string;
+  created_at: string;
+}

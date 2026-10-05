@@ -3,6 +3,9 @@ import { useDisclosure } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import { useSession } from "@/auth/SessionProvider";
+import { DemoRibbon } from "@/demo/DemoRibbon";
+import { SmsInboxButton } from "@/demo/SmsInboxButton";
+import { useDemo } from "@/demo/useDemo";
 import { AlertsDrawerProvider } from "./AlertsDrawerContext";
 import { Bell } from "./Bell";
 import { NavLinks } from "./NavLinks";
@@ -11,13 +14,15 @@ import { SkipLink } from "./SkipLink";
 // Personnel and the authorities that see alerts (the Licensing Authority has no alerts).
 const WITH_BELL = new Set(["PERSONNEL", "HEAD_AUTHORITY", "SOFTWARE_OWNER"]);
 
-// The signed-in frame: a navy header (app name, who is signed in, the bell, sign out), the
+// The signed-in frame: a navy header (app name, who is signed in, the bell, sign out; in demo
+// mode also the demo ribbon and the SMS inbox button), the
 // role's navigation (a burger menu under 768 px) and the page in <main id="main">. The alerts
 // drawer (bell roles) can be opened from any page through useAlertsDrawer.
 export function AppShell() {
   const { t } = useTranslation();
   const { user, signOut } = useSession();
   const [opened, { toggle, close }] = useDisclosure(false);
+  const demo = useDemo();
   if (!user) return null; // RequireRole only renders the shell for a signed-in user.
   const withBell = WITH_BELL.has(user.role);
 
@@ -40,7 +45,11 @@ export function AppShell() {
                 color="white"
                 aria-label={t(opened ? "nav.closeMenu" : "nav.openMenu")}
               />
-              <Text fw={700}>{t("app.name")}</Text>
+              {/* On a phone in demo mode the ribbon takes the app name's place, so Sign out fits. */}
+              <Text fw={700} visibleFrom={demo.enabled ? "xs" : undefined}>
+                {t("app.name")}
+              </Text>
+              <DemoRibbon />
             </Group>
             <Group gap="sm" wrap="nowrap">
               <Stack gap={0} visibleFrom="xs" align="flex-end">
@@ -49,6 +58,7 @@ export function AppShell() {
                 </Text>
                 <Text size="xs">{t(`roles.${user.role}`)}</Text>
               </Stack>
+              <SmsInboxButton variant="header" />
               {withBell && <Bell />}
               <Button variant="white" color="navy" size="xs" onClick={() => void signOut()}>
                 {t("session.signOut")}

@@ -4,6 +4,7 @@ import type { Role } from "@/api/types";
 import { LandingRedirect, RequireRole } from "@/auth/RequireRole";
 import { SessionProvider } from "@/auth/SessionProvider";
 import { SignInPage } from "@/auth/SignInPage";
+import { DemoProvider } from "@/demo/DemoProvider";
 import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
 import { BATCHES_PATH, PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
 import { HEAD_PATHS, OWNER_PATHS, type OverviewPaths } from "@/features/overview/paths";
@@ -68,7 +69,9 @@ const TransactionPage = lazyPage(() =>
 function SessionRoot() {
   return (
     <SessionProvider>
-      <Outlet />
+      <DemoProvider>
+        <Outlet />
+      </DemoProvider>
     </SessionProvider>
   );
 }

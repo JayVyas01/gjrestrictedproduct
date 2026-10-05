@@ -3,6 +3,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import type { Challenge } from "@/api/types";
+import { DemoCodeHint } from "@/demo/DemoCodeHint";
+import { useDemo, useDemoCodeFill } from "@/demo/useDemo";
 import { ErrorNotice } from "./ErrorNotice";
 import { useFocusHeadingOnSuccess } from "./focusPageHeading";
 
@@ -37,6 +39,8 @@ function minutesSeconds(ms: number): string {
 export function CodeDialog<T>({ opened, onClose, title, onDone, ...rest }: Props<T>) {
   const { t } = useTranslation();
   const { returnFocus, succeed } = useFocusHeadingOnSuccess(opened);
+  // Demo mode: Escape in the SMS inbox drawer (opened over this dialog) closes only the drawer.
+  const { inboxOpen } = useDemo();
   const done = (result: T) => {
     succeed();
     onDone(result);
@@ -48,6 +52,7 @@ export function CodeDialog<T>({ opened, onClose, title, onDone, ...rest }: Props
       title={title}
       centered
       returnFocus={returnFocus}
+      closeOnEscape={!inboxOpen}
       closeButtonProps={{ "aria-label": t("common.close") }}
     >
       {opened && <CodeForm onClose={onClose} onDone={done} {...rest} />}
@@ -70,6 +75,14 @@ function CodeForm<T>({ onClose, requestCode, submit, onDone }: FormProps<T>) {
   const introId = useId();
   const errorId = useId();
   const pinId = useId();
+  const submitButton = useRef<HTMLButtonElement>(null);
+
+  // Demo mode: the SMS inbox's "Use this code" fills the digits; the user still confirms.
+  useDemoCodeFill((filled) => {
+    setCode(filled);
+    setIncomplete(false);
+    window.setTimeout(() => submitButton.current?.focus(), 0);
+  });
 
   const sendCode = () => {
     setRequesting(true);
@@ -173,6 +186,7 @@ function CodeForm<T>({ onClose, requestCode, submit, onDone }: FormProps<T>) {
               ? t("code.expiresIn", { time: minutesSeconds(remaining) })
               : ""}
         </Text>
+        <DemoCodeHint />
         <Group justify="space-between">
           <Button variant="subtle" onClick={sendCode} disabled={requesting || submitting}>
             {t("code.newCode")}
@@ -182,6 +196,7 @@ function CodeForm<T>({ onClose, requestCode, submit, onDone }: FormProps<T>) {
               {t("common.cancel")}
             </Button>
             <Button
+              ref={submitButton}
               type="submit"
               loading={submitting}
               disabled={!challenge || expired || requesting}

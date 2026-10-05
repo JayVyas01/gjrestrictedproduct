@@ -3,7 +3,7 @@ import { apiGet } from "@/api/client";
 import type { Me } from "@/api/types";
 import { contract, contracts, createHandlers } from "@/test/handlers";
 import { server } from "@/test/server";
-import { mockPersona, PERSONAS } from "./browser";
+import { mockHandlers, mockPersona, PERSONAS } from "./browser";
 
 describe("mock mode personas", () => {
   it("every persona names captured contracts", () => {
@@ -17,6 +17,13 @@ describe("mock mode personas", () => {
     expect(mockPersona("?as=officer")).toBe("officer");
     expect(mockPersona("")).toBe("officer");
     expect(mockPersona("?as=nobody")).toBe("officer");
+  });
+
+  it("mock mode is a demo: the persona list and the inbox answer (tests default to 404)", async () => {
+    await expect(apiGet("/api/demo/personas")).rejects.toMatchObject({ status: 404 });
+    server.use(...mockHandlers(""));
+    expect(await apiGet("/api/demo/personas")).toEqual(contract("demo_personas"));
+    expect(await apiGet("/api/demo/inbox")).toEqual(contract("demo_inbox"));
   });
 
   it("the buyer-stock persona sees a sale over their stock limit", async () => {

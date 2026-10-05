@@ -37,7 +37,12 @@ export function mockPersona(search = window.location.search): string {
   return kept && kept in PERSONAS ? kept : "seller";
 }
 
+/** Mock mode answers as the chosen persona, and as a demo (the persona picker and SMS inbox). */
+export function mockHandlers(search = window.location.search) {
+  return createHandlers(PERSONAS[mockPersona(search)], { demo: true });
+}
+
 export async function startMockWorker(): Promise<void> {
-  const worker = setupWorker(...createHandlers(PERSONAS[mockPersona()]));
+  const worker = setupWorker(...mockHandlers());
   await worker.start({ onUnhandledRequest: "bypass", quiet: true });
 }

@@ -38,6 +38,13 @@ services:
       DJANGO_SSL_REDIRECT: "0"
       # Caddy passes the browser's Host (localhost:8080); Django ignores the port.
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      # Caddy is the one proxy in front of Django and appends the browser's address to
+      # X-Forwarded-For, so rate limits count per browser rather than per Caddy container.
+      DJANGO_NUM_PROXIES: "1"
+      # Presenters (and the end-to-end tests) switch persona often; the production limit of 10
+      # sign-ins and codes a minute would get in the way. The stack serves localhost only.
+      THROTTLE_RATE_LOGIN: 60/min
+      THROTTLE_RATE_OTP: 60/min
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?run make demo-env}
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?run make demo-env}
       BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:?run make demo-env}

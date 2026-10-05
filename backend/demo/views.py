@@ -17,7 +17,7 @@ INBOX_SIZE = 20
 class DemoView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "lookup"
+    throttle_scope = "demo"  # its own budget: inbox polling must not use up "lookup"
 
     def initial(self, request, *args, **kwargs):
         # Before authentication and throttling, so the 404 looks the same for every request.

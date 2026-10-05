@@ -126,14 +126,21 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    # Per user once signed in, else per client address. The defaults are the production
+    # limits; the local demo stack raises login and otp (docker-compose.demo.yml).
     "DEFAULT_THROTTLE_RATES": {
-        "login": "10/min",
-        "otp": "10/min",
-        "enrolment": "10/min",
-        "lookup": "30/min",
+        "login": env.rate("THROTTLE_RATE_LOGIN", "10/min"),
+        "otp": env.rate("THROTTLE_RATE_OTP", "10/min"),
+        "enrolment": env.rate("THROTTLE_RATE_ENROLMENT", "10/min"),
+        "lookup": env.rate("THROTTLE_RATE_LOOKUP", "30/min"),
+        # The demo-only endpoints (demo/views.py): the SMS inbox polls every 3 seconds.
+        "demo": env.rate("THROTTLE_RATE_DEMO", "120/min"),
     },
-    # Set to the number of trusted proxies in production; 0 = use REMOTE_ADDR, never client headers.
-    "NUM_PROXIES": 0,
+    # The number of trusted reverse proxies in front of Django. 0 (default) = the client address
+    # is REMOTE_ADDR and client headers are never read. With N, the address is the Nth entry
+    # from the right of X-Forwarded-For, so set it only when exactly N proxies append to it
+    # (the demo stack: 1, Caddy).
+    "NUM_PROXIES": env.count("DJANGO_NUM_PROXIES", 0),
     "EXCEPTION_HANDLER": "core.exceptions.rollback_on_exception",
 }
 

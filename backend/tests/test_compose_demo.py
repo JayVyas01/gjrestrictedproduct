@@ -94,3 +94,17 @@ def test_the_database_lives_in_a_named_volume():
     volumes = SERVICES["db"]["volumes"]
     assert any(v.startswith("demo_pgdata:") for v in volumes)
     assert "demo_pgdata" in COMPOSE["volumes"]
+
+
+def test_the_backend_trusts_exactly_one_proxy_caddy():
+    """Caddy appends the browser's address to X-Forwarded-For; with one trusted proxy, rate
+    limits count per browser address instead of per Caddy container."""
+    assert BACKEND_ENV["DJANGO_NUM_PROXIES"] == "1"
+
+
+def test_the_demo_raises_the_sign_in_and_code_limits():
+    """Presenters and the end-to-end tests switch persona often; the stack serves localhost only."""
+    assert BACKEND_ENV["THROTTLE_RATE_LOGIN"] == "60/min"
+    assert BACKEND_ENV["THROTTLE_RATE_OTP"] == "60/min"
+    for unchanged in ("THROTTLE_RATE_ENROLMENT", "THROTTLE_RATE_LOOKUP", "THROTTLE_RATE_DEMO"):
+        assert unchanged not in BACKEND_ENV

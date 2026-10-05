@@ -6,3 +6,7 @@ coverage
 .env*
 Dockerfile
 .dockerignore
+# End-to-end tests and their reports never go into the image.
+e2e
+playwright-report
+test-results

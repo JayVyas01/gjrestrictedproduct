@@ -227,3 +227,7 @@ frontend/*.tsbuildinfo
 
 # Demo stack secrets (made by `make demo-env` from .env.demo.example)
 .env.demo
+
+# Playwright end-to-end runs (frontend/e2e)
+frontend/playwright-report/
+frontend/test-results/

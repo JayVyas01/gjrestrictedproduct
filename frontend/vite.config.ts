@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // public/mockServiceWorker.js serves mock mode only (npm run dev:mock). Vite copies public/
 // into every build, so remove it from the build output: production never ships the MSW worker.
@@ -87,5 +87,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     restoreMocks: true,
+    // e2e/ holds the Playwright journeys (npm run e2e), which run against the real stack.
+    exclude: [...configDefaults.exclude, "e2e/**"],
   },
 });

@@ -1,0 +1,63 @@
+# End-to-end demo journeys (frontend/e2e) against the real offline demo stack
+# (docker-compose.demo.yml). Not a required check: the owner decides later whether it gates.
+name: e2e
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "docker/**"
+      - "docker-compose.demo.yml"
+      - "Makefile"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Pin actions to full commit SHAs before go-live (Dependabot keeps them current).
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Fresh keys for this run only (.env.demo is never committed), then the images.
+      - run: make demo-env
+      - run: make demo-build
+
+      - name: Install dependencies and Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # globalSetup runs `make demo-reset`: it starts the stack offline and seeds the story.
+      - name: Run the journeys
+        working-directory: frontend
+        run: npm run e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose --env-file .env.demo -f docker-compose.demo.yml logs --no-color --tail=300

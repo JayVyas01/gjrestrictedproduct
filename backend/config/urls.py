@@ -14,4 +14,5 @@ urlpatterns = [
     path("api/", include("alerts.urls")),
     path("api/", include("oversight.urls")),
     path("api/", include("governance.urls")),
+    path("api/demo/", include("demo.urls")),  # 404 unless DEMO_MODE (demo/views.py)
 ]

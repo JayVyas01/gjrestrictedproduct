@@ -5,8 +5,12 @@ Every environment-specific or secret value comes from environment variables
 """
 
 from pathlib import Path
+from types import SimpleNamespace
+
+from django.core.exceptions import ImproperlyConfigured
 
 from config import env
+from config.checks import DEMO_MODE_MESSAGE, demo_mode_problems
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,6 +35,7 @@ INSTALLED_APPS = [
     "alerts",
     "oversight",
     "governance",
+    "demo",  # demo-only tooling; its endpoints answer 404 unless DEMO_MODE is on
 ]
 
 AUTH_USER_MODEL = "identity.User"
@@ -131,3 +136,19 @@ REST_FRAMEWORK = {
     "NUM_PROXIES": 0,
     "EXCEPTION_HANDLER": "core.exceptions.rollback_on_exception",
 }
+
+# --- Demo mode (local demo only; see config/checks.py) ----------------------------------
+# Off unless set. With it on, settings refuse to load unless the app serves only localhost,
+# without the SSL redirect, and sends codes to the demo SMS inbox.
+DEMO_MODE = env.flag("DEMO_MODE")
+# The one shared password of the synthetic demo accounts; never read outside demo mode.
+DEMO_PASSWORD = env.optional("DEMO_PASSWORD", "") if DEMO_MODE else ""
+if demo_mode_problems(
+    SimpleNamespace(
+        DEMO_MODE=DEMO_MODE,
+        ALLOWED_HOSTS=ALLOWED_HOSTS,
+        SECURE_SSL_REDIRECT=SECURE_SSL_REDIRECT,
+        OTP_SENDER=OTP_SENDER,
+    )
+):
+    raise ImproperlyConfigured(DEMO_MODE_MESSAGE)

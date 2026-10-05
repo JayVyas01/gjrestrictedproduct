@@ -88,7 +88,7 @@ class MeView(APIView):
             {
                 "user_id": user.user_id,
                 "role": user.role,
-                "display_name": _display_name(user, positions),
+                "display_name": display_name(user, positions),
                 "positions": [
                     {"id": p.id, "title": p.title, "level": p.area.level} for p in positions
                 ],
@@ -96,9 +96,11 @@ class MeView(APIView):
         )
 
 
-def _display_name(user, positions) -> str:
+def display_name(user, positions) -> str:
+    """The name the app shows for an account. Also used by the demo SMS inbox (as SYSTEM)."""
     if user.role == Role.LICENSEE:
-        # Read under the licensee's own RLS, which also limits it to their business.
+        # Read under the caller's RLS; for the licensee themselves that limits it to their
+        # business, and as SYSTEM the GSTIN filter does.
         licence = (
             Licence.objects.filter(gstin_index=user.licensee_gstin_index).order_by("id").first()
         )

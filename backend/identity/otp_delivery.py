@@ -12,13 +12,15 @@ from django.utils.module_loading import import_string
 
 
 class OtpSender(Protocol):
-    def send(self, contact: str, code: str) -> None: ...
+    # user_id: the public ID of the account the code is for, or None for a subject code
+    # (enrolment). Senders may ignore it; the demo SMS inbox uses it to label messages.
+    def send(self, contact: str, code: str, user_id: str | None = None) -> None: ...
 
 
 class ConsoleOtpSender:
     """Development only: prints the code. Refuses to run when DEBUG is off."""
 
-    def send(self, contact: str, code: str) -> None:
+    def send(self, contact: str, code: str, user_id: str | None = None) -> None:
         if not settings.DEBUG:
             raise ImproperlyConfigured("ConsoleOtpSender must not be used outside development")
         print(f"[DEV OTP] code {code} for contact ending {contact[-4:]}")
@@ -29,7 +31,7 @@ class OutboxOtpSender:
 
     outbox: ClassVar[list[tuple[str, str]]] = []
 
-    def send(self, contact: str, code: str) -> None:
+    def send(self, contact: str, code: str, user_id: str | None = None) -> None:
         self.outbox.append((contact, code))
 
 

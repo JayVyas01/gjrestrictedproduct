@@ -35,11 +35,13 @@ def _new_code() -> str:
     return f"{secrets.randbelow(10**OTP_LENGTH):0{OTP_LENGTH}d}"
 
 
-def _create_and_send(challenge: OtpChallenge, contact: str) -> OtpChallenge:
+def _create_and_send(
+    challenge: OtpChallenge, contact: str, user_id: str | None = None
+) -> OtpChallenge:
     code = _new_code()
     challenge.code_hash = _hash_code(challenge, code)
     challenge.save()
-    get_sender().send(contact, code)
+    get_sender().send(contact, code, user_id=user_id)
     return challenge
 
 
@@ -53,7 +55,7 @@ def issue(user: User, purpose: str) -> OtpChallenge:
         closed_at=now
     )
     challenge = OtpChallenge(user=user, purpose=purpose, expires_at=now + OTP_TTL)
-    return _create_and_send(challenge, user.get_contact())
+    return _create_and_send(challenge, user.get_contact(), user_id=user.user_id)
 
 
 def issue_for_subject(*, subject: str, contact: str, purpose: str) -> OtpChallenge:

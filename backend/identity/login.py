@@ -10,6 +10,7 @@ tell whether an account exists.
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 
@@ -20,6 +21,14 @@ from identity.models import OtpChallenge, OtpPurpose, User
 
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
+# Owner decision (2026-10-05): presenters switch personas often, so demo mode (localhost
+# only, enforced by the DEMO_MODE guard) allows 30 code requests per 15 minutes.
+# Wrong passwords still lock after LOCKOUT_THRESHOLD in every mode.
+DEMO_CODE_REQUEST_LIMIT = 30
+
+
+def code_request_limit() -> int:
+    return DEMO_CODE_REQUEST_LIMIT if settings.DEMO_MODE else LOCKOUT_THRESHOLD
 
 
 def start_login(user_id: str, password: str) -> OtpChallenge | None:
@@ -78,7 +87,7 @@ def _too_many_codes(user: User, now) -> bool:
     recent = OtpChallenge.objects.filter(
         user=user, purpose=OtpPurpose.LOGIN, created_at__gte=now - LOCKOUT_DURATION
     ).count()
-    return recent >= LOCKOUT_THRESHOLD
+    return recent >= code_request_limit()
 
 
 def _lock_for_too_many_codes(user: User, now) -> None:

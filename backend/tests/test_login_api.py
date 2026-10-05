@@ -88,6 +88,30 @@ def test_account_locks_after_too_many_code_requests(app_db, client, make_user, o
     assert user.locked_until is not None
 
 
+def test_demo_mode_allows_30_code_requests_before_locking(app_db, make_user, otp_outbox, settings):
+    # Presenters switch personas often; demo mode (localhost only) raises the cap to 30.
+    from identity.login import start_login
+
+    settings.DEMO_MODE = True
+    user = make_user()
+    for _ in range(30):
+        assert start_login(user.user_id, TEST_PASSWORD) is not None
+    assert start_login(user.user_id, TEST_PASSWORD) is None
+    user.refresh_from_db()
+    assert user.locked_until is not None
+
+
+def test_wrong_passwords_still_lock_after_5_in_demo_mode(app_db, make_user, settings):
+    from identity.login import start_login
+
+    settings.DEMO_MODE = True
+    user = make_user()
+    for _ in range(5):
+        assert start_login(user.user_id, "wrong-password") is None
+    user.refresh_from_db()
+    assert user.locked_until is not None
+
+
 def test_login_is_rate_limited(app_db, client):
     statuses = [start(client, "GJNOSUCHUSER").status_code for _ in range(11)]
     assert statuses[:10] == [401] * 10

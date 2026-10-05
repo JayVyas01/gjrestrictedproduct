@@ -1,0 +1,41 @@
+# Caddy for the offline demo stack (frontend/Dockerfile): the built app plus /api to Django.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	# Every response, including the API's. Deleting a field (-Server) defers the block until
+	# the response is written, so these replace any value the backend set, never duplicate it.
+	# Server and Via are dropped so responses do not name the software.
+	header {
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+		-Via
+	}
+
+	encode zstd gzip
+	root * /srv
+
+	# The browser's Host (localhost:8080) is passed on unchanged, so Django's ALLOWED_HOSTS
+	# and CSRF origin check see the address the browser used.
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# Hashed build files never change: cache them for a year. A missing one is a 404.
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Everything else is the single-page app: unknown paths get index.html, always revalidated.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

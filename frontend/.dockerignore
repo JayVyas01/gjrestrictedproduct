@@ -1,0 +1,8 @@
+# The image builds from source with a clean `npm ci`.
+node_modules
+dist
+coverage
+*.tsbuildinfo
+.env*
+Dockerfile
+.dockerignore

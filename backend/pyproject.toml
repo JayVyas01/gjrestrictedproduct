@@ -8,6 +8,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<3.3",
     "argon2-cffi>=23.1",
     "cryptography>=43",
+    "gunicorn>=26.2,<26.3",  # WSGI server for the Docker image (backend/Dockerfile)
 ]
 
 [dependency-groups]
@@ -16,6 +17,7 @@ dev = [
     "pytest-django>=4.9",
     "ruff>=0.6",
     "pip-audit>=2.7",
+    "pyyaml>=6.0,<7",
 ]
 
 [tool.uv]

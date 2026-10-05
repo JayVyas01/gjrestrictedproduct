@@ -224,3 +224,6 @@ frontend/coverage/
 frontend/*.tsbuildinfo
 # The Python `lib/` rule above must not hide frontend source folders.
 !frontend/src/**/lib/
+
+# Demo stack secrets (made by `make demo-env` from .env.demo.example)
+.env.demo

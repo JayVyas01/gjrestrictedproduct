@@ -1,0 +1,83 @@
+# The offline demo stack: run it through the Makefile (`make help`), never in production.
+#
+# Values come from .env.demo (made by `make demo-env`), passed as `--env-file .env.demo`, and
+# are handed to each service explicitly: the Postgres superuser password reaches only `db`.
+# The fixed demo values (DEMO_MODE, OTP_SENDER, hosts) live here, not in .env.demo, so a
+# stray .env.demo cannot switch them; backend/tests/test_compose_demo.py checks them.
+#
+# Only `web` publishes a port, bound to 127.0.0.1: nothing is reachable from the network.
+# After `make demo-build`, starting and resetting need no network (`--pull never`).
+name: gjdemo
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?run make demo-env}
+      GJ_OWNER_PASSWORD: ${GJ_OWNER_PASSWORD:?run make demo-env}
+      GJ_APP_PASSWORD: ${GJ_APP_PASSWORD:?run make demo-env}
+    volumes:
+      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+      - demo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The init script creates gjrp last, so its presence means the roles exist too.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gjrp"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    image: gjdemo-backend:latest
+    build: ./backend
+    environment:
+      DEMO_MODE: "1"
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?run make demo-env}
+      OTP_SENDER: demo.sender.DemoInboxOtpSender
+      DJANGO_DEBUG: "0"
+      DJANGO_SSL_REDIRECT: "0"
+      # Caddy passes the browser's Host (localhost:8080); Django ignores the port.
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?run make demo-env}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?run make demo-env}
+      BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:?run make demo-env}
+      OTP_HMAC_KEY: ${OTP_HMAC_KEY:?run make demo-env}
+      DB_NAME: gjrp
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_SSLMODE: disable  # private network inside this stack only
+      # The app runs as gj_app; the entrypoint migrates as gj_owner (see docker-entrypoint.sh).
+      DB_USER: gj_app
+      DB_PASSWORD: ${GJ_APP_PASSWORD:?run make demo-env}
+      DB_OWNER_USER: gj_owner
+      DB_OWNER_PASSWORD: ${GJ_OWNER_PASSWORD:?run make demo-env}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+
+  web:
+    image: gjdemo-web:latest
+    build: ./frontend
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  demo_pgdata:

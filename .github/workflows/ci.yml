@@ -79,5 +79,12 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      # The demo stack's Caddy config (frontend/Caddyfile) must parse; upstreams are not resolved.
+      - name: Validate the Caddyfile
+        working-directory: .
+        run: >-
+          docker run --rm -v "$PWD/frontend/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
+          caddy validate --config /etc/caddy/Caddyfile
+
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high

@@ -22,7 +22,7 @@ BACKGROUND = {"HTTP_X_BACKGROUND_REFRESH": "1"}
 
 @pytest.fixture
 def signed_in(app_db, client, make_user, otp_outbox):
-    login(client, make_user(role=Role.LICENSEE), otp_outbox)
+    login(client, make_user(role=Role.HEAD_AUTHORITY), otp_outbox)
     key = client.cookies[settings.SESSION_COOKIE_NAME].value
     # Pretend the user was last active a few minutes ago.
     earlier = timezone.now() + timedelta(minutes=5)

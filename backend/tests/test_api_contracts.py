@@ -23,7 +23,7 @@ from demo.dataset import PERSONAS
 from demo.models import DemoPersona
 from identity.roles import Role
 from oversight.service import create_due_batches, set_review_period
-from tests.conftest import BUYER_GSTIN, TEST_PASSWORD, set_decided_on
+from tests.conftest import BUYER_GSTIN, login_body, set_decided_on
 from tests.test_buyer_stock_limit import buyer_holds
 from tests.test_governance_api import RULE, decide, draft
 from tests.test_transaction_api import NEW_TX, login, post
@@ -149,13 +149,13 @@ def buyer_rejection_alert(ctx):
 
 @contract("login_start")
 def _(ctx):
-    body = {"user_id": ctx.trade.seller.user_id, "password": TEST_PASSWORD}
+    body = login_body(ctx.trade.seller)
     return post(ctx.client, "/api/auth/login", body)
 
 
 @contract("login_verify")
 def _(ctx):
-    body = {"user_id": ctx.trade.seller.user_id, "password": TEST_PASSWORD}
+    body = login_body(ctx.trade.seller)
     challenge = post(ctx.client, "/api/auth/login", body).json()["challenge_id"]
     code = ctx.otp_outbox[-1][1]
     return post(ctx.client, "/api/auth/login/verify", {"challenge_id": challenge, "code": code})
@@ -176,7 +176,7 @@ def _(ctx):
 
 @contract("demo_inbox")
 def _(ctx):
-    body = {"user_id": ctx.trade.seller.user_id, "password": TEST_PASSWORD}
+    body = login_body(ctx.trade.seller)
     with override_settings(**DEMO):
         post(ctx.client, "/api/auth/login", body)
         return ctx.client.get("/api/demo/inbox")

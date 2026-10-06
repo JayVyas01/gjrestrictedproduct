@@ -2,7 +2,7 @@ import pytest
 
 from alerts.models import AuthorityAlert
 from core.db_context import acting_as_system
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import login_body
 
 pytestmark = pytest.mark.django_db
 
@@ -11,7 +11,7 @@ def login(client, user, otp_outbox):
     client.logout()
     first = client.post(
         "/api/auth/login",
-        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        login_body(user),
         content_type="application/json",
     )
     client.post(

@@ -1,7 +1,10 @@
-"""First login step: check the password, enforce lockout, then send an OTP.
+"""First login step: find the account for the chosen role, check the password, enforce
+lockout, then send an OTP.
 
-Every outcome looks the same to the caller except success, so the API cannot be used
-to discover which user IDs exist. Re-requesting codes with a known-correct password is
+A party signs in with its GSTIN and officials with their email (owner decisions A1/A2,
+2026-10-06); `user_id` stays the internal key. Every outcome looks the same to the caller
+except success, so the API cannot be used to discover which identifiers exist, or which
+role an account has. Re-requesting codes with a known-correct password is
 also capped (R10): otherwise a valid password would grant unlimited OTP guesses across
 many challenges instead of the usual per-challenge attempt limit. The password is always
 checked, even for locked or inactive accounts (R11), so response time cannot be used to
@@ -16,8 +19,13 @@ from django.utils import timezone
 
 from audit.service import record
 from core import crypto
+from core.db_context import acting_as_system
 from identity import otp
-from identity.models import OtpChallenge, OtpPurpose, User
+from identity.models import OtpChallenge, OtpPurpose, User, email_index
+from identity.roles import ACCOUNT_ROLE, LoginRole, Role
+from licensing.models import Licence
+from positions.models import AreaLevel
+from positions.service import positions_held
 
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
@@ -31,14 +39,65 @@ def code_request_limit() -> int:
     return DEMO_CODE_REQUEST_LIMIT if settings.DEMO_MODE else LOCKOUT_THRESHOLD
 
 
-def start_login(user_id: str, password: str) -> OtpChallenge | None:
-    user = User.objects.select_for_update().filter(user_id=user_id.strip().upper()).first()
+# Which current position lets an officer sign in under each officer role.
+POSITION_LEVEL = {
+    LoginRole.AREA_OFFICER: AreaLevel.TALUKA,
+    LoginRole.SUPERINTENDENT: AreaLevel.DISTRICT,
+}
+
+
+def _account_for(role: str, identifier: str) -> User | None:
+    """The account `identifier` names under the sign-in `role`, or None. An account of another
+    role, or an officer without a current position at the right level, counts as unknown."""
+    if role not in ACCOUNT_ROLE:
+        return None
+    if role == LoginRole.PARTY:
+        # Normalised as licensing does (strip, upper), then matched by blind index.
+        lookup = {"licensee_gstin_index": crypto.blind_index("gstin", identifier.strip().upper())}
+    else:
+        if not identifier.strip():
+            return None
+        lookup = {"email_index": email_index(identifier)}
+    user = (
+        User.objects.select_for_update()
+        .filter(role=ACCOUNT_ROLE[LoginRole(role)], **lookup)
+        .first()
+    )
+    if user is not None and role in POSITION_LEVEL:
+        levels = {position.area.level for position in positions_held(user)}
+        if POSITION_LEVEL[LoginRole(role)] not in levels:
+            return None
+    return user
+
+
+def login_identity(user: User) -> tuple[str, str]:
+    """(sign-in role, identifier) for an account; ("", "") when it cannot sign in, such as an
+    officer without a position or a licensee whose business has no licence on record. A user
+    holding both an Area Officer and a Superintendent position gets the Area Officer role.
+    Used by the demo persona list and the tests."""
+    if user.role == Role.LICENSEE:
+        with acting_as_system("login_identity"):
+            licence = (
+                Licence.objects.filter(gstin_index=user.licensee_gstin_index).order_by("id").first()
+            )
+            return (LoginRole.PARTY.value, licence.gstin()) if licence else ("", "")
+    if user.role == Role.PERSONNEL:
+        levels = {position.area.level for position in positions_held(user)}
+        for role, level in POSITION_LEVEL.items():
+            if level in levels:
+                return role.value, user.get_email()
+        return "", ""
+    return LoginRole(user.role).value, user.get_email()
+
+
+def start_login(role: str, identifier: str, password: str) -> OtpChallenge | None:
+    user = _account_for(role, identifier)
     if user is None:
         make_password(password)  # spend the same time as a real check
         record(
             action="login.failed",
-            reason="unknown user id",
-            payload={"attempted_index": crypto.blind_index("login_attempt", user_id)},
+            reason="unknown identifier",
+            payload={"attempted_index": crypto.blind_index("login_attempt", identifier or "-")},
         )
         return None
 

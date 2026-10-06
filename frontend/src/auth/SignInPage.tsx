@@ -53,7 +53,7 @@ export function SignInPage() {
           <>
             <PersonaPicker
               onPick={(persona) =>
-                passwordStep.current?.signInAs(persona.user_id, persona.password)
+                passwordStep.current?.signInAs(persona.identifier, persona.password)
               }
             />
             <Group>

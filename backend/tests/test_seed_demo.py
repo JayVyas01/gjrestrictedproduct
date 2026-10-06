@@ -233,7 +233,11 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
             assert entry["password"] == DEMO_PASSWORD
             started = client.post(
                 "/api/auth/login",
-                {"user_id": entry["user_id"], "password": entry["password"]},
+                {
+                    "role": entry["role"],
+                    "identifier": entry["identifier"],
+                    "password": entry["password"],
+                },
                 content_type="application/json",
             )
             assert started.status_code == 200, entry["key"]
@@ -244,6 +248,9 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
                 content_type="application/json",
             )
             assert verified.status_code == 200, entry["key"]
+            # Officials' passwords were issued, so they must change them first (A3).
+            assert verified.json()["must_change_password"] is (entry["role"] != "PARTY")
+            client.post("/api/auth/logout")
 
 
 def test_the_dataset_keeps_to_the_synthetic_data_rules():
@@ -255,6 +262,9 @@ def test_the_dataset_keeps_to_the_synthetic_data_rules():
         assert all(licence.number.startswith("DEMO/") for licence in business.licences)
     for official in dataset.OFFICIALS:
         assert official.contact.startswith("+91980000") and len(official.contact) == 13
+    emails = [official.email for official in dataset.OFFICIALS]
+    assert len(set(emails)) == len(emails)
+    assert all(email.endswith("@demo.gujarat.example") for email in emails)
     contacts = [b.contact for b in dataset.BUSINESSES] + [o.contact for o in dataset.OFFICIALS]
     assert len(set(contacts)) == len(contacts)
     assert {Decimal(t.above_litres) for t in dataset.THRESHOLDS} == {Decimal("200")}

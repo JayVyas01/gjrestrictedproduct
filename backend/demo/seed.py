@@ -176,7 +176,11 @@ class Seeder:
     def _officials(self) -> None:
         for official in dataset.OFFICIALS:
             user = User.objects.create_user(
-                role=official.role, password=self.password, contact=official.contact
+                role=official.role,
+                password=self.password,
+                contact=official.contact,
+                email=official.email,
+                must_change_password=True,  # an issued password (A3)
             )
             record(
                 action="demo.account_created",

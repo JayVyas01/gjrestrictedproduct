@@ -55,6 +55,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "identity.middleware.PasswordChangeGateMiddleware",  # issued passwords must be changed
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.DbContextMiddleware",
 ]

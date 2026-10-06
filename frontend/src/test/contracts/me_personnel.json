@@ -1,12 +1,13 @@
 {
   "display_name": "Area Officer, Sanand",
+  "must_change_password": false,
   "positions": [
     {
-      "id": 61,
+      "id": 69,
       "level": "TALUKA",
       "title": "Area Officer, Sanand"
     }
   ],
   "role": "PERSONNEL",
-  "user_id": "GJ7DH3DTTVC7"
+  "user_id": "GJA86SX7VTY5"
 }

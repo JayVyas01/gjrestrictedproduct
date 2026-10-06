@@ -10,8 +10,9 @@ from audit.models import AuditEvent
 from catalogue.service import add_threshold_version
 from core.db_context import SYSTEM_ROLE, acting_as_system, set_actor
 from identity.roles import Role
+from identity.views import display_name
 from positions.service import assign
-from tests.conftest import BUYER_GSTIN, DEMO_GSTIN, TEST_PASSWORD
+from tests.conftest import BUYER_GSTIN, DEMO_GSTIN, TEST_PASSWORD, login_body
 from tests.test_buyer_stock_limit import buyer_holds
 from tests.test_transaction_api import login, post
 from tests.test_transaction_decisions import act, new_tx
@@ -40,6 +41,7 @@ def test_me_has_display_name_and_positions(app_db, client, org, trade, make_user
         "user_id": trade.seller.user_id,
         "role": "LICENSEE",
         "display_name": "Sanand Spirits Pvt Ltd",
+        "must_change_password": False,
         "positions": [],
     }
 
@@ -56,9 +58,11 @@ def test_me_has_display_name_and_positions(app_db, client, org, trade, make_user
         },
     ]
 
-    login(client, trade.superintendent, otp_outbox)  # their position went to the officer
-    me = client.get("/api/auth/me").json()
-    assert (me["display_name"], me["positions"]) == ("Unassigned officer", [])
+    # Their position went to the officer: with no position they can no longer sign in, and
+    # a session that outlives the position shows them as unassigned.
+    body = {"role": "SUPERINTENDENT", "identifier": trade.superintendent.get_email()}
+    assert post(client, "/api/auth/login", {**body, "password": TEST_PASSWORD}).status_code == 401
+    assert display_name(trade.superintendent, []) == "Unassigned officer"
 
     authority = make_user(role=Role.LICENSING_AUTHORITY, contact="+919800000601")
     login(client, authority, otp_outbox)
@@ -211,7 +215,7 @@ def test_check_requires_licensee_and_csrf(app_db, client, trade, otp_outbox):
     token = c.get("/api/auth/csrf").cookies["csrftoken"].value
     first = c.post(
         "/api/auth/login",
-        {"user_id": trade.seller.user_id, "password": TEST_PASSWORD},
+        login_body(trade.seller),
         content_type="application/json",
         HTTP_X_CSRFTOKEN=token,
     )

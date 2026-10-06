@@ -21,12 +21,35 @@ def generate_user_id() -> str:
     return "GJ" + "".join(secrets.choice(USER_ID_ALPHABET) for _ in range(10))
 
 
+def normalise_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def email_index(email: str) -> str:
+    """Blind index of an email, the sign-in identifier of every official."""
+    return crypto.blind_index("email", normalise_email(email))
+
+
 class UserManager(BaseUserManager):
     def create_user(
-        self, *, role: str, password: str, contact: str, licensee_gstin_index: str = ""
+        self,
+        *,
+        role: str,
+        password: str,
+        contact: str,
+        licensee_gstin_index: str = "",
+        email: str = "",
+        address: str = "",
+        must_change_password: bool = False,
     ) -> "User":
-        user = self.model(role=role, licensee_gstin_index=licensee_gstin_index)
+        user = self.model(
+            role=role,
+            licensee_gstin_index=licensee_gstin_index,
+            must_change_password=must_change_password,
+        )
         user.set_contact(contact)
+        user.set_email(email)
+        user.set_address(address)
         user.set_password(password)
         user.save()
         return user
@@ -38,6 +61,13 @@ class User(AbstractBaseUser):
     # Blind index of the licensee's GSTIN; links the account to its licences. Blank otherwise.
     licensee_gstin_index = models.CharField(max_length=64, blank=True, db_index=True)
     contact_encrypted = models.TextField()
+    # Officials sign in with their email (through the blind index); a party's is only stored.
+    email_encrypted = models.TextField(blank=True)
+    email_index = models.CharField(max_length=64, blank=True, db_index=True)
+    address_encrypted = models.TextField(blank=True)
+    # Set for passwords the system issued: every API but me, password and logout answers 403
+    # until the user chooses their own (identity/middleware.py).
+    must_change_password = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     failed_login_count = models.PositiveSmallIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
@@ -58,6 +88,11 @@ class User(AbstractBaseUser):
                 condition=~models.Q(licensee_gstin_index=""),
                 name="one_account_per_licensee_gstin",
             ),
+            models.UniqueConstraint(
+                fields=["email_index"],
+                condition=~models.Q(email_index=""),
+                name="one_account_per_email",
+            ),
         ]
 
     def set_contact(self, contact: str) -> None:
@@ -65,6 +100,21 @@ class User(AbstractBaseUser):
 
     def get_contact(self) -> str:
         return crypto.decrypt(self.contact_encrypted)
+
+    def set_email(self, email: str) -> None:
+        email = normalise_email(email)
+        self.email_encrypted = crypto.encrypt(email) if email else ""
+        self.email_index = email_index(email) if email else ""
+
+    def get_email(self) -> str:
+        return crypto.decrypt(self.email_encrypted) if self.email_encrypted else ""
+
+    def set_address(self, address: str) -> None:
+        address = address.strip()
+        self.address_encrypted = crypto.encrypt(address) if address else ""
+
+    def get_address(self) -> str:
+        return crypto.decrypt(self.address_encrypted) if self.address_encrypted else ""
 
     def has_role(self, *roles: str) -> bool:
         return self.is_active and self.role in roles

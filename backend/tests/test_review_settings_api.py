@@ -13,7 +13,7 @@ from identity.roles import Role
 from oversight.models import SuperintendentSetting
 from oversight.service import create_due_batches, review_settings_overview
 from positions.models import Area, AreaLevel, Position
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import login_body
 from tests.test_transaction_api import login
 
 pytestmark = pytest.mark.django_db
@@ -82,9 +82,9 @@ def test_overview_lists_every_district_position(
     ],
 )
 def test_only_licensing_authority_can_change(
-    app_db, client, org, make_user, otp_outbox, role, may_read, may_change
+    app_db, client, org, make_member, otp_outbox, role, may_read, may_change
 ):
-    login(client, make_user(role=role), otp_outbox)
+    login(client, make_member(role), otp_outbox)
     assert client.get(URL).status_code == (200 if may_read else 403)
     response = put(client, org.district_officer.id, {"period_days": 30})
     assert response.status_code == (200 if may_change else 403)
@@ -157,7 +157,7 @@ def test_change_requires_csrf(app_db, org, make_user, otp_outbox):
     token = c.get("/api/auth/csrf").cookies["csrftoken"].value
     first = c.post(
         "/api/auth/login",
-        {"user_id": la.user_id, "password": TEST_PASSWORD},
+        login_body(la),
         content_type="application/json",
         HTTP_X_CSRFTOKEN=token,
     )

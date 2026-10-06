@@ -15,7 +15,7 @@ from identity.roles import Role
 from licensing.service import set_status
 from licensing.views import LicenceSearchView
 from stock.service import set_opening_balance
-from tests.conftest import BUYER_GSTIN, DEMO_GSTIN, TEST_PASSWORD
+from tests.conftest import BUYER_GSTIN, DEMO_GSTIN, login_body
 from tests.test_transaction_api import login, post
 
 pytestmark = pytest.mark.django_db
@@ -49,10 +49,10 @@ def events(action):
     ],
 )
 def test_only_authorities_can_use_register(
-    app_db, client, make_licence, make_user, otp_outbox, role, allowed
+    app_db, client, make_licence, make_member, otp_outbox, role, allowed
 ):
     licence = make_licence()
-    login(client, make_user(role=role), otp_outbox)
+    login(client, make_member(role), otp_outbox)
     expected = 200 if allowed else 403
     assert client.get("/api/licences").status_code == expected
     assert client.get(f"/api/licences/{licence.id}").status_code == expected
@@ -122,7 +122,7 @@ def test_search_needs_csrf_and_uses_the_lookup_throttle(app_db, make_user, otp_o
     headers = {"HTTP_X_CSRFTOKEN": token}
     first = c.post(
         "/api/auth/login",
-        {"user_id": authority.user_id, "password": TEST_PASSWORD},
+        login_body(authority),
         content_type="application/json",
         **headers,
     )

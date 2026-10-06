@@ -8,7 +8,13 @@ import type * as T from "./types";
 
 const keysOf = <K extends string>(keys: K[]) => keys;
 
-const ME = keysOf(["user_id", "role", "display_name", "positions"] satisfies (keyof T.Me)[]);
+const ME = keysOf([
+  "user_id",
+  "role",
+  "display_name",
+  "positions",
+  "must_change_password",
+] satisfies (keyof T.Me)[]);
 const HOME = keysOf(["role", "counts"] satisfies (keyof T.Home)[]);
 const CHALLENGE = keysOf(["challenge_id"] satisfies (keyof T.Challenge)[]);
 const SUMMARY = keysOf([
@@ -103,7 +109,9 @@ const GUARDS: Record<string, Guard> = {
   "home_*": { keys: HOME },
   login_start: { keys: CHALLENGE },
   decision_code: { keys: CHALLENGE },
-  login_verify: { keys: ["user_id", "role"] satisfies (keyof T.LoginVerified)[] },
+  login_verify: {
+    keys: ["user_id", "role", "must_change_password"] satisfies (keyof T.LoginVerified)[],
+  },
   transactions_list: { keys: SUMMARY, list: true },
   transaction_created: { keys: DETAIL },
   "transaction_detail_*": {
@@ -230,7 +238,14 @@ const GUARDS: Record<string, Guard> = {
     },
   },
   demo_personas: {
-    keys: ["key", "label", "description", "user_id", "password"] satisfies (keyof T.DemoPersona)[],
+    keys: [
+      "key",
+      "label",
+      "description",
+      "role",
+      "identifier",
+      "password",
+    ] satisfies (keyof T.DemoPersona)[],
     list: true,
   },
   demo_inbox: {

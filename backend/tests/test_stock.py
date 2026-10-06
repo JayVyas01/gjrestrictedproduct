@@ -13,7 +13,7 @@ from stock.service import (
     set_opening_balance,
     transfer,
 )
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import login_body
 
 pytestmark = pytest.mark.django_db
 SELLER = "a" * 64
@@ -149,7 +149,7 @@ def test_my_stock_api(app_db, client, catalogue, make_licence, make_licensee, ot
     user = make_licensee(licence)
     first = client.post(
         "/api/auth/login",
-        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        login_body(user),
         content_type="application/json",
     )
     client.post(

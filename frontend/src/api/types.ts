@@ -11,9 +11,20 @@ export interface Challenge {
   challenge_id: string;
 }
 
+/** The role chosen at sign-in; officers sign in as AREA_OFFICER or SUPERINTENDENT. */
+export type LoginRole =
+  | "PARTY"
+  | "LICENSING_AUTHORITY"
+  | "AREA_OFFICER"
+  | "SUPERINTENDENT"
+  | "HEAD_AUTHORITY"
+  | "SOFTWARE_OWNER";
+
 export interface LoginVerified {
   user_id: string;
   role: Role;
+  /** A password the system issued: every other API answers 403 until it is changed. */
+  must_change_password: boolean;
 }
 
 export interface Position {
@@ -27,6 +38,7 @@ export interface Me {
   role: Role;
   display_name: string;
   positions: Position[];
+  must_change_password: boolean;
 }
 
 // Home: each role gets a different subset of counts ----------------------------------------------
@@ -352,7 +364,9 @@ export interface DemoPersona {
   key: string;
   label: string;
   description: string;
-  user_id: string;
+  role: LoginRole;
+  /** A party's GSTIN or an official's email. */
+  identifier: string;
   password: string;
 }
 

@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 
 from demo.dataset import PERSONAS
 from demo.models import DemoInboxMessage, DemoPersona
+from identity.login import login_identity
+from identity.models import User
 
 INBOX_SIZE = 20
 
@@ -43,18 +45,25 @@ class InboxView(DemoView):
 
 
 class PersonasView(DemoView):
+    """Each seeded persona with what the sign-in form needs: the sign-in role, the identifier
+    (a party's GSTIN or an official's email) and the password."""
+
     def get(self, request):
         seeded = dict(DemoPersona.objects.values_list("key", "user_id"))
-        return Response(
-            [
+        accounts = {user.user_id: user for user in User.objects.filter(user_id__in=seeded.values())}
+        entries = []
+        for persona in PERSONAS:
+            if persona.key not in seeded:
+                continue
+            role, identifier = login_identity(accounts[seeded[persona.key]])
+            entries.append(
                 {
                     "key": persona.key,
                     "label": persona.label,
                     "description": persona.description,
-                    "user_id": seeded[persona.key],
+                    "role": role,
+                    "identifier": identifier,
                     "password": settings.DEMO_PASSWORD,
                 }
-                for persona in PERSONAS
-                if persona.key in seeded
-            ]
-        )
+            )
+        return Response(entries)

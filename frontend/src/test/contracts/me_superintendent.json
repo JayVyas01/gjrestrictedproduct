@@ -1,12 +1,13 @@
 {
   "display_name": "District Officer, Ahmedabad",
+  "must_change_password": false,
   "positions": [
     {
-      "id": 66,
+      "id": 74,
       "level": "DISTRICT",
       "title": "District Officer, Ahmedabad"
     }
   ],
   "role": "PERSONNEL",
-  "user_id": "GJUHAT3U3BER"
+  "user_id": "GJQTTMZMKJMQ"
 }

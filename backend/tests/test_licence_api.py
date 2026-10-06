@@ -2,7 +2,7 @@ import pytest
 
 from identity.models import User
 from identity.roles import Role
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import TEST_PASSWORD, login_body
 
 pytestmark = pytest.mark.django_db
 
@@ -10,7 +10,7 @@ pytestmark = pytest.mark.django_db
 def log_in(client, user, otp_outbox):
     first = client.post(
         "/api/auth/login",
-        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        login_body(user),
         content_type="application/json",
     )
     client.post(
@@ -78,8 +78,8 @@ def test_class_licence_card_carries_the_class_unit(
 
 
 @pytest.mark.parametrize("role", [Role.PERSONNEL, Role.LICENSING_AUTHORITY, Role.HEAD_AUTHORITY])
-def test_only_licensees_have_my_licences(app_db, client, make_user, otp_outbox, role):
-    log_in(client, make_user(role=role), otp_outbox)
+def test_only_licensees_have_my_licences(app_db, client, make_member, otp_outbox, role):
+    log_in(client, make_member(role), otp_outbox)
     assert client.get("/api/licences/mine").status_code == 403
 
 
@@ -87,7 +87,7 @@ def test_my_licences_requires_login(app_db, client):
     assert client.get("/api/licences/mine").status_code == 403
 
 
-def test_substance_list_for_logged_in_users(app_db, client, catalogue, make_user, otp_outbox):
-    log_in(client, make_user(role=Role.LICENSEE), otp_outbox)
+def test_substance_list_for_logged_in_users(app_db, client, catalogue, make_member, otp_outbox):
+    log_in(client, make_member(Role.LICENSEE), otp_outbox)
     body = client.get("/api/catalogue/substances").json()
     assert {"code": "WHISKY", "name": "Whisky", "substance_class": "Spirits", "unit": "L"} in body

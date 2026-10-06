@@ -1,16 +1,18 @@
 [
   {
     "description": "Sanand Spirits Pvt Ltd, a wholesale licensee in Sanand. Starts sales.",
+    "identifier": "99AAAAA0000A1Z5",
     "key": "seller",
     "label": "Seller",
     "password": "demo-password-2026",
-    "user_id": "GJCTQJHFMUPH"
+    "role": "PARTY"
   },
   {
     "description": "Bopal Bar & Kitchen, a hotel permit room. Confirms or rejects incoming sales.",
+    "identifier": "99BBBBB1111B1Z5",
     "key": "buyer",
     "label": "Buyer",
     "password": "demo-password-2026",
-    "user_id": "GJGJWMGCV52B"
+    "role": "PARTY"
   }
 ]

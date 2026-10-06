@@ -132,7 +132,7 @@ describe("the persona picker", () => {
     await user.click(await screen.findByRole("button", { name: "Seller" }));
 
     expect(await screen.findByText(HINT)).toBeInTheDocument();
-    expect(posted).toEqual([{ user_id: SELLER!.user_id, password: SELLER!.password }]);
+    expect(posted).toEqual([{ user_id: SELLER!.identifier, password: SELLER!.password }]);
     // The picker belongs to step 1 only.
     expect(screen.queryByText(PICKER)).not.toBeInTheDocument();
   });

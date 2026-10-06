@@ -13,7 +13,7 @@ from governance.models import ProposalStatus, RuleChangeProposal
 from identity.models import OtpChallenge
 from identity.roles import Role
 from positions.service import assign
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import login_body
 from tests.test_transaction_api import login, post
 
 pytestmark = pytest.mark.django_db
@@ -35,7 +35,7 @@ WRONG_CODE = {"detail": "The code is wrong or has expired. Request a new code."}
 
 
 @pytest.fixture
-def people(org, make_user):
+def people(org, make_user, make_member):
     superintendent = make_user(role=Role.PERSONNEL, contact="+919800000603")
     assign(org.district_officer, superintendent, by="test")
     officer = make_user(role=Role.PERSONNEL, contact="+919800000606")
@@ -47,7 +47,7 @@ def people(org, make_user):
         superintendent=superintendent,
         officer=officer,
         owner=make_user(role=Role.SOFTWARE_OWNER, contact="+919800000605"),
-        licensee=make_user(role=Role.LICENSEE, contact="+919800000607"),
+        licensee=make_member(Role.LICENSEE, contact="+919800000607"),
     )
 
 
@@ -427,7 +427,7 @@ def test_posts_need_csrf(app_db, catalogue, people, otp_outbox):
     token = c.get("/api/auth/csrf").cookies["csrftoken"].value
     first = c.post(
         "/api/auth/login",
-        {"user_id": people.licensing.user_id, "password": TEST_PASSWORD},
+        login_body(people.licensing),
         content_type="application/json",
         HTTP_X_CSRFTOKEN=token,
     )

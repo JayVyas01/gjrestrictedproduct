@@ -5,7 +5,7 @@ from django.test import Client
 
 from core.db_context import acting_as_system
 from stock.service import balance_of
-from tests.conftest import BUYER_GSTIN, TEST_PASSWORD
+from tests.conftest import BUYER_GSTIN, login_body
 
 pytestmark = pytest.mark.django_db
 NEW_TX = {
@@ -23,7 +23,7 @@ def login(client, user, otp_outbox):
     client.logout()
     first = client.post(
         "/api/auth/login",
-        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        login_body(user),
         content_type="application/json",
     )
     client.post(
@@ -197,7 +197,7 @@ def test_post_requires_csrf_token(app_db, trade, otp_outbox):
     headers = {"HTTP_X_CSRFTOKEN": token}
     first = c.post(
         "/api/auth/login",
-        {"user_id": trade.seller.user_id, "password": TEST_PASSWORD},
+        login_body(trade.seller),
         content_type="application/json",
         **headers,
     )

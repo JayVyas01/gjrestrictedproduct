@@ -1,8 +1,9 @@
 import pytest
 
+from identity.roles import Role
 from reasons.models import ReasonCode, ReasonKind
 from reasons.service import InvalidReason, active_reasons, resolve_reason
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import login_body
 
 pytestmark = pytest.mark.django_db
 
@@ -54,10 +55,10 @@ def test_admin_can_add_a_new_reason_without_code_change(app_db):
 
 
 def test_reason_code_api_lists_active_codes(app_db, client, make_user, otp_outbox):
-    user = make_user()
+    user = make_user(role=Role.HEAD_AUTHORITY)
     first = client.post(
         "/api/auth/login",
-        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        login_body(user),
         content_type="application/json",
     )
     client.post(

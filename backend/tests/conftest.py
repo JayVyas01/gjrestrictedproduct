@@ -19,6 +19,7 @@ from audit.models import AuditEvent
 from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass, Unit
 from catalogue.service import add_rule_version, add_threshold_version
 from core.db_context import SYSTEM_ROLE, acting_as_system, current_actor, set_actor
+from identity.login import login_identity
 from identity.models import User
 from identity.otp_delivery import OutboxOtpSender
 from identity.roles import Role
@@ -48,12 +49,51 @@ def app_db(db):
         cursor.execute("SET ROLE gj_app")
 
 
+_emails = count(1)
+
+
 @pytest.fixture
 def make_user(db):
-    def _make(role=Role.LICENSEE, password=TEST_PASSWORD, contact="+919800000001") -> User:
-        return User.objects.create_user(role=role, password=password, contact=contact)
+    """An account. Officials get a unique sign-in email unless one is given."""
+
+    def _make(
+        role=Role.LICENSEE,
+        password=TEST_PASSWORD,
+        contact="+919800000001",
+        email=None,
+        must_change_password=False,
+    ) -> User:
+        if email is None:
+            email = "" if role == Role.LICENSEE else f"user{next(_emails)}@test.example"
+        return User.objects.create_user(
+            role=role,
+            password=password,
+            contact=contact,
+            email=email,
+            must_change_password=must_change_password,
+        )
 
     return _make
+
+
+def login_body(user, password=TEST_PASSWORD) -> dict:
+    """The sign-in request for `user`: its sign-in role and identifier (GSTIN or email)."""
+    role, identifier = login_identity(user)
+    assert role, f"{user.user_id} ({user.role}) has no way to sign in"
+    return {"role": role, "identifier": identifier, "password": password}
+
+
+def api_login(client, user, otp_outbox, password=TEST_PASSWORD):
+    """Sign in through the real API (password, then the code); returns the verify response."""
+    started = client.post(
+        "/api/auth/login", login_body(user, password), content_type="application/json"
+    )
+    assert started.status_code == 200, started.content
+    return client.post(
+        "/api/auth/login/verify",
+        {"challenge_id": started.json()["challenge_id"], "code": otp_outbox[-1][1]},
+        content_type="application/json",
+    )
 
 
 @pytest.fixture
@@ -193,6 +233,24 @@ def make_licensee(db):
             contact=contact,
             licensee_gstin_index=licence.gstin_index,
         )
+
+    return _make
+
+
+@pytest.fixture
+def make_member(make_user, make_licence, make_licensee, org):
+    """An account of `role` that can sign in: a licensee whose business has a licence on record,
+    or an officer holding the Sanand Area Officer position (replacing any holder)."""
+    numbers = count(1)
+
+    def _make(role, contact="+919800000001") -> User:
+        if role == Role.LICENSEE:
+            licence = make_licence(gstin=f"99CCCCC{next(numbers):04d}C1Z5", contact=contact)
+            return make_licensee(licence, contact=contact)
+        user = make_user(role=role, contact=contact)
+        if role == Role.PERSONNEL:
+            assign(org.area_officer, user, by="test")
+        return user
 
     return _make
 

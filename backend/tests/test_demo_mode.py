@@ -20,6 +20,7 @@ from identity.models import OtpPurpose
 from identity.otp_delivery import ConsoleOtpSender, OutboxOtpSender
 from identity.roles import Role
 from positions.service import assign
+from tests.conftest import DEMO_GSTIN, login_body
 
 pytestmark = pytest.mark.django_db
 
@@ -161,11 +162,9 @@ def test_outbox_and_console_senders_accept_the_user_id(otp_outbox, capsys):
 
 
 def _login_start(client, user):
-    from tests.conftest import TEST_PASSWORD
-
     return client.post(
         "/api/auth/login",
-        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        login_body(user),
         content_type="application/json",
     )
 
@@ -234,9 +233,27 @@ def test_inbox_lists_newest_first_and_at_most_twenty(app_db, client):
 # --- The persona list ------------------------------------------------------------------------
 
 
+def test_personas_give_each_role_its_sign_in_identifier(app_db, client, trade):
+    for key, user in [
+        ("seller", trade.seller),
+        ("area_officer", trade.officer),
+        ("superintendent", trade.superintendent),
+    ]:
+        DemoPersona.objects.create(key=key, user_id=user.user_id)
+    with override_settings(**DEMO):
+        body = {entry["key"]: entry for entry in client.get("/api/demo/personas").json()}
+    assert (body["seller"]["role"], body["seller"]["identifier"]) == ("PARTY", DEMO_GSTIN)
+    assert (body["area_officer"]["role"], body["area_officer"]["identifier"]) == (
+        "AREA_OFFICER",
+        trade.officer.get_email(),
+    )
+    assert body["superintendent"]["role"] == "SUPERINTENDENT"
+
+
 def test_personas_are_listed_in_the_fixed_order_with_the_password(app_db, client, make_user):
     for persona in reversed(PERSONAS):
-        DemoPersona.objects.create(key=persona.key, user_id=make_user().user_id)
+        user = make_user(role=Role.HEAD_AUTHORITY, email=f"{persona.key}@demo.gujarat.example")
+        DemoPersona.objects.create(key=persona.key, user_id=user.user_id)
     with override_settings(**DEMO):
         response = client.get("/api/demo/personas")
     assert response.status_code == 200
@@ -251,10 +268,10 @@ def test_personas_are_listed_in_the_fixed_order_with_the_password(app_db, client
         "Head Authority A",
         "Head Authority B",
     ]
-    stored = dict(DemoPersona.objects.values_list("key", "user_id"))
     for entry in body:
-        assert set(entry) == {"key", "label", "description", "user_id", "password"}
-        assert entry["user_id"] == stored[entry["key"]]
+        assert set(entry) == {"key", "label", "description", "role", "identifier", "password"}
+        assert entry["role"] == "HEAD_AUTHORITY"
+        assert entry["identifier"] == f"{entry['key']}@demo.gujarat.example"
         assert entry["password"] == "demo-password-2026"
         assert entry["description"]
 

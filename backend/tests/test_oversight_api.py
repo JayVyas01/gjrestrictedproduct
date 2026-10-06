@@ -4,7 +4,7 @@ import pytest
 
 from core.db_context import acting_as_system
 from oversight.service import create_due_batches
-from tests.conftest import TEST_PASSWORD, set_decided_on
+from tests.conftest import login_body, set_decided_on
 
 pytestmark = pytest.mark.django_db
 
@@ -13,7 +13,7 @@ def login(client, user, otp_outbox):
     client.logout()
     first = client.post(
         "/api/auth/login",
-        {"user_id": user.user_id, "password": TEST_PASSWORD},
+        login_body(user),
         content_type="application/json",
     )
     client.post(

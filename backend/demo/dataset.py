@@ -229,19 +229,53 @@ class Official:
     key: str
     role: str
     contact: str
+    email: str  # the sign-in identifier; on the reserved example domain
     positions: tuple[str, ...] = ()
 
 
 # Bavla and Padra have no officer yet: no seller there needs one.
+DEMO_EMAIL_DOMAIN = "demo.gujarat.example"
+
+
+def _email(name: str) -> str:
+    return f"{name}@{DEMO_EMAIL_DOMAIN}"
+
+
+# Officials' passwords are issued, so each must choose their own at the first sign-in (A3).
 OFFICIALS = (
-    Official("licensing_authority", "LICENSING_AUTHORITY", "+919800000001"),
-    Official("head_authority_a", "HEAD_AUTHORITY", "+919800000002"),
-    Official("head_authority_b", "HEAD_AUTHORITY", "+919800000003"),
-    Official("area_officer", "PERSONNEL", "+919800000011", ("AO-SND",)),
-    Official("daskroi_officer", "PERSONNEL", "+919800000012", ("AO-DSK",)),
-    Official("superintendent", "PERSONNEL", "+919800000013", ("DO-AHD",)),
-    Official("vadodara_city_officer", "PERSONNEL", "+919800000014", ("AO-VDC",)),
-    Official("vadodara_superintendent", "PERSONNEL", "+919800000015", ("DO-VAD",)),
+    Official(
+        "licensing_authority",
+        "LICENSING_AUTHORITY",
+        "+919800000001",
+        _email("licensing.authority"),
+    ),
+    Official("head_authority_a", "HEAD_AUTHORITY", "+919800000002", _email("head.a")),
+    Official("head_authority_b", "HEAD_AUTHORITY", "+919800000003", _email("head.b")),
+    Official("area_officer", "PERSONNEL", "+919800000011", _email("officer.sanand"), ("AO-SND",)),
+    Official(
+        "daskroi_officer", "PERSONNEL", "+919800000012", _email("officer.daskroi"), ("AO-DSK",)
+    ),
+    Official(
+        "superintendent",
+        "PERSONNEL",
+        "+919800000013",
+        _email("superintendent.ahmedabad"),
+        ("DO-AHD",),
+    ),
+    Official(
+        "vadodara_city_officer",
+        "PERSONNEL",
+        "+919800000014",
+        _email("officer.vadodara-city"),
+        ("AO-VDC",),
+    ),
+    Official(
+        "vadodara_superintendent",
+        "PERSONNEL",
+        "+919800000015",
+        _email("superintendent.vadodara"),
+        ("DO-VAD",),
+    ),
 )
 
 # Who records licences and opening stock, and who assigns officers to positions.

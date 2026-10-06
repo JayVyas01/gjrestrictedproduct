@@ -8,16 +8,20 @@ its own executed capture block."""
 
 import csv
 import logging
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
 from django.core.management import CommandError, call_command
+from django.utils import timezone
 
 from core.db_context import acting_as_system, set_actor
 from demo import csv_export
 from demo.models import DemoCredential
 from identity.models import User
 from identity.roles import Role
+from licensing.models import LicenceStatus
+from licensing.service import set_status
 from tests.conftest import (
     BUYER_GSTIN,
     DEMO_GSTIN,
@@ -39,6 +43,7 @@ PARTY_COLUMNS = [
     "signed_up",
     "licence_numbers",
     "licence_types",
+    "licence_statuses",
     "scopes",
     "talukas",
     "may_buy",
@@ -141,6 +146,7 @@ def test_a_party_row_has_its_licences_stock_and_permissions(
         "signed_up": "yes",
         "licence_numbers": "GJ/TEST/0001; GJ/TEST/0003",
         "licence_types": "Retail; Wholesale",
+        "licence_statuses": "ACTIVE; ACTIVE",
         "scopes": "Spirits; Rum",
         "talukas": "Sanand; Sanand",
         "may_buy": "yes; yes",
@@ -163,6 +169,22 @@ def test_a_licensed_business_without_an_account_is_listed_for_sign_up(
     assert unsigned["signed_up"] == "no"
     assert unsigned["password"] == ""
     assert unsigned["email"] == ""
+
+
+def test_licence_statuses_show_suspensions_and_expired_validity(app_db, tmp_path, make_licence):
+    today = timezone.localdate()
+    make_licence(gstin=UNSIGNED_GSTIN, holder_name="Bavla Wines", contact="+919800000555")
+    suspended = make_licence(gstin=UNSIGNED_GSTIN, contact="+919800000555")
+    ended = {"starts_on": today - timedelta(days=30), "ends_on": today - timedelta(days=1)}
+    make_licence(gstin=UNSIGNED_GSTIN, **ended)  # its only period ended yesterday
+    make_licence(  # its only period has not started yet
+        gstin=UNSIGNED_GSTIN, starts_on=today + timedelta(days=1), ends_on=today + timedelta(days=9)
+    )
+    with acting_as_system("test"):
+        set_status(suspended, LicenceStatus.SUSPENDED, by="test", reason="inspection")
+    csv_export.export_all(tmp_path)
+    party = row(read(tmp_path, "parties.csv"), gstin=UNSIGNED_GSTIN)
+    assert party["licence_statuses"] == "ACTIVE; SUSPENDED; EXPIRED; EXPIRED"
 
 
 def test_officials_have_role_email_password_and_the_change_flag(app_db, tmp_path, trade, make_user):

@@ -1,7 +1,11 @@
 """The scripted demo story, as plain data. `seed_demo` plays it through the real services.
 
 Everything here is synthetic: GSTINs use state code 99 (no real business has it), phone numbers
-are in the reserved +91 98000 0xxxx range and licence numbers start with DEMO/.
+are in the reserved +91 98000 0xxxx range, licence numbers start with DEMO/ and officials'
+emails use the reserved example domain. The places are real Gujarat districts and talukas:
+Ahmedabad (Sanand, Daskroi, Bavla), Vadodara (Vadodara City, Padra) and Gandhinagar
+(Gandhinagar, Kalol). Businesses marked `enrolled=False` are licensed but have no account yet,
+so testers can try the demo sign-up with them.
 
 How to read the dates: `Ago(12, "15:30")` means 12 days before the day the seed runs, at 15:30
 India time, and `HoursAgo(3)` means 3 hours before the seed runs. The story covers the last 75
@@ -210,6 +214,9 @@ AREAS = (
     ("GJ-VAD", "Vadodara", "DISTRICT", "GJ"),
     ("GJ-VAD-VDC", "Vadodara City", "TALUKA", "GJ-VAD"),
     ("GJ-VAD-PDR", "Padra", "TALUKA", "GJ-VAD"),
+    ("GJ-GNR", "Gandhinagar", "DISTRICT", "GJ"),
+    ("GJ-GNR-GNR", "Gandhinagar", "TALUKA", "GJ-GNR"),
+    ("GJ-GNR-KLL", "Kalol", "TALUKA", "GJ-GNR"),
 )
 
 # (code, title, area code): one approving position per district and taluka.
@@ -221,6 +228,9 @@ POSITIONS = (
     ("DO-VAD", "Superintendent, Vadodara", "GJ-VAD"),
     ("AO-VDC", "Area Officer, Vadodara City", "GJ-VAD-VDC"),
     ("AO-PDR", "Area Officer, Padra", "GJ-VAD-PDR"),
+    ("DO-GNR", "Superintendent, Gandhinagar", "GJ-GNR"),
+    ("AO-GNR", "Area Officer, Gandhinagar", "GJ-GNR-GNR"),
+    ("AO-KLL", "Area Officer, Kalol", "GJ-GNR-KLL"),
 )
 
 
@@ -233,7 +243,6 @@ class Official:
     positions: tuple[str, ...] = ()
 
 
-# Bavla and Padra have no officer yet: no seller there needs one.
 DEMO_EMAIL_DOMAIN = "demo.gujarat.example"
 
 
@@ -241,7 +250,8 @@ def _email(name: str) -> str:
     return f"{name}@{DEMO_EMAIL_DOMAIN}"
 
 
-# Officials' passwords are issued, so each must choose their own at the first sign-in (A3).
+# Every district has a superintendent and every taluka an Area Officer. Officials' passwords
+# are issued, so each must choose their own at the first sign-in (A3).
 OFFICIALS = (
     Official(
         "licensing_authority",
@@ -276,6 +286,23 @@ OFFICIALS = (
         _email("superintendent.vadodara"),
         ("DO-VAD",),
     ),
+    Official("bavla_officer", "PERSONNEL", "+919800000016", _email("officer.bavla"), ("AO-BVL",)),
+    Official("padra_officer", "PERSONNEL", "+919800000017", _email("officer.padra"), ("AO-PDR",)),
+    Official(
+        "gandhinagar_superintendent",
+        "PERSONNEL",
+        "+919800000018",
+        _email("superintendent.gandhinagar"),
+        ("DO-GNR",),
+    ),
+    Official(
+        "gandhinagar_officer",
+        "PERSONNEL",
+        "+919800000019",
+        _email("officer.gandhinagar"),
+        ("AO-GNR",),
+    ),
+    Official("kalol_officer", "PERSONNEL", "+919800000020", _email("officer.kalol"), ("AO-KLL",)),
 )
 
 # Who records licences and opening stock, and who assigns officers to positions.
@@ -287,11 +314,15 @@ ASSIGNED_BY = "head_authority_a"
 
 @dataclass(frozen=True)
 class LicenceData:
+    """A class licence names a substance class (SPIRITS); a substance licence leaves the class
+    blank and names one substance instead (substance="WHISKY")."""
+
     number: str
     licence_type: str
     substance_class: str
     valid_from_days_ago: int
     valid_until_days_ahead: int
+    substance: str = ""
 
 
 @dataclass(frozen=True)
@@ -425,6 +456,146 @@ BUSINESSES = (
         (LicenceData("DEMO/VAD/0002", "HOTEL", "SPIRITS", 380, -16),),
         {"WHISKY": 100, "RUM": 20, "VODKA": 20},
     ),
+    Business(
+        "padra_wholesale",
+        "Padra Wholesale Beverages",
+        "99AAUCP1015Q1Z1",
+        "+919800000115",
+        "GJ-VAD-PDR",
+        "Padra",
+        (LicenceData("DEMO/VAD/0003", "WHOLESALE", "SPIRITS", 260, 105),),
+        {"WHISKY": 1500, "RUM": 300, "VODKA": 300},
+        transporter=("Mahi Valley Transport", "GJ-TR-6345", "GJ06KL2345"),
+    ),
+    Business(
+        "alkapuri_liquor",
+        "Alkapuri Liquor Mart",
+        "99AAVCA1016R1Z2",
+        "+919800000116",
+        "GJ-VAD-VDC",
+        "Vadodara",
+        # Expires in 12 days. A Retail Vendor: may not buy Rum (the Rum rule above).
+        (LicenceData("DEMO/VAD/0004", "RETAIL", "SPIRITS", 210, 12),),
+        {"WHISKY": 150, "VODKA": 50},
+    ),
+    # Gandhinagar district.
+    Business(
+        "gandhinagar_wholesale",
+        "Gandhinagar Wholesale Traders",
+        "99AAQCG1011L1Z6",
+        "+919800000111",
+        "GJ-GNR-GNR",
+        "Gandhinagar",
+        (
+            LicenceData("DEMO/GNR/0001", "WHOLESALE", "SPIRITS", 230, 135),
+            LicenceData("DEMO/GNR/0002", "WHOLESALE", "WINE", 230, 135),
+        ),
+        {"WHISKY": 2000, "RUM": 500, "VODKA": 500, "WINE": 800},
+        transporter=("Capital Freight Services", "GJ-TR-7340", "GJ18GH3456"),
+    ),
+    Business(
+        "kalol_beer_depot",
+        "Kalol Beer Depot",
+        "99AARCK1012M1Z7",
+        "+919800000112",
+        "GJ-GNR-KLL",
+        "Kalol",
+        (LicenceData("DEMO/GNR/0003", "WHOLESALE", "BEER", 200, 165),),
+        {"BEER": 5000},
+        transporter=("Kalol Roadways", "GJ-TR-7451", "GJ18JK7890"),
+    ),
+    Business(
+        "infocity_hotel",
+        "Hotel Infocity Grand",
+        "99AASCH1013N1Z8",
+        "+919800000113",
+        "GJ-GNR-GNR",
+        "Gandhinagar",
+        (
+            LicenceData("DEMO/GNR/0004", "HOTEL", "SPIRITS", 150, 215),
+            LicenceData("DEMO/GNR/0005", "HOTEL", "BEER", 150, 215),
+        ),
+        {"WHISKY": 120, "BEER": 40},
+    ),
+    Business(
+        "kalol_wine_shop",
+        "Kalol Wine & Whisky Shop",
+        "99AATCK1014P1Z9",
+        "+919800000114",
+        "GJ-GNR-KLL",
+        "Kalol",
+        # A class licence (all wine) and a substance licence (Whisky only): it may not buy Rum
+        # or Vodka.
+        (
+            LicenceData("DEMO/GNR/0006", "RETAIL", "WINE", 120, 245),
+            LicenceData("DEMO/GNR/0007", "RETAIL", "", 120, 245, substance="WHISKY"),
+        ),
+        {"WINE": 50},
+    ),
+    # Licensed but not signed up yet: candidates for the demo sign-up (with Sabarmati Carriers).
+    Business(
+        "bavla_beer_point",
+        "Bavla Beer Point",
+        "99AAWCB1017S1Z3",
+        "+919800000117",
+        "GJ-AHD-BVL",
+        "Bavla",
+        (LicenceData("DEMO/AHD/0011", "RETAIL", "BEER", 140, 225),),
+        {"BEER": 300},
+        enrolled=False,
+    ),
+    Business(
+        "kathwada_inn",
+        "Hotel Kathwada Inn",
+        "99AAXCH1018T1Z4",
+        "+919800000118",
+        "GJ-AHD-DSK",
+        "Kathwada",
+        (LicenceData("DEMO/AHD/0012", "HOTEL", "SPIRITS", 100, 265),),
+        {"WHISKY": 80},
+        enrolled=False,
+    ),
+    Business(
+        "sursagar_hotel",
+        "Hotel Sursagar View",
+        "99AAYCH1019U1Z5",
+        "+919800000119",
+        "GJ-VAD-VDC",
+        "Vadodara",
+        (LicenceData("DEMO/VAD/0005", "HOTEL", "SPIRITS", 130, 235),),
+        {"WHISKY": 90, "RUM": 20},
+        enrolled=False,
+    ),
+    Business(
+        "sector21_wines",
+        "Sector 21 Wine Shop",
+        "99AAZCS1020V1Z6",
+        "+919800000120",
+        "GJ-GNR-GNR",
+        "Gandhinagar",
+        # Its spirits licence expired 10 days ago and was not renewed.
+        (
+            LicenceData("DEMO/GNR/0008", "RETAIL", "WINE", 160, 205),
+            LicenceData("DEMO/GNR/0009", "RETAIL", "SPIRITS", 375, -10),
+        ),
+        {"WINE": 40},
+        enrolled=False,
+    ),
+    Business(
+        "padra_spirits_corner",
+        "Padra Spirits Corner",
+        "99ABACP1021W1Z7",
+        "+919800000121",
+        "GJ-VAD-PDR",
+        "Padra",
+        # Its beer licence is suspended; the spirits one is still active.
+        (
+            LicenceData("DEMO/VAD/0006", "RETAIL", "SPIRITS", 170, 195),
+            LicenceData("DEMO/VAD/0007", "RETAIL", "BEER", 170, 195),
+        ),
+        {"WHISKY": 60},
+        enrolled=False,
+    ),
 )
 
 
@@ -451,6 +622,7 @@ STATUS_CHANGES = (
     StatusChange(
         "DEMO/AHD/0008", "SUSPENDED", Ago(20, "16:00"), "Stock register not produced at inspection"
     ),
+    StatusChange("DEMO/VAD/0007", "SUSPENDED", Ago(10, "16:30"), "Beer sold after hours"),
 )
 
 # --- Review periods: how often each district superintendent reviews approved sales ------------
@@ -467,6 +639,7 @@ class ReviewPeriod:
 REVIEW_PERIODS = (
     ReviewPeriod("DO-AHD", 15, 75, Ago(75, "09:00")),
     ReviewPeriod("DO-VAD", 30, 75, Ago(75, "09:15")),
+    ReviewPeriod("DO-GNR", 30, 75, Ago(75, "09:30")),
 )
 # The batch job runs at this time every night (as the real scheduler will), creating a batch
 # for each review period that has ended; the seed's last step runs it once more for today.
@@ -511,6 +684,20 @@ SALES = (
     Sale("sanand_spirits", "sanand_retail", "WHISKY", 250, Ago(62),
          buyer=Step("CONFIRM", Ago(62, "15:00")), officer=Step("RECOMMEND", Ago(61, "11:00")),
          superintendent=Step("APPROVE", Ago(60, "12:00"))),
+    # Elsewhere, 75 to 61 days ago.
+    Sale("gandhinagar_wholesale", "infocity_hotel", "WHISKY", 60, Ago(73, "11:30"),
+         buyer=Step("CONFIRM", Ago(73, "16:00")), officer=Step("APPROVE", Ago(72, "12:30"))),
+    Sale("kalol_beer_depot", "infocity_hotel", "BEER", 100, Ago(71, "11:30"),
+         buyer=Step("CONFIRM", Ago(71, "16:00")), officer=Step("APPROVE", Ago(70, "12:30"))),
+    Sale("padra_wholesale", "padra_permit_room", "WHISKY", 50, Ago(69, "11:30"),
+         buyer=Step("CONFIRM", Ago(69, "16:00")), officer=Step("APPROVE", Ago(68, "12:30"))),
+    Sale("gandhinagar_wholesale", "kalol_wine_shop", "WINE", 150, Ago(67, "11:30"),
+         buyer=Step("CONFIRM", Ago(67, "16:00")), officer=Step("APPROVE", Ago(66, "12:30"))),
+    Sale("vadodara_distributors", "alkapuri_liquor", "WHISKY", 80, Ago(65, "11:30"),
+         buyer=Step("CONFIRM", Ago(65, "16:00")), officer=Step("APPROVE", Ago(64, "12:30"))),
+    Sale("kalol_beer_depot", "infocity_hotel", "BEER", 80, Ago(63, "11:30"),
+         key="kalol_rejected_63",
+         buyer=Step("REJECT", Ago(63, "16:00"), "QUANTITY_WRONG", "We ordered 50 L.")),
     # 60 to 46 days ago.
     Sale("sanand_spirits", "bopal_bar", "RUM", 20, Ago(59),
          buyer=Step("CONFIRM", Ago(59, "15:00")), officer=Step("APPROVE", Ago(58, "11:00"))),
@@ -528,6 +715,24 @@ SALES = (
     Sale("vadodara_distributors", "sanand_spirits", "WHISKY", 600, Ago(46),
          buyer=Step("CONFIRM", Ago(46, "15:00")), officer=Step("RECOMMEND", Ago(45, "11:00")),
          superintendent=Step("APPROVE", Ago(44, "12:00"))),
+    # Elsewhere, 60 to 46 days ago. A Whisky licence of its own lets the Kalol shop buy Whisky.
+    Sale("padra_wholesale", "alkapuri_liquor", "VODKA", 40, Ago(60, "11:30"),
+         buyer=Step("CONFIRM", Ago(60, "16:00")), officer=Step("APPROVE", Ago(59, "12:30"))),
+    Sale("gandhinagar_wholesale", "kalol_wine_shop", "WHISKY", 120, Ago(58, "11:30"),
+         buyer=Step("CONFIRM", Ago(58, "16:00")), officer=Step("APPROVE", Ago(57, "12:30"))),
+    Sale("daskroi_beverages", "kalol_beer_depot", "BEER", 1500, Ago(56, "11:30"),
+         buyer=Step("CONFIRM", Ago(56, "16:00")), officer=Step("APPROVE", Ago(55, "12:30"))),
+    Sale("gandhinagar_wholesale", "infocity_hotel", "RUM", 30, Ago(54, "11:30"),
+         buyer=Step("CONFIRM", Ago(54, "16:00")), officer=Step("APPROVE", Ago(53, "12:30"))),
+    Sale("padra_wholesale", "vadodara_distributors", "WHISKY", 400, Ago(52, "11:30"),
+         buyer=Step("CONFIRM", Ago(52, "16:00")), officer=Step("RECOMMEND", Ago(51, "12:30")),
+         superintendent=Step("APPROVE", Ago(50, "14:00"))),
+    Sale("kalol_beer_depot", "infocity_hotel", "BEER", 60, Ago(50, "11:30"),
+         buyer=Step("CONFIRM", Ago(50, "16:00")),
+         officer=Step("REJECT", Ago(49, "12:30"), "TRANSPORTER_INVALID")),
+    Sale("gandhinagar_wholesale", "kalol_wine_shop", "WHISKY", 250, Ago(48, "11:30"),
+         buyer=Step("CONFIRM", Ago(48, "16:00")), officer=Step("RECOMMEND", Ago(47, "12:30")),
+         superintendent=Step("APPROVE", Ago(46, "14:00"))),
     # 45 to 31 days ago.
     Sale("sanand_spirits", "bopal_bar", "VODKA", 20, Ago(43),
          buyer=Step("CONFIRM", Ago(43, "15:00")), officer=Step("APPROVE", Ago(42, "11:00"))),
@@ -545,6 +750,22 @@ SALES = (
          buyer=Step("REJECT", Ago(33, "15:00"), "QUANTITY_WRONG", "We ordered 50 L.")),
     Sale("vadodara_distributors", "padra_permit_room", "VODKA", 30, Ago(32),
          buyer=Step("CONFIRM", Ago(32, "15:00")), officer=Step("APPROVE", Ago(31, "11:00"))),
+    # Elsewhere, 45 to 31 days ago.
+    Sale("padra_wholesale", "padra_permit_room", "RUM", 30, Ago(44, "11:30"),
+         buyer=Step("CONFIRM", Ago(44, "16:00")), officer=Step("APPROVE", Ago(43, "12:30"))),
+    Sale("vadodara_distributors", "alkapuri_liquor", "VODKA", 50, Ago(42, "11:30"),
+         cancelled=Ago(42, "15:00")),
+    Sale("gandhinagar_wholesale", "kalol_wine_shop", "WINE", 100, Ago(38, "11:30"),
+         buyer=Step("CONFIRM", Ago(38, "16:00")), officer=Step("APPROVE", Ago(37, "12:30"))),
+    Sale("gandhinagar_wholesale", "kalol_wine_shop", "WHISKY", 280, Ago(36, "11:30"),
+         buyer=Step("CONFIRM", Ago(36, "16:00")), officer=Step("RECOMMEND", Ago(35, "12:30")),
+         superintendent=Step("REJECT", Ago(34, "14:00"), "OTHER",
+                             "The new godown has not been inspected yet.")),
+    Sale("padra_wholesale", "alkapuri_liquor", "WHISKY", 60, Ago(34, "11:30"),
+         key="padra_rejected_34",
+         buyer=Step("REJECT", Ago(34, "16:00"), "NOT_ORDERED")),
+    Sale("daskroi_beverages", "infocity_hotel", "BEER", 80, Ago(32, "11:30"),
+         buyer=Step("CONFIRM", Ago(32, "16:00")), officer=Step("APPROVE", Ago(31, "12:30"))),
     # 30 to 16 days ago.
     Sale("sanand_spirits", "sanand_retail", "WHISKY", 240, Ago(29),
          buyer=Step("CONFIRM", Ago(29, "15:00")), officer=Step("RECOMMEND", Ago(28, "11:00")),
@@ -564,6 +785,22 @@ SALES = (
          buyer=Step("CONFIRM", Ago(19, "15:00")), officer=Step("APPROVE", Ago(18, "11:00"))),
     Sale("vadodara_distributors", "padra_permit_room", "WHISKY", 70, Ago(17),
          buyer=Step("CONFIRM", Ago(17, "15:00")), officer=Step("APPROVE", Ago(16, "11:00"))),
+    # Elsewhere, 30 to 16 days ago. Beer above 2000 L needs the superintendent from day 38.
+    Sale("daskroi_beverages", "kalol_beer_depot", "BEER", 2500, Ago(30, "11:30"),
+         buyer=Step("CONFIRM", Ago(30, "16:00")), officer=Step("RECOMMEND", Ago(29, "12:30")),
+         superintendent=Step("APPROVE", Ago(28, "14:00"))),
+    Sale("gandhinagar_wholesale", "sector21_wines", "WINE", 50, Ago(27, "11:30"),
+         cancelled=Ago(27, "13:00")),
+    Sale("padra_wholesale", "vadodara_distributors", "VODKA", 200, Ago(25, "11:30"),
+         buyer=Step("CONFIRM", Ago(25, "16:00")), officer=Step("APPROVE", Ago(24, "12:30"))),
+    Sale("kalol_beer_depot", "infocity_hotel", "BEER", 70, Ago(23, "11:30"),
+         buyer=Step("CONFIRM", Ago(23, "16:00")),
+         officer=Step("REJECT", Ago(22, "12:30"), "QUANTITY_MISMATCH",
+                      "Only 60 L were found at the check post.")),
+    Sale("gandhinagar_wholesale", "infocity_hotel", "WHISKY", 100, Ago(21, "11:30"),
+         buyer=Step("CONFIRM", Ago(21, "16:00")), officer=Step("APPROVE", Ago(20, "12:30"))),
+    Sale("padra_wholesale", "alkapuri_liquor", "WHISKY", 90, Ago(19, "11:30"),
+         buyer=Step("CONFIRM", Ago(19, "16:00")), officer=Step("APPROVE", Ago(18, "12:30"))),
     # 15 to 2 days ago.
     Sale("vadodara_distributors", "padra_permit_room", "RUM", 30, Ago(14),
          buyer=Step("CONFIRM", Ago(14, "15:00")),
@@ -585,6 +822,19 @@ SALES = (
          buyer=Step("CONFIRM", Ago(5, "15:00")), officer=Step("APPROVE", Ago(4, "11:00"))),
     Sale("vadodara_distributors", "padra_permit_room", "VODKA", 25, Ago(4),
          buyer=Step("CONFIRM", Ago(3, "11:00"))),
+    # Elsewhere, 15 to 2 days ago. The Gandhinagar officer's alert stays unacknowledged.
+    Sale("gandhinagar_wholesale", "kalol_wine_shop", "WINE", 120, Ago(15, "11:30"),
+         buyer=Step("CONFIRM", Ago(15, "16:00")), officer=Step("APPROVE", Ago(14, "12:30"))),
+    Sale("kalol_beer_depot", "infocity_hotel", "BEER", 90, Ago(13, "11:30"),
+         buyer=Step("CONFIRM", Ago(13, "16:00")), officer=Step("APPROVE", Ago(12, "12:30"))),
+    Sale("padra_wholesale", "padra_permit_room", "VODKA", 40, Ago(11, "11:30"),
+         buyer=Step("CONFIRM", Ago(11, "16:00")),
+         officer=Step("REJECT", Ago(10, "12:30"), "TRANSPORTER_INVALID")),
+    Sale("gandhinagar_wholesale", "infocity_hotel", "VODKA", 30, Ago(8, "11:30"),
+         buyer=Step("REJECT", Ago(8, "16:00"), "NOT_ORDERED", "We stock no Vodka.")),
+    Sale("padra_wholesale", "vadodara_distributors", "WHISKY", 300, Ago(6, "11:30"),
+         buyer=Step("CONFIRM", Ago(6, "16:00")), officer=Step("RECOMMEND", Ago(5, "12:30")),
+         superintendent=Step("APPROVE", Ago(4, "14:00"))),
     # Waiting today: the superintendent's final approval ...
     Sale("sanand_spirits", "sanand_retail", "WHISKY", 260, Ago(3),
          buyer=Step("CONFIRM", Ago(3, "15:00")), officer=Step("RECOMMEND", Ago(2, "11:00"))),
@@ -598,6 +848,18 @@ SALES = (
     Sale("sanand_spirits", "bopal_bar", "WHISKY", 90, HoursAgo(4)),
     Sale("sanand_spirits", "bopal_bar", "RUM", 24, HoursAgo(3)),
     Sale("sanand_spirits", "bopal_bar", "VODKA", 36, HoursAgo(2)),
+    # Waiting elsewhere: Kalol's officer, Gandhinagar's superintendent and Padra's officer ...
+    Sale("kalol_beer_depot", "daskroi_beverages", "BEER", 600, Ago(4, "11:30"),
+         buyer=Step("CONFIRM", Ago(3, "16:00"))),
+    Sale("gandhinagar_wholesale", "kalol_wine_shop", "WHISKY", 220, Ago(3, "11:30"),
+         buyer=Step("CONFIRM", Ago(3, "16:00")), officer=Step("RECOMMEND", Ago(2, "12:30"))),
+    Sale("padra_wholesale", "padra_permit_room", "WHISKY", 60, Ago(2, "11:30"),
+         buyer=Step("CONFIRM", Ago(2, "16:00"))),
+    # ... and buyers: two of them not signed up yet (they see these once they sign up).
+    Sale("gandhinagar_wholesale", "kathwada_inn", "WHISKY", 40, HoursAgo(6)),
+    Sale("daskroi_beverages", "bavla_beer_point", "BEER", 100, HoursAgo(5)),
+    Sale("vadodara_distributors", "alkapuri_liquor", "VODKA", 30, HoursAgo(4)),
+    Sale("kalol_beer_depot", "infocity_hotel", "BEER", 50, HoursAgo(3)),
 )  # fmt: skip
 
 # --- Batch reviews and alerts ----------------------------------------------------------------
@@ -624,6 +886,7 @@ class BatchReview:
 
 # Ahmedabad's three oldest batches are signed (the first with a flag); its batch for 30 to 16
 # days ago stays open and due soon. Vadodara's first batch is left unsigned and is overdue.
+# Gandhinagar's first batch is signed and its second is open.
 BATCH_REVIEWS = (
     BatchReview(
         "DO-AHD",
@@ -640,6 +903,7 @@ BATCH_REVIEWS = (
     ),
     BatchReview("DO-AHD", 60, Ago(40, "16:00")),
     BatchReview("DO-AHD", 45, Ago(24, "16:00")),
+    BatchReview("DO-GNR", 75, Ago(30, "16:00")),
 )
 
 
@@ -655,7 +919,8 @@ class Acknowledgement:
 
 
 # Left unacknowledged: the Superintendent's alert for the 26-days-ago rejection, and both
-# alerts for the 9-days-ago rejection (so the Area Officer has one waiting).
+# alerts for the 9-days-ago rejection (so the Area Officer has one waiting); elsewhere, the
+# Vadodara superintendent's for Padra's rejection and both for Gandhinagar's 8-days-ago one.
 ACKNOWLEDGEMENTS = (
     Acknowledgement("rejected_47", "AO-SND", Ago(46, "12:00"), "Called the buyer; a typo."),
     Acknowledgement("rejected_47", "DO-AHD", Ago(45, "12:00")),
@@ -664,6 +929,9 @@ ACKNOWLEDGEMENTS = (
     Acknowledgement("rejected_33", "AO-DSK", Ago(32, "12:00"), "Seller corrected the quantity."),
     Acknowledgement("rejected_33", "DO-AHD", Ago(31, "12:00")),
     Acknowledgement("rejected_26", "AO-SND", Ago(25, "12:00"), "Asked the seller to explain."),
+    Acknowledgement("kalol_rejected_63", "AO-KLL", Ago(62, "12:00"), "Seller fixed the order."),
+    Acknowledgement("kalol_rejected_63", "DO-GNR", Ago(61, "12:00")),
+    Acknowledgement("padra_rejected_34", "AO-PDR", Ago(33, "12:30"), "Order cancelled by phone."),
 )  # fmt: skip
 
 # --- Rule changes ----------------------------------------------------------------------------

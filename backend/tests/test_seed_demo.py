@@ -5,6 +5,7 @@ story in clearly separated blocks; the refusals are small tests of their own.
 """
 
 import csv
+import re
 from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
@@ -21,7 +22,7 @@ from audit.verify import verify_chain
 from config.checks import DEMO_SENDER
 from core.db_context import acting_as_system, set_actor
 from core.home import home_counts
-from demo import clock, dataset
+from demo import clock, dataset, signup
 from demo.models import DemoCredential, DemoInboxMessage, DemoPersona
 from governance import service as governance
 from governance.models import ProposalStatus, RuleChangeProposal
@@ -29,8 +30,10 @@ from identity.models import User
 from licensing.models import Licence, LicenceStatus
 from oversight.models import BatchFlag, OversightBatch
 from oversight.service import batch_status
+from positions.models import Area, AreaLevel, Position
+from positions.service import current_holder
 from transactions import service as transactions
-from transactions.models import Transaction
+from transactions.models import Transaction, TransactionStatus
 
 DEMO_PASSWORD = "demo-password-2026"
 DEMO = {"DEMO_MODE": True, "OTP_SENDER": DEMO_SENDER, "DEMO_PASSWORD": DEMO_PASSWORD}
@@ -131,8 +134,16 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
         assert Counter(party["signed_up"] for party in parties) == Counter(
             "yes" if business.enrolled else "no" for business in dataset.BUSINESSES
         )
+        # A suspended licence, an expired one beside an active one, and plain active ones.
+        licence_statuses = {p["business_name"]: p["licence_statuses"] for p in parties}
+        assert licence_statuses["Padra Spirits Corner"] == "ACTIVE; SUSPENDED"
+        assert licence_statuses["Sector 21 Wine Shop"] == "ACTIVE; EXPIRED"
+        assert licence_statuses["Kanbha Traders"] == "SUSPENDED"
+        assert licence_statuses["Sanand Spirits Pvt Ltd"] == "ACTIVE"
         with open(exported / "officials.csv", newline="", encoding="utf-8") as handle:
             officials = list(csv.DictReader(handle))
+        assert len(officials) == len(dataset.OFFICIALS)
+        assert {official["must_change_password"] for official in officials} == {"yes"}
         assert {official["email"] for official in officials} == {
             official.email for official in dataset.OFFICIALS
         }
@@ -153,9 +164,16 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
             ]
             suspended = Licence.objects.filter(status=LicenceStatus.SUSPENDED).count()
             assert suspended == len(dataset.STATUS_CHANGES)
+            # Every status shows up somewhere.
+            assert set(statuses) == set(TransactionStatus.values)
             # The batches follow from the review periods (one per completed period).
             assert OversightBatch.objects.filter(position__code="DO-AHD").count() == 5
             assert OversightBatch.objects.filter(position__code="DO-VAD").count() == 2
+            assert OversightBatch.objects.filter(position__code="DO-GNR").count() == 2
+            # Every taluka has an Area Officer and every district a superintendent.
+            for area in Area.objects.exclude(level=AreaLevel.STATE):
+                positions = Position.objects.filter(area=area)
+                assert [current_holder(p) is not None for p in positions] == [True], area.name
             # Every transaction was started on a past day and its decisions came later.
             assert Transaction.objects.filter(created_at__gt=timezone.now()).count() == 0
             assert Transaction.objects.order_by("created_at").first().created_at.date() < (
@@ -164,6 +182,14 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
         enrolled = [b for b in dataset.BUSINESSES if b.enrolled]
         assert User.objects.filter(role="LICENSEE").count() == len(enrolled)
         assert User.objects.count() == len(enrolled) + len(dataset.OFFICIALS)
+        # Officials' passwords are issued: each must choose their own first (A3).
+        assert not User.objects.exclude(role="LICENSEE").filter(must_change_password=False)
+        # The licensed businesses without an account are offered for the demo sign-up.
+        candidates = signup.candidates()
+        assert len(candidates) >= 6
+        assert {c["business_name"] for c in candidates} == {
+            b.name for b in dataset.BUSINESSES if not b.enrolled
+        }
         assert DemoPersona.objects.count() == len(dataset.PERSONAS)
         # Every account's password is recorded for the persona picker and the CSV (A7).
         credentials = {c.user_id: c.password() for c in DemoCredential.objects.all()}
@@ -275,7 +301,22 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
             assert verified.status_code == 200, entry["key"]
             # Officials' passwords were issued, so they must change them first (A3).
             assert verified.json()["must_change_password"] is (entry["role"] != "PARTY")
+            if entry["key"] == "area_officer":
+                # The forced change; the persona picker then offers the new password.
+                changed = client.post(
+                    "/api/auth/password",
+                    {"current_password": DEMO_PASSWORD, "new_password": "sanand-officer-own-26"},
+                    content_type="application/json",
+                )
+                assert changed.status_code == 200
+                assert client.get("/api/auth/me").json()["must_change_password"] is False
             client.post("/api/auth/logout")
+        officer = next(
+            entry
+            for entry in client.get("/api/demo/personas").json()
+            if entry["key"] == "area_officer"
+        )
+        assert officer["password"] == "sanand-officer-own-26"
 
 
 def test_the_dataset_keeps_to_the_synthetic_data_rules():
@@ -284,7 +325,13 @@ def test_the_dataset_keeps_to_the_synthetic_data_rules():
     for business in dataset.BUSINESSES:
         assert GSTIN_PATTERN.match(business.gstin) and business.gstin.startswith("99")
         assert business.contact.startswith("+91980000") and len(business.contact) == 13
-        assert all(licence.number.startswith("DEMO/") for licence in business.licences)
+        district = business.area.split("-")[1]
+        for licence in business.licences:
+            assert re.fullmatch(rf"DEMO/{district}/\d{{4}}", licence.number), licence.number
+    numbers = [licence.number for b in dataset.BUSINESSES for licence in b.licences]
+    assert len(set(numbers)) == len(numbers)
+    gstins = [business.gstin for business in dataset.BUSINESSES]
+    assert len(set(gstins)) == len(gstins)
     for official in dataset.OFFICIALS:
         assert official.contact.startswith("+91980000") and len(official.contact) == 13
     emails = [official.email for official in dataset.OFFICIALS]
@@ -293,4 +340,7 @@ def test_the_dataset_keeps_to_the_synthetic_data_rules():
     contacts = [b.contact for b in dataset.BUSINESSES] + [o.contact for o in dataset.OFFICIALS]
     assert len(set(contacts)) == len(contacts)
     assert {Decimal(t.above_litres) for t in dataset.THRESHOLDS} == {Decimal("200")}
-    assert len(dataset.SALES) >= 40
+    # About 20 businesses (about 6 not signed up) and about 80 sales (A10).
+    assert len(dataset.BUSINESSES) >= 20
+    assert len([b for b in dataset.BUSINESSES if not b.enrolled]) >= 6
+    assert len(dataset.SALES) >= 75

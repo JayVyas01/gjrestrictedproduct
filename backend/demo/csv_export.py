@@ -63,6 +63,7 @@ PARTY_COLUMNS = (
     "signed_up",
     "licence_numbers",
     "licence_types",
+    "licence_statuses",
     "scopes",
     "talukas",
     "may_buy",
@@ -118,6 +119,15 @@ def _passwords() -> dict[str, DemoCredential]:
 # --- parties.csv -------------------------------------------------------------------------------
 
 
+def _licence_status(licence: Licence, period, today) -> str:
+    """ACTIVE, SUSPENDED or REVOKED as recorded; an ACTIVE licence that no validity period
+    covers today (ended, or not yet started) shows EXPIRED, as it cannot trade."""
+    if licence.status != LicenceStatus.ACTIVE:
+        return licence.status
+    covered = period is not None and period.starts_on <= today <= period.ends_on
+    return licence.status if covered else "EXPIRED"
+
+
 def _licence_columns(licences: list[Licence], today) -> dict[str, str]:
     columns = defaultdict(list)
     for licence in licences:
@@ -126,6 +136,7 @@ def _licence_columns(licences: list[Licence], today) -> dict[str, str]:
         unit = licence.substance.unit if licence.substance else class_unit(licence.substance_class)
         columns["licence_numbers"].append(licence.number())
         columns["licence_types"].append(licence.licence_type.name)
+        columns["licence_statuses"].append(_licence_status(licence, period, today))
         columns["scopes"].append(licence.scope_name())
         columns["talukas"].append(licence.area.name)
         columns["may_buy"].append(_yes_no(permissions and permissions.may_buy))

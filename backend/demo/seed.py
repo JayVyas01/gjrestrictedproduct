@@ -220,8 +220,14 @@ class Seeder:
                     starts_on=self.today - timedelta(days=licence.valid_from_days_ago),
                     ends_on=self.today + timedelta(days=licence.valid_until_days_ahead),
                     recorded_by=authority.user_id,
-                    substance_class=SubstanceClass.objects.get(code=licence.substance_class),
+                    **self._licence_scope(licence),
                 )
+
+    @staticmethod
+    def _licence_scope(licence: dataset.LicenceData) -> dict:
+        if licence.substance:
+            return {"substance": Substance.objects.get(code=licence.substance)}
+        return {"substance_class": SubstanceClass.objects.get(code=licence.substance_class)}
 
     def _opening_stock(self) -> None:
         authority = self._licensing_authority()

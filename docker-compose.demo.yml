@@ -6,6 +6,8 @@
 # stray .env.demo cannot switch them; backend/tests/test_compose_demo.py checks them.
 #
 # Only `web` publishes a port, bound to 127.0.0.1: nothing is reachable from the network.
+# The backend writes the demo CSV files (parties, officials and transactions, with the demo
+# passwords) to ./demo-data on the host, a gitignored folder `make` creates.
 # After `make demo-build`, starting and resetting need no network (`--pull never`).
 name: gjdemo
 
@@ -58,6 +60,10 @@ services:
       DB_PASSWORD: ${GJ_APP_PASSWORD:?run make demo-env}
       DB_OWNER_USER: gj_owner
       DB_OWNER_PASSWORD: ${GJ_OWNER_PASSWORD:?run make demo-env}
+      DEMO_DATA_DIR: /app/demo-data
+    volumes:
+      # Read-write: the CSV files are rebuilt after every change (backend/demo/csv_export.py).
+      - ./demo-data:/app/demo-data
     depends_on:
       db:
         condition: service_healthy

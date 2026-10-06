@@ -4,11 +4,14 @@ Seeding takes a few seconds and `app_db` is per test, so one test seeds and chec
 story in clearly separated blocks; the refusals are small tests of their own.
 """
 
+import csv
 from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
+from django.conf import settings
 from django.core.management import CommandError, call_command
 from django.test import override_settings
 from django.utils import timezone
@@ -119,6 +122,23 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
         output = capsys.readouterr().out
         assert "Audit chain OK" in output
         today = timezone.localdate()
+
+        # The demo CSV files are written at the end (demo/csv_export.py).
+        exported = Path(settings.DEMO_DATA_DIR)
+        with open(exported / "parties.csv", newline="", encoding="utf-8") as handle:
+            parties = list(csv.DictReader(handle))
+        assert len(parties) == len(dataset.BUSINESSES)
+        assert Counter(party["signed_up"] for party in parties) == Counter(
+            "yes" if business.enrolled else "no" for business in dataset.BUSINESSES
+        )
+        with open(exported / "officials.csv", newline="", encoding="utf-8") as handle:
+            officials = list(csv.DictReader(handle))
+        assert {official["email"] for official in officials} == {
+            official.email for official in dataset.OFFICIALS
+        }
+        assert {official["password"] for official in officials} == {DEMO_PASSWORD}
+        with open(exported / "transactions.csv", newline="", encoding="utf-8") as handle:
+            assert len(list(csv.DictReader(handle))) == len(dataset.SALES)
 
         # Counts match the dataset.
         with acting_as_system("test"):

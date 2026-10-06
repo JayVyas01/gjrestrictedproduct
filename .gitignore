@@ -227,6 +227,8 @@ frontend/*.tsbuildinfo
 
 # Demo stack secrets (made by `make demo-env` from .env.demo.example)
 .env.demo
+# Demo CSV files with the demo passwords (written by the demo backend; see csv_export.py)
+demo-data/
 
 # Playwright end-to-end runs (frontend/e2e)
 frontend/playwright-report/

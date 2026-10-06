@@ -6,15 +6,21 @@ UP := $(COMPOSE) up -d --wait --pull never --no-build
 CSP := default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 
 .DEFAULT_GOAL := help
-.PHONY: help demo-env demo-build demo demo-seed demo-reset demo-stop demo-logs demo-check need-env
+.PHONY: help demo-data demo-env demo-build demo demo-seed demo-reset demo-stop demo-logs demo-check need-env
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
-demo-env: ## Create .env.demo with fresh keys, if missing (prints no secrets)
+demo-env: ## Create .env.demo with fresh keys, if missing (prints no secrets), and demo-data/
 	@python3 docker/make-demo-env.py
+	@$(MAKE) --no-print-directory demo-data
 
-need-env:
+# The demo CSV files land here (bind-mounted into the backend). World-writable because the
+# container runs as uid 10001, which on Linux owns nothing on the host; the data is synthetic.
+demo-data:
+	@mkdir -p demo-data && chmod 0777 demo-data
+
+need-env: demo-data
 	@test -f .env.demo || { echo "No .env.demo: run 'make demo-env' first."; exit 1; }
 
 demo-build: demo-env ## Online, once: pull Postgres and build the backend and web images

@@ -51,11 +51,13 @@ class DemoCredential(models.Model):
     """The current password of a demo account (A7), for the persona picker and the CSV files.
 
     Demo only: written at seed, sign-up and password change. Encrypted at rest; only the demo
-    endpoints and exports decrypt it.
+    endpoints and exports decrypt it. `business_name` is the name a party gave at sign-up (blank
+    for seeded accounts), shown in parties.csv instead of the licence holder name.
     """
 
     user_id = models.CharField(max_length=12, unique=True)
     password_encrypted = models.TextField()
+    business_name = models.CharField(max_length=200, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

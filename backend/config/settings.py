@@ -151,6 +151,9 @@ REST_FRAMEWORK = {
 DEMO_MODE = env.flag("DEMO_MODE")
 # The one shared password of the synthetic demo accounts; never read outside demo mode.
 DEMO_PASSWORD = env.optional("DEMO_PASSWORD", "") if DEMO_MODE else ""
+# Where the demo CSV files (parties, officials, transactions) are written; never outside demo
+# mode. The demo stack bind-mounts ./demo-data here (docker-compose.demo.yml).
+DEMO_DATA_DIR = env.optional("DEMO_DATA_DIR", "/app/demo-data")
 if demo_mode_problems(
     SimpleNamespace(
         DEMO_MODE=DEMO_MODE,

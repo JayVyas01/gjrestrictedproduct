@@ -108,3 +108,14 @@ def test_the_demo_raises_the_sign_in_and_code_limits():
     assert BACKEND_ENV["THROTTLE_RATE_OTP"] == "60/min"
     for unchanged in ("THROTTLE_RATE_ENROLMENT", "THROTTLE_RATE_LOOKUP", "THROTTLE_RATE_DEMO"):
         assert unchanged not in BACKEND_ENV
+
+
+def test_the_backend_writes_the_csv_files_to_the_gitignored_demo_data_folder():
+    """The demo CSV files (backend/demo/csv_export.py) reach the host's ./demo-data, read-write,
+    and git never sees them; `make` creates the folder before compose would."""
+    assert BACKEND_ENV["DEMO_DATA_DIR"] == "/app/demo-data"
+    assert SERVICES["backend"]["volumes"] == ["./demo-data:/app/demo-data"]
+    assert "demo-data/" in (REPO / ".gitignore").read_text().splitlines()
+    makefile = (REPO / "Makefile").read_text()
+    assert "need-env: demo-data" in makefile
+    assert "mkdir -p demo-data" in makefile

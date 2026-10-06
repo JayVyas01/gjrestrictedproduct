@@ -2,6 +2,7 @@
 
 Demo mode only. Everything goes through the real services (see `demo/seed.py`) in one database
 transaction, and the command fails, writing nothing, unless the audit chain verifies at the end.
+Then it writes the demo CSV files (`demo/csv_export.py`) to settings.DEMO_DATA_DIR.
 """
 
 import time
@@ -17,6 +18,7 @@ from alerts.models import AuthorityAlert
 from audit.verify import verify_chain
 from config.checks import DEMO_SENDER
 from core.db_context import acting_as_system
+from demo.csv_export import export_all
 from demo.seed import Seeder, SeedFailed
 from governance.models import RuleChangeProposal
 from identity.models import User
@@ -44,7 +46,11 @@ class Command(BaseCommand):
                     )
         except SeedFailed as exc:
             raise CommandError(f"{exc}. Nothing was seeded.") from exc
+        # The commit already scheduled an export; this one runs in the open, so a failure
+        # (such as an unwritable folder) shows here instead of only in the log.
+        export_all(settings.DEMO_DATA_DIR)
         self.stdout.write(summary)
+        self.stdout.write(f"Wrote the demo CSV files to {settings.DEMO_DATA_DIR}.")
         self.stdout.write(
             f"Audit chain OK ({report.checked} events). "
             f"Seeded in {time.monotonic() - started:.1f} s."

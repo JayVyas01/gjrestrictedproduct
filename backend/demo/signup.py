@@ -143,7 +143,9 @@ def complete_signup(*, challenge_id: str, code: str) -> User | None:
     user.password = pending.password_hash  # hashed at start; the plain text is never re-read
     user.save(update_fields=["password"])
     DemoCredential.objects.create(
-        user_id=user.user_id, password_encrypted=pending.password_encrypted
+        user_id=user.user_id,
+        password_encrypted=pending.password_encrypted,
+        business_name=pending.business_name,
     )
     pending.delete()
     record(

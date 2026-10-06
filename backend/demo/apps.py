@@ -7,6 +7,6 @@ class DemoConfig(AppConfig):
 
     def ready(self) -> None:
         from config.checks import demo_mode_check
-        from demo import receivers  # noqa: F401 - connects the password-change receiver
+        from demo import receivers  # noqa: F401 - connects the demo receivers
 
         checks.register(demo_mode_check, checks.Tags.security)

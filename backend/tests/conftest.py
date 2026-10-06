@@ -42,6 +42,12 @@ TEST_TRANSPORT = Transport(
 )
 
 
+@pytest.fixture(autouse=True)
+def _demo_data_dir(settings, tmp_path):
+    """Demo CSV exports (demo/csv_export.py) never write outside the test's own folder."""
+    settings.DEMO_DATA_DIR = str(tmp_path / "demo-data")
+
+
 @pytest.fixture
 def app_db(db):
     # SET ROLE is undone automatically when the test transaction rolls back.

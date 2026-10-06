@@ -141,17 +141,27 @@ const ENDPOINTS: Endpoint[] = [
   { method: "get", path: "/api/licences/:id", contract: "licence_detail" },
 ];
 
-// Demo mode only (D4). Outside it both answer 404, as the real server does, so by default the
+// Demo mode only (D4). Outside they all answer 404, as the real server does, so by default the
 // tests and mock mode run as a real deployment; `createHandlers(..., { demo: true })` (mock mode)
 // or `server.use(...serveDemo())` (a test) turns the demo on.
 const DEMO_ENDPOINTS: Endpoint[] = [
   { method: "get", path: "/api/demo/personas", contract: "demo_personas" },
   { method: "get", path: "/api/demo/inbox", contract: "demo_inbox" },
+  { method: "post", path: "/api/demo/signup/start", contract: "demo_signup_start" },
+  {
+    method: "post",
+    path: "/api/demo/signup/complete",
+    contract: "demo_signup_complete",
+    status: 201,
+  },
+  { method: "get", path: "/api/demo/signup/candidates", contract: "demo_signup_candidates" },
 ];
 
 /** The demo endpoints, answering as in demo mode. */
 export function serveDemo(): HttpHandler[] {
-  return DEMO_ENDPOINTS.map((endpoint) => serve(endpoint.method, endpoint.path, endpoint.contract));
+  return DEMO_ENDPOINTS.map((endpoint) =>
+    serve(endpoint.method, endpoint.path, endpoint.contract, endpoint.status),
+  );
 }
 
 function notADemo(): HttpHandler[] {

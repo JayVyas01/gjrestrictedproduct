@@ -257,6 +257,12 @@ const GUARDS: Record<string, Guard> = {
     ] satisfies (keyof T.DemoInboxMessage)[],
     list: true,
   },
+  demo_signup_start: { keys: CHALLENGE },
+  demo_signup_complete: { keys: ["user_id"] satisfies (keyof T.DemoSignupCompleted)[] },
+  demo_signup_candidates: {
+    keys: ["gstin", "business_name", "phone_on_file"] satisfies (keyof T.DemoSignupCandidate)[],
+    list: true,
+  },
   error_400_field_errors: { keys: [] },
   "error_*": { keys: ERROR },
 };

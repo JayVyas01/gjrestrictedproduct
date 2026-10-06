@@ -19,6 +19,7 @@ from identity.login import start_login
 from identity.models import OtpPurpose
 from identity.roles import Role
 from identity.serializers import LoginSerializer, OtpVerifySerializer, PasswordChangeSerializer
+from identity.signals import password_changed
 from licensing.models import Licence
 from positions.service import positions_held
 
@@ -139,6 +140,7 @@ class PasswordChangeView(APIView):
         user.must_change_password = False
         user.save(update_fields=["password", "must_change_password"])
         update_session_auth_hash(request, user)
+        password_changed.send(sender=type(user), user=user, password=new_password)
         record(
             action="auth.password_changed",
             actor=user.user_id,

@@ -20,7 +20,7 @@ from django.utils import timezone
 from config.checks import DEMO_SENDER
 from core.db_context import acting_as_system
 from demo.dataset import PERSONAS
-from demo.models import DemoPersona
+from demo.models import DemoInboxMessage, DemoPersona
 from identity.roles import Role
 from oversight.service import create_due_batches, set_review_period
 from tests.conftest import BUYER_GSTIN, login_body, set_decided_on
@@ -180,6 +180,50 @@ def _(ctx):
     with override_settings(**DEMO):
         post(ctx.client, "/api/auth/login", body)
         return ctx.client.get("/api/demo/inbox")
+
+
+SIGNUP_GSTIN = "99DDDDD3333D1Z5"  # licensed, no account yet
+
+
+def _signup_start(ctx, phone="+919800000701"):
+    ctx.make_licence(gstin=SIGNUP_GSTIN, contact="+919800000701", holder_name="Kheda Traders")
+    body = {
+        "gstin": SIGNUP_GSTIN,
+        "phone": phone,
+        "email": "owner@kheda-traders.example",
+        "business_name": "Kheda Traders",
+        "address": "4 Market Road, Kheda",
+        "password": "a-chosen-signup-pass-8",
+    }
+    with override_settings(**DEMO):
+        return post(ctx.client, "/api/demo/signup/start", body)
+
+
+@contract("demo_signup_start")
+def _(ctx):
+    return _signup_start(ctx)
+
+
+@contract("demo_signup_complete", status=201)
+def _(ctx):
+    challenge = _signup_start(ctx).json()["challenge_id"]
+    code = DemoInboxMessage.objects.latest("id").code
+    with override_settings(**DEMO):
+        return post(
+            ctx.client, "/api/demo/signup/complete", {"challenge_id": challenge, "code": code}
+        )
+
+
+@contract("error_401_signup_failed", status=401)
+def _(ctx):
+    return _signup_start(ctx, phone="+919800000999")
+
+
+@contract("demo_signup_candidates")
+def _(ctx):
+    ctx.make_licence(gstin=SIGNUP_GSTIN, contact="+919800000701", holder_name="Kheda Traders")
+    with override_settings(**DEMO):
+        return ctx.client.get("/api/demo/signup/candidates")
 
 
 def _awaiting_officer(ctx, qty="10"):

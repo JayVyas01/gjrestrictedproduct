@@ -357,7 +357,7 @@ export interface ErrorBody {
   [field: string]: unknown;
 }
 
-// Demo mode only (D4): both endpoints answer 404 outside demo mode -----------------------------
+// Demo mode only (D4): these endpoints answer 404 outside demo mode ----------------------------
 
 /** A synthetic account the persona picker signs in as (the shared demo password included). */
 export interface DemoPersona {
@@ -376,4 +376,27 @@ export interface DemoInboxMessage {
   contact_last4: string;
   code: string;
   created_at: string;
+}
+
+/** What party sign-up asks for (POST /api/demo/signup/start; the answer is a `Challenge`). */
+export interface DemoSignupForm {
+  gstin: string;
+  /** Must match the phone on file of an ACTIVE licence for the GSTIN; the code goes there. */
+  phone: string;
+  email: string;
+  business_name: string;
+  address: string;
+  password: string;
+}
+
+/** The account a completed sign-up created (not signed in yet). */
+export interface DemoSignupCompleted {
+  user_id: string;
+}
+
+/** A licensed business with no account yet, offered to testers for sign-up. */
+export interface DemoSignupCandidate {
+  gstin: string;
+  business_name: string;
+  phone_on_file: string;
 }

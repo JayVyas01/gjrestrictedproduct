@@ -26,10 +26,11 @@ from alerts.service import acknowledge
 from audit.service import record
 from catalogue.models import LicenceType, LicenceTypeRule, Substance, SubstanceClass, Unit
 from catalogue.service import add_licence_type, add_rule_version, add_threshold_version
+from core import crypto
 from core.db_context import acting_as_system, set_actor
 from demo import clock, dataset
 from demo.dataset import Ago, HoursAgo, Step
-from demo.models import DemoInboxMessage, DemoPersona
+from demo.models import DemoCredential, DemoInboxMessage, DemoPersona
 from governance import service as governance
 from identity.models import User
 from licensing.enrolment import complete_enrolment, start_enrolment
@@ -100,6 +101,7 @@ class Seeder:
         # The batch job once more for today, at the real time (as the scheduler would).
         self._batch_job()
         self._personas()
+        self._credentials()
 
     def _timeline(self) -> list[Event]:
         events = [
@@ -500,9 +502,16 @@ class Seeder:
                 )
         return events
 
-    # --- personas ---------------------------------------------------------------------------
+    # --- personas and passwords ------------------------------------------------------------
 
     def _personas(self) -> None:
         for persona in dataset.PERSONAS:
             account = self.accounts[dataset.PERSONA_ACCOUNTS[persona.key]]
             DemoPersona.objects.create(key=persona.key, user_id=account.user_id)
+
+    def _credentials(self) -> None:
+        """Every seeded account starts with the shared demo password (A7)."""
+        DemoCredential.objects.bulk_create(
+            DemoCredential(user_id=user.user_id, password_encrypted=crypto.encrypt(self.password))
+            for user in self.accounts.values()
+        )

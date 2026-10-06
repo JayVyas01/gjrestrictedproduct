@@ -19,7 +19,7 @@ from config.checks import DEMO_SENDER
 from core.db_context import acting_as_system, set_actor
 from core.home import home_counts
 from demo import clock, dataset
-from demo.models import DemoInboxMessage, DemoPersona
+from demo.models import DemoCredential, DemoInboxMessage, DemoPersona
 from governance import service as governance
 from governance.models import ProposalStatus, RuleChangeProposal
 from identity.models import User
@@ -145,6 +145,11 @@ def test_seed_builds_the_scripted_story_through_the_real_services(app_db, client
         assert User.objects.filter(role="LICENSEE").count() == len(enrolled)
         assert User.objects.count() == len(enrolled) + len(dataset.OFFICIALS)
         assert DemoPersona.objects.count() == len(dataset.PERSONAS)
+        # Every account's password is recorded for the persona picker and the CSV (A7).
+        credentials = {c.user_id: c.password() for c in DemoCredential.objects.all()}
+        assert credentials == {
+            user_id: DEMO_PASSWORD for user_id in User.objects.values_list("user_id", flat=True)
+        }
 
         # The audit chain verifies.
         with acting_as_system("test"):

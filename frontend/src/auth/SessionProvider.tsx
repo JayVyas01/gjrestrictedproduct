@@ -12,11 +12,16 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ApiError, lastActiveRequestAt, setSessionExpiredHandler } from "@/api/client";
+import {
+  ApiError,
+  lastActiveRequestAt,
+  setPasswordChangeRequiredHandler,
+  setSessionExpiredHandler,
+} from "@/api/client";
 import { useLogout, useMe } from "@/api/hooks/auth";
 import { keys } from "@/api/hooks/keys";
 import type { Me } from "@/api/types";
-import { clearDrafts, EXPIRED_PATH, hasDrafts } from "./session";
+import { CHANGE_PASSWORD_PATH, clearDrafts, EXPIRED_PATH, hasDrafts } from "./session";
 
 /** No input for this long: the "you'll be signed out" warning. */
 export const IDLE_WARNING_MS = 14 * 60_000;
@@ -31,6 +36,10 @@ export const KEEP_ALIVE_MS = 5 * 60_000;
 
 /** What counts as the user doing something. Listened for on window, in the capture phase. */
 const ACTIVITY_EVENTS = ["pointerdown", "pointermove", "keydown", "touchstart", "wheel", "scroll"];
+
+/** Queries that belong to no session: `me` itself, and the anonymous demo data (personas,
+ * inbox, sign-up candidates). Their data says nothing about a session having ended. */
+const ANONYMOUS = new Set([String(keys.me[0]), String(keys.demoPersonas[0])]);
 
 function isSignedOutError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403;
@@ -136,7 +145,8 @@ function IdleTimeout({ keepAlive, onExpire }: IdleProps) {
 
 // Who is signed in (from `me`), signing out, and what happens when the session ends: by
 // signing out, by the server (a 403 that `me` confirms), by 15 minutes without input, or
-// before this page loaded (left-over drafts or data). In mock mode `me` is answered by the
+// before this page loaded (left-over drafts or data). A 403 asking for a new password first goes
+// to /change-password instead. In mock mode `me` is answered by the
 // persona's contract, so the session just works.
 export function SessionProvider({ children }: { children: ReactNode }) {
   const me = useMe();
@@ -166,6 +176,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => setSessionExpiredHandler(null);
   }, [endSession]);
 
+  // A 403 `password_change_required`: still signed in, but a password the system issued must be
+  // changed first (A3). Not an expiry: nothing is cleared. `me` is fetched again, so the guards
+  // keep sending the user back until the new password is saved.
+  useEffect(() => {
+    setPasswordChangeRequiredHandler(() => {
+      void queryClient.invalidateQueries({ queryKey: keys.me });
+      navigate(CHANGE_PASSWORD_PATH, { replace: true });
+    });
+    return () => setPasswordChangeRequiredHandler(null);
+  }, [queryClient, navigate]);
+
   // `me` says nobody is signed in (403). Anything a session left behind (a draft, cached data)
   // is removed, and if there was any, the session must have ended: say so on the sign-in page.
   // Another failure (offline, 5xx) says nothing about the session and changes nothing.
@@ -181,7 +202,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           queryClient
             .getQueryCache()
             .getAll()
-            .some((query) => query.queryKey[0] !== keys.me[0] && query.state.data !== undefined);
+            .some(
+              (query) =>
+                !ANONYMOUS.has(String(query.queryKey[0])) && query.state.data !== undefined,
+            );
         if (leftOver) endSession(EXPIRED_PATH);
       }),
     [queryClient, endSession],

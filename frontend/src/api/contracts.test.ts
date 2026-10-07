@@ -21,6 +21,8 @@ const SUMMARY = keysOf([
   "reference",
   "status",
   "status_label",
+  "status_for_you",
+  "awaiting_you",
   "substance",
   "quantity",
   "unit",
@@ -111,6 +113,9 @@ const GUARDS: Record<string, Guard> = {
   decision_code: { keys: CHALLENGE },
   login_verify: {
     keys: ["user_id", "role", "must_change_password"] satisfies (keyof T.LoginVerified)[],
+  },
+  password_changed: {
+    keys: ["must_change_password"] satisfies (keyof T.PasswordChanged)[],
   },
   transactions_list: { keys: SUMMARY, list: true },
   transaction_created: { keys: DETAIL },
@@ -264,6 +269,10 @@ const GUARDS: Record<string, Guard> = {
     list: true,
   },
   error_400_field_errors: { keys: [] },
+  error_400_password_rules: { keys: ["new_password"] },
+  error_403_password_change_required: {
+    keys: [...ERROR, "code"] satisfies (keyof T.ErrorBody)[],
+  },
   "error_*": { keys: ERROR },
 };
 
@@ -306,6 +315,19 @@ describe("API contracts match the hand-written types", () => {
     for (const [path, required] of Object.entries(nested)) {
       expect(missing(at(sample, path), required), path).toEqual([]);
     }
+  });
+
+  it("words the status for the viewer, and marks what awaits them (A8)", () => {
+    const detail = (name: string) => contracts[name] as T.TransactionDetail;
+    expect(detail("transaction_detail_buyer").status_for_you).toBe("Requires your approval");
+    expect(detail("transaction_detail_seller").status_for_you).toBe("Requires buyer approval");
+    expect(detail("transaction_detail_officer").status_for_you).toBe("Requires your approval");
+    for (const name of names.filter((n) => n.startsWith("transaction_detail_"))) {
+      expect(detail(name).awaiting_you, name).toBe(detail(name).can_decide);
+    }
+    expect((contracts.error_403_password_change_required as T.ErrorBody).code).toBe(
+      "password_change_required",
+    );
   });
 
   it("a buyer over their stock limit may only reject, and the seller never sees the problem", () => {

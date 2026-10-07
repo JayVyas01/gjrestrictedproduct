@@ -3,11 +3,12 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Outlet } from "react-router-dom";
 import type { Role } from "@/api/types";
-import { landingFor } from "./session";
+import { CHANGE_PASSWORD_PATH, landingFor } from "./session";
 import { useSession } from "./SessionProvider";
 
-// Guards a route: signed-out visitors go to sign-in, the wrong role goes to its own home.
-// Without `roles`, any signed-in user may pass.
+// Guards a route: signed-out visitors go to sign-in, a user whose password the system issued
+// goes to change it first (A3), and the wrong role goes to its own home. Without `roles`, any
+// signed-in user may pass.
 export function RequireRole({ roles, children }: { roles?: Role[]; children?: ReactNode }) {
   const { t } = useTranslation();
   const { user, loading } = useSession();
@@ -19,6 +20,7 @@ export function RequireRole({ roles, children }: { roles?: Role[]; children?: Re
     );
   }
   if (!user) return <Navigate to="/sign-in" replace />;
+  if (user.must_change_password) return <Navigate to={CHANGE_PASSWORD_PATH} replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={landingFor(user.role)} replace />;
   return children ?? <Outlet />;
 }

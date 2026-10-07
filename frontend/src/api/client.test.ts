@@ -9,6 +9,7 @@ import {
   apiPut,
   ensureCsrf,
   lastActiveRequestAt,
+  setPasswordChangeRequiredHandler,
   setSessionExpiredHandler,
 } from "./client";
 
@@ -189,6 +190,34 @@ describe("session expiry", () => {
     await failure(apiGet("/api/auth/me"));
     expect(calls.count).toBe(1);
     expect(expired).not.toHaveBeenCalled();
+  });
+});
+
+describe("password change required", () => {
+  it("a 403 with code password_change_required calls its handler, not the expiry one", async () => {
+    const expired = vi.fn();
+    const changeFirst = vi.fn();
+    setSessionExpiredHandler(expired);
+    setPasswordChangeRequiredHandler(changeFirst);
+    let meCalls = 0;
+    server.use(
+      serveContract("error_403_password_change_required", {
+        method: "get",
+        path: "/api/home",
+      }),
+      http.get("/api/auth/me", () => {
+        meCalls += 1;
+        return HttpResponse.json(contract("error_403_not_signed_in"), {
+          status: 403,
+        });
+      }),
+    );
+    const error = await failure(apiGet("/api/home"));
+    expect([error.status, error.code]).toEqual([403, "password_change_required"]);
+    expect(error.fieldErrors).toBeUndefined();
+    expect(changeFirst).toHaveBeenCalledOnce();
+    expect(expired).not.toHaveBeenCalled();
+    expect(meCalls).toBe(0);
   });
 });
 

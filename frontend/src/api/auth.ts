@@ -1,11 +1,25 @@
 import { apiGet, apiPost, ensureCsrf } from "./client";
-import type { Challenge, LoginVerified, Me } from "./types";
+import type {
+  Challenge,
+  LoginRole,
+  LoginVerified,
+  Me,
+  PasswordChange,
+  PasswordChanged,
+} from "./types";
 
 export { ensureCsrf };
 
-/** Step 1: user ID and password; the server sends a code by SMS. */
-export function startLogin(userId: string, password: string): Promise<Challenge> {
-  return apiPost<Challenge>("/api/auth/login", { user_id: userId, password });
+export interface LoginStart {
+  role: LoginRole;
+  /** A party's GSTIN, or an official's email. */
+  identifier: string;
+  password: string;
+}
+
+/** Step 1: the role, its identifier and the password; the server sends a code by SMS. */
+export function startLogin(body: LoginStart): Promise<Challenge> {
+  return apiPost<Challenge>("/api/auth/login", body);
 }
 
 /** Step 2: the code from the SMS; signs in and starts the session. */
@@ -19,4 +33,9 @@ export function logout(): Promise<void> {
 
 export function getMe(): Promise<Me> {
   return apiGet<Me>("/api/auth/me");
+}
+
+/** A new password (required first when the system issued the current one). */
+export function changePassword(body: PasswordChange): Promise<PasswordChanged> {
+  return apiPost<PasswordChanged>("/api/auth/password", body);
 }

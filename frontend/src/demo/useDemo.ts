@@ -7,6 +7,8 @@ export type CodeFill = (code: string) => void;
 export interface Demo {
   /** True only when the server answered the persona list (demo mode). */
   enabled: boolean;
+  /** True while the persona list has not answered yet (demo mode not known). */
+  loading: boolean;
   personas: DemoPersona[];
   inboxOpen: boolean;
   openInbox: () => void;
@@ -17,6 +19,7 @@ export interface Demo {
 /** Outside a DemoProvider (and outside demo mode) nothing demo-related shows or happens. */
 export const NOT_A_DEMO: Demo = {
   enabled: false,
+  loading: false,
   personas: [],
   inboxOpen: false,
   openInbox: () => {},

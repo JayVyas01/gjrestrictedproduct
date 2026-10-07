@@ -153,7 +153,6 @@ export function PersonnelHomePage() {
                 transactions={list}
                 label={t("personnel.queue")}
                 basePath={PERSONNEL_TRANSACTIONS_PATH}
-                awaitingYou
                 showChain
               />
             )

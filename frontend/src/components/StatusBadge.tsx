@@ -16,23 +16,36 @@ export function statusTone(status: TransactionStatus): StatusTone {
 
 interface Props {
   status: TransactionStatus;
-  /** The viewer can decide (`can_decide`): "Awaiting you" replaces the status. */
+  /**
+   * The words to show: the server's `status_for_you` ("Requires your approval", "Requires buyer
+   * approval", or the status label). Without it, the status's own words.
+   */
+  label?: string;
+  /** The viewer must decide (`awaiting_you`): the attention colour, and "Awaiting you" unless
+   * `label` says otherwise. */
   awaitingYou?: boolean;
 }
 
-// A transaction's status as a word on a coloured badge (the colour is never the only signal).
-export function StatusBadge({ status, awaitingYou = false }: Props) {
+// A transaction's status as words on a coloured badge (the colour is never the only signal).
+export function StatusBadge({ status, label, awaitingYou = false }: Props) {
   const { t } = useTranslation();
   if (awaitingYou) {
     return (
-      <Badge color={AWAITING_YOU_COLOR} variant="filled" tt="none" {...WHOLE_WORD}>
-        {t("status.awaitingYou")}
+      <Badge
+        color={AWAITING_YOU_COLOR}
+        variant="filled"
+        tt="none"
+        {...WHOLE_WORD}
+        data-tone="awaiting-you"
+      >
+        {label ?? t("status.awaitingYou")}
       </Badge>
     );
   }
+  const tone = statusTone(status);
   return (
-    <Badge color={STATUS_COLORS[statusTone(status)]} variant="filled" tt="none" {...WHOLE_WORD}>
-      {t(`status.${status}`)}
+    <Badge color={STATUS_COLORS[tone]} variant="filled" tt="none" {...WHOLE_WORD} data-tone={tone}>
+      {label ?? t(`status.${status}`)}
     </Badge>
   );
 }

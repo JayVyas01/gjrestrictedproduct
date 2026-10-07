@@ -4,8 +4,9 @@ import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { axe } from "vitest-axe";
 import type { BatchDetail, LicenceDetail, RuleChange, TransactionDetail } from "@/api/types";
-import { contract } from "./handlers";
+import { contract, serveDemo } from "./handlers";
 import { renderApp } from "./render";
+import { server } from "./server";
 
 const LICENSEE: string[] = []; // the default contracts
 const OFFICER = ["me_personnel", "home_personnel"];
@@ -47,6 +48,7 @@ function overview(who: string, base: string, as: string[]): Case[] {
 
 const CASES: Case[] = [
   ["sign-in", "/sign-in", []],
+  ["change password", "/change-password", OFFICER],
   ["licensee home", "/licensee", LICENSEE],
   ["licensee transactions", "/licensee/transactions", LICENSEE],
   ["seller's transaction", `/licensee/transactions/${ref("transaction_detail_seller")}`, LICENSEE],
@@ -97,13 +99,11 @@ const CASES: Case[] = [
       "rule_change_threshold",
       "rule_change_decided",
     ] as const
-  ).map(
-    (name): Case => [
-      `rule change (${name})`,
-      `/rule-changes/${ruleChange(name)}`,
-      [...AUTHORITY, name],
-    ],
-  ),
+  ).map((name): Case => [
+    `rule change (${name})`,
+    `/rule-changes/${ruleChange(name)}`,
+    [...AUTHORITY, name],
+  ]),
   [
     "Head Authority's rule change to decide",
     `/rule-changes/${ruleChange("rule_change_rule_version")}`,
@@ -114,14 +114,29 @@ const CASES: Case[] = [
 ];
 
 describe("accessibility sweep", () => {
-  it.each(CASES)("%s (%s) has no axe violations", async (_name, route, contracts) => {
-    const { container, router } = renderApp(route, { contracts });
+  it.each(CASES)(
+    "%s (%s) has no axe violations",
+    async (_name, route, contracts) => {
+      const { container, router } = renderApp(route, { contracts });
+      expect(
+        await screen.findByRole("heading", { level: 1 }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe(route); // not redirected to another page
+      await waitFor(
+        () => expect(screen.queryByRole("status", { name: "Loading…" })).not.toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+      expect(await axe(container)).toHaveNoViolations();
+    },
+    20_000,
+  );
+
+  it("sign-up (demo only) has no axe violations", async () => {
+    server.use(...serveDemo());
+    const { container, router } = renderApp("/sign-up", { signedOut: true });
     expect(await screen.findByRole("heading", { level: 1 }, { timeout: 5000 })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe(route); // not redirected to another page
-    await waitFor(
-      () => expect(screen.queryByRole("status", { name: "Loading…" })).not.toBeInTheDocument(),
-      { timeout: 5000 },
-    );
+    await screen.findByRole("region", { name: "Pick a demo business" });
+    expect(router.state.location.pathname).toBe("/sign-up");
     expect(await axe(container)).toHaveNoViolations();
   }, 20_000);
 });

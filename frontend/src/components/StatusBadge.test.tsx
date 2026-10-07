@@ -28,6 +28,18 @@ describe("StatusBadge", () => {
     expect(screen.queryByText("Waiting for the officer")).not.toBeInTheDocument();
   });
 
+  it("shows the words it is given (status_for_you), in the status's tone", async () => {
+    renderWithProviders(
+      <>
+        <StatusBadge status="AWAITING_BUYER" label="Requires buyer approval" />
+        <StatusBadge status="AWAITING_BUYER" label="Requires your approval" awaitingYou />
+      </>,
+    );
+    expect(toneOf(await screen.findByText("Requires buyer approval"))).toBe("waiting");
+    expect(toneOf(screen.getByText("Requires your approval"))).toBe("awaiting-you");
+    expect(screen.queryByText("Waiting for the buyer")).not.toBeInTheDocument();
+  });
+
   it("gives each status its tone", () => {
     const tones: Record<TransactionStatus, string> = {
       AWAITING_BUYER: "waiting",

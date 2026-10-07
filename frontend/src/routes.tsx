@@ -4,6 +4,7 @@ import type { Role } from "@/api/types";
 import { LandingRedirect, RequireRole } from "@/auth/RequireRole";
 import { SessionProvider } from "@/auth/SessionProvider";
 import { SignInPage } from "@/auth/SignInPage";
+import { CHANGE_PASSWORD_PATH } from "@/auth/session";
 import { DemoProvider } from "@/demo/DemoProvider";
 import { TRANSACTIONS_PATH } from "@/features/licensee/paths";
 import { BATCHES_PATH, PERSONNEL_TRANSACTIONS_PATH } from "@/features/personnel/paths";
@@ -13,6 +14,10 @@ import { lazyPage } from "@/lazyPage";
 
 // Each page's code loads on first visit, in a chunk per feature area (vite.config.ts), so the
 // first download carries only the shell and sign-in.
+const ChangePasswordPage = lazyPage(() =>
+  import("@/auth/ChangePasswordPage").then((m) => m.ChangePasswordPage),
+);
+const SignUpPage = lazyPage(() => import("@/auth/SignUpPage").then((m) => m.SignUpPage));
 const AuthorityHomePage = lazyPage(() =>
   import("@/features/authority/AuthorityHomePage").then((m) => m.AuthorityHomePage),
 );
@@ -111,12 +116,16 @@ const DRAFTERS: Role[] = ["LICENSING_AUTHORITY", "PERSONNEL", "HEAD_AUTHORITY"];
 /** Drafters, and the Software Owner read-only. */
 const RULE_CHANGES: Role[] = [...DRAFTERS, "SOFTWARE_OWNER"];
 
-// The app's routes: sign-in, then the shell with each role's screens behind RequireRole.
+// The app's routes: sign-in, sign-up (demo) and change-password, then the shell with each role's screens behind RequireRole.
 export const routes: RouteObject[] = [
   {
     element: <SessionRoot />,
     children: [
       { path: "/sign-in", element: <SignInPage /> },
+      // Demo only: the page sends the visitor to sign-in outside demo mode.
+      { path: "/sign-up", element: <SignUpPage /> },
+      // Signed in, outside the shell: required first while `me.must_change_password` is set.
+      { path: CHANGE_PASSWORD_PATH, element: <ChangePasswordPage /> },
       {
         path: "/",
         element: (

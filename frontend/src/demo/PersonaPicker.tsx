@@ -37,8 +37,9 @@ function PersonaButton({ persona, onPick, disabled }: { persona: DemoPersona } &
   );
 }
 
-// Demo mode only: one button per synthetic account. A click fills the user ID and password and
-// submits step 1, so the real password-and-code sign-in still runs.
+// Demo mode only: one button per synthetic account. A click fills the role, the identifier (a
+// GSTIN or an email) and the password and submits step 1, so the real password-and-code
+// sign-in still runs.
 export function PersonaPicker({ onPick, disabled }: Props) {
   const { t } = useTranslation();
   const { enabled, personas } = useDemo();

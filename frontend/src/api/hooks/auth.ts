@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMe, logout, startLogin, verifyLogin } from "../auth";
+import { changePassword, getMe, logout, startLogin, verifyLogin, type LoginStart } from "../auth";
+import type { PasswordChange } from "../types";
 import { keys } from "./keys";
 
 export function useMe(enabled = true) {
@@ -8,8 +9,7 @@ export function useMe(enabled = true) {
 
 export function useStartLogin() {
   return useMutation({
-    mutationFn: ({ userId, password }: { userId: string; password: string }) =>
-      startLogin(userId, password),
+    mutationFn: (body: LoginStart) => startLogin(body),
   });
 }
 
@@ -19,6 +19,22 @@ export function useVerifyLogin() {
     mutationFn: ({ challengeId, code }: { challengeId: string; code: string }) =>
       verifyLogin(challengeId, code),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.me }),
+  });
+}
+
+/**
+ * Choose a new password. Afterwards `me` is fetched again (before this resolves, so the guards
+ * see the flag cleared) and, in a demo, the personas (the picker shows the new password).
+ */
+export function useChangePassword() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PasswordChange) => changePassword(body),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.me }),
+        client.invalidateQueries({ queryKey: keys.demoPersonas }),
+      ]),
   });
 }
 

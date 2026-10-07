@@ -13,6 +13,9 @@ export function landingFor(role: string): string {
   return role in LANDING ? LANDING[role as Role] : "/";
 }
 
+/** Where a signed-in user must go while `me.must_change_password` is set (owner decision A3). */
+export const CHANGE_PASSWORD_PATH = "/change-password";
+
 /** Where a session that ended goes: sign-in with the expiry notice. */
 export const EXPIRED_PATH = "/sign-in?expired=1";
 

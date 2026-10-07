@@ -24,8 +24,6 @@ interface Props {
   label: string;
   /** Detail links go to `${basePath}/${reference}`. */
   basePath: string;
-  /** Every row waits for the viewer (the "Waiting for you" filter). */
-  awaitingYou?: boolean;
   /** Adds each row's approval chain, tagged "Final approval" while it waits for the superintendent. */
   showChain?: boolean;
 }
@@ -46,14 +44,9 @@ function Chain({ tx }: { tx: TransactionSummary }) {
 }
 
 // Transactions as a table (reference, substance, quantity, other party, status, date), or as
-// stacked cards on a narrow screen. Only one of the two is rendered.
-export function TransactionList({
-  transactions,
-  label,
-  basePath,
-  awaitingYou = false,
-  showChain = false,
-}: Props) {
+// stacked cards on a narrow screen. Only one of the two is rendered. The status is worded for
+// the viewer (`status_for_you`), in the attention colour on the rows that wait for them.
+export function TransactionList({ transactions, label, basePath, showChain = false }: Props) {
   const { t } = useTranslation();
   const stacked = useMediaQuery(STACKED);
   const href = (tx: TransactionSummary) => `${basePath}/${encodeURIComponent(tx.reference)}`;
@@ -70,7 +63,11 @@ export function TransactionList({
           <Card component="li" key={tx.reference} withBorder padding="md">
             <Group justify="space-between" wrap="wrap" gap="xs">
               {reference(tx)}
-              <StatusBadge status={tx.status} awaitingYou={awaitingYou} />
+              <StatusBadge
+                status={tx.status}
+                label={tx.status_for_you}
+                awaitingYou={tx.awaiting_you}
+              />
             </Group>
             <Text mt="xs">
               {tx.substance}, <Qty value={tx.quantity} unit={tx.unit} />
@@ -119,7 +116,11 @@ export function TransactionList({
                 </Table.Td>
               )}
               <Table.Td>
-                <StatusBadge status={tx.status} awaitingYou={awaitingYou} />
+                <StatusBadge
+                  status={tx.status}
+                  label={tx.status_for_you}
+                  awaitingYou={tx.awaiting_you}
+                />
               </Table.Td>
               <Table.Td>
                 <DateText iso={tx.created_at} />

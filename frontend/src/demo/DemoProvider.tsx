@@ -23,12 +23,13 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const demo = useMemo<Demo>(
     () => ({
       enabled,
+      loading: personas.isPending,
       personas: personas.data ?? [],
       inboxOpen: enabled && inboxOpen,
       openInbox: open,
       registerCodeFill,
     }),
-    [enabled, personas.data, inboxOpen, open, registerCodeFill],
+    [enabled, personas.isPending, personas.data, inboxOpen, open, registerCodeFill],
   );
 
   return (

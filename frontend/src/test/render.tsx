@@ -3,7 +3,7 @@ import { render, type RenderResult } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import type { ReactElement } from "react";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, parsePath, RouterProvider } from "react-router-dom";
 import { AppProviders, createQueryClient } from "@/App";
 import { routes } from "@/routes";
 import { contract, createHandlers, handlers } from "./handlers";
@@ -47,6 +47,8 @@ export interface RenderAppOptions {
   contracts?: string[];
   /** Nobody is signed in: `me` answers 403. */
   signedOut?: boolean;
+  /** Router state for the first entry (as `navigate(route, { state })` would leave). */
+  state?: unknown;
 }
 
 /** `me` answers 403, as it does when nobody is signed in. */
@@ -62,12 +64,13 @@ export function serveSignedOut() {
 // puts the newest handlers first, so the test's own handlers are put back in front.
 export function renderApp(
   route = "/",
-  { contracts = [], signedOut = false }: RenderAppOptions = {},
+  { contracts = [], signedOut = false, state }: RenderAppOptions = {},
 ): RenderWithProvidersResult {
   const defaults: readonly unknown[] = handlers;
   const overrides = server.listHandlers().filter((handler) => !defaults.includes(handler));
   if (contracts.length) server.use(...createHandlers(contracts));
   if (signedOut) server.use(serveSignedOut());
   if (overrides.length && (contracts.length || signedOut)) server.use(...overrides);
-  return renderRouter(createMemoryRouter(routes, { initialEntries: [route] }));
+  const entry = state === undefined ? route : { ...parsePath(route), state };
+  return renderRouter(createMemoryRouter(routes, { initialEntries: [entry] }));
 }

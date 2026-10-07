@@ -21,13 +21,22 @@ function serveHome(name: string, counts: Home["counts"]) {
 function serveQueue() {
   const searches: string[] = [];
   const queue: TransactionSummary[] = [
-    { ...ROW, reference: "TXOFFICER001", status: "AWAITING_OFFICER", your_role: "officer" },
+    {
+      ...ROW,
+      reference: "TXOFFICER001",
+      status: "AWAITING_OFFICER",
+      status_for_you: "Requires your approval",
+      awaiting_you: true,
+      your_role: "officer",
+    },
     {
       ...ROW,
       reference: "TXFINAL00002",
       status: "AWAITING_SUPERINTENDENT",
       approval_chain: "OFFICER_THEN_SUPERINTENDENT",
       approval_chain_label: "Officer, then superintendent",
+      status_for_you: "Requires your approval",
+      awaiting_you: true,
       your_role: "superintendent",
     },
   ];
@@ -64,7 +73,9 @@ describe("PersonnelHomePage", () => {
     );
     expect(within(officerRow!).getByText("Officer")).toBeInTheDocument();
     expect(within(officerRow!).queryByText("Final approval")).not.toBeInTheDocument();
-    expect(within(officerRow!).getByText("Awaiting you")).toBeInTheDocument();
+    // Worded for the viewer, in the attention colour.
+    const status = within(officerRow!).getByText("Requires your approval");
+    expect(status.closest("[data-tone]")).toHaveAttribute("data-tone", "awaiting-you");
     expect(within(finalRow!).getByText("Officer, then superintendent")).toBeInTheDocument();
     expect(within(finalRow!).getByText("Final approval")).toBeInTheDocument();
 

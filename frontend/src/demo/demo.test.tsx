@@ -79,7 +79,7 @@ describe("outside demo mode (the persona list answers 404)", () => {
   it("shows no picker, inbox button or ribbon on sign-in, and asks only once", async () => {
     const asked = serveNotADemo();
     renderApp("/sign-in", { signedOut: true });
-    await screen.findByLabelText("User ID");
+    await screen.findByLabelText("GSTIN");
     await waitFor(() => expect(asked.count).toBe(1));
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
     expect(screen.queryByText(PICKER)).not.toBeInTheDocument();
@@ -103,7 +103,7 @@ describe("outside demo mode (the persona list answers 404)", () => {
     const asked = serveNotADemo();
     serveSignIn();
     const { user } = renderApp("/sign-in");
-    await user.type(await screen.findByLabelText("User ID"), "GJK2PY48DX3B");
+    await user.type(await screen.findByLabelText("GSTIN"), "99AAAAA0000A1Z5");
     await user.type(screen.getByLabelText("Password"), "a-password");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText(/Enter the 6-digit code/);
@@ -125,14 +125,16 @@ describe("the persona picker", () => {
     expect(screen.getByText(RIBBON)).toBeInTheDocument();
   });
 
-  it("fills the user ID and password, submits step 1, and the code step shows the hint", async () => {
+  it("fills the role, identifier and password, submits step 1, and the code step shows the hint", async () => {
     server.use(...serveDemo());
     const posted = serveSignIn();
     const { user } = renderApp("/sign-in");
     await user.click(await screen.findByRole("button", { name: "Seller" }));
 
     expect(await screen.findByText(HINT)).toBeInTheDocument();
-    expect(posted).toEqual([{ user_id: SELLER!.identifier, password: SELLER!.password }]);
+    expect(posted).toEqual([
+      { role: SELLER!.role, identifier: SELLER!.identifier, password: SELLER!.password },
+    ]);
     // The picker belongs to step 1 only.
     expect(screen.queryByText(PICKER)).not.toBeInTheDocument();
   });

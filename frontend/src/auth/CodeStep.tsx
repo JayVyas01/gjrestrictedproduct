@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useVerifyLogin } from "@/api/hooks/auth";
 import { DemoCodeHint } from "@/demo/DemoCodeHint";
 import { useDemoCodeFill } from "@/demo/useDemo";
-import { clearDrafts, landingFor } from "./session";
+import { CHANGE_PASSWORD_PATH, clearDrafts, landingFor } from "./session";
 import { signInError } from "./signInError";
 
 const CODE_LENGTH = 6;
@@ -16,7 +16,8 @@ interface Props {
   onRestart: () => void;
 }
 
-// Step 2: the six-digit code from the SMS (typed or pasted). On success, the role's home.
+// Step 2: the six-digit code from the SMS (typed or pasted). On success, the role's home, or
+// the change-password page first when the system issued the password.
 export function CodeStep({ challengeId, onRestart }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -54,9 +55,12 @@ export function CodeStep({ challengeId, onRestart }: Props) {
     verify.mutate(
       { challengeId, code },
       {
-        onSuccess: ({ role }) => {
+        onSuccess: ({ role, must_change_password }) => {
           clearDrafts();
-          navigate(landingFor(role), { replace: true });
+          // A password the system issued: nothing else works until a new one is chosen.
+          navigate(must_change_password ? CHANGE_PASSWORD_PATH : landingFor(role), {
+            replace: true,
+          });
         },
       },
     );

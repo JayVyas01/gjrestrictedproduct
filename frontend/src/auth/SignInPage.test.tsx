@@ -1,17 +1,20 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { axe } from "vitest-axe";
-import { contract } from "@/test/handlers";
+import type { DemoPersona } from "@/api/types";
+import { contract, serveDemo } from "@/test/handlers";
 import { renderApp } from "@/test/render";
 import { server } from "@/test/server";
 
 const WRONG_CODE = "That code didn't match. Check the SMS or send a new code.";
 const TOO_MANY = "Too many tries. Wait a minute and try again.";
+const GSTIN = "99AAAAA0000A1Z5";
+const ROLES = ["Party", "Licensing Authority", "Area Officer", "Superintendent", "Head Authority"];
 
 // Signed out until the code is verified, as on the real server; records what was posted.
 // (It serves `me` itself, so these tests don't pass `signedOut`, which would take precedence.)
-function serveSignIn() {
+function serveSignIn({ mustChange = false } = {}) {
   const posted: Record<string, unknown>[] = [];
   let signedIn = false;
   server.use(
@@ -22,11 +25,15 @@ function serveSignIn() {
     http.post("/api/auth/login/verify", async ({ request }) => {
       posted.push((await request.json()) as Record<string, unknown>);
       signedIn = true;
-      return HttpResponse.json(contract<object>("login_verify"));
+      const verified = { ...contract<object>("login_verify"), must_change_password: mustChange };
+      return HttpResponse.json(verified);
     }),
     http.get("/api/auth/me", () =>
       signedIn
-        ? HttpResponse.json(contract<object>("me_licensee"))
+        ? HttpResponse.json({
+            ...contract<object>("me_licensee"),
+            must_change_password: mustChange,
+          })
         : HttpResponse.json(contract<object>("error_403_not_signed_in"), { status: 403 }),
     ),
   );
@@ -34,14 +41,14 @@ function serveSignIn() {
 }
 
 async function passwordStep(user: ReturnType<typeof renderApp>["user"]) {
-  await user.type(await screen.findByLabelText("User ID"), "GJK2PY48DX3B");
+  await user.type(await screen.findByLabelText("GSTIN"), GSTIN.toLowerCase());
   await user.type(screen.getByLabelText("Password"), "a-password");
   await user.click(screen.getByRole("button", { name: "Continue" }));
   return screen.findByText(/Enter the 6-digit code/);
 }
 
 describe("SignInPage", () => {
-  it("signs in with a password and a pasted code, then lands on the role's home", async () => {
+  it("signs a party in with the GSTIN, a password and a pasted code, then lands on its home", async () => {
     const posted = serveSignIn();
     const { user, router } = renderApp("/sign-in");
     await passwordStep(user);
@@ -55,7 +62,7 @@ describe("SignInPage", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/licensee"));
     const challenge = contract<{ challenge_id: string }>("login_start").challenge_id;
     expect(posted).toEqual([
-      { user_id: "GJK2PY48DX3B", password: "a-password" },
+      { role: "PARTY", identifier: GSTIN, password: "a-password" }, // the GSTIN in capitals
       { challenge_id: challenge, code: "123456" },
     ]);
     expect(await screen.findByText("Sanand Spirits Pvt Ltd")).toBeInTheDocument();
@@ -73,11 +80,103 @@ describe("SignInPage", () => {
     expect(sessionStorage.getItem("gj.draft.sale")).toBeNull();
   });
 
-  it("asks for both fields before calling the server", async () => {
-    const { user } = renderApp("/sign-in", { signedOut: true });
+  it("asks for the role first: Party by default, then the GSTIN with its format", async () => {
+    renderApp("/sign-in", { signedOut: true });
+    const group = await screen.findByRole("radiogroup", { name: "Sign in as" });
+    for (const role of ROLES)
+      expect(within(group).getByRole("radio", { name: role })).toBeVisible();
+    expect(within(group).getAllByRole("radio")).toHaveLength(ROLES.length);
+    expect(within(group).getByRole("radio", { name: "Party" })).toBeChecked();
+    expect(screen.getByLabelText("GSTIN")).toHaveAccessibleDescription(
+      "Your business's 15-character GSTIN, for example 24ABCDE1234F1Z5.",
+    );
+    expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
+  });
+
+  it("asks for every field, and a GSTIN in its format, before calling the server", async () => {
+    const posted = serveSignIn();
+    const { user } = renderApp("/sign-in");
     await user.click(await screen.findByRole("button", { name: "Continue" }));
-    expect(screen.getByLabelText("User ID")).toHaveAccessibleDescription("Enter your user ID.");
+    expect(screen.getByLabelText("GSTIN")).toHaveAccessibleDescription(
+      expect.stringContaining("Enter your GSTIN."),
+    );
     expect(screen.getByLabelText("Password")).toHaveAccessibleDescription("Enter your password.");
+    await user.type(screen.getByLabelText("GSTIN"), "24ABC");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByLabelText("GSTIN")).toHaveAccessibleDescription(
+      expect.stringContaining("Enter a 15-character GSTIN"),
+    );
+    expect(posted).toEqual([]);
+  });
+
+  it("an official signs in by email; an issued password goes to change-password first", async () => {
+    const posted = serveSignIn({ mustChange: true });
+    const { user, router } = renderApp("/sign-in");
+    await user.type(await screen.findByLabelText("GSTIN"), GSTIN);
+    await user.click(screen.getByRole("radio", { name: "Area Officer" }));
+    // A GSTIN is no email: the identifier starts again.
+    const email = screen.getByLabelText("Email");
+    expect(email).toHaveValue("");
+    expect(screen.queryByLabelText("GSTIN")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(email).toHaveAccessibleDescription("Enter your email.");
+
+    await user.type(email, "officer.sanand@demo.gujarat.example");
+    await user.type(screen.getByLabelText("Password"), "issued-pass");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(await screen.findByLabelText("Digit 1 of 6"));
+    await user.paste("123456");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/change-password"));
+    expect(posted[0]).toEqual({
+      role: "AREA_OFFICER",
+      identifier: "officer.sanand@demo.gujarat.example",
+      password: "issued-pass",
+    });
+  });
+
+  it("preselects Party and the GSTIN from sign-up's router state", async () => {
+    renderApp("/sign-in", { signedOut: true, state: { role: "PARTY", identifier: GSTIN } });
+    expect(await screen.findByLabelText("GSTIN")).toHaveValue(GSTIN);
+    expect(screen.getByRole("radio", { name: "Party" })).toBeChecked();
+  });
+
+  it("a persona fills the role as well: an official's goes in with the email", async () => {
+    const official: DemoPersona = {
+      key: "officer",
+      label: "Area Officer, Sanand",
+      description: "Decides sales in Sanand.",
+      role: "AREA_OFFICER",
+      identifier: "officer.sanand@demo.gujarat.example",
+      password: "issued-pass-123",
+    };
+    server.use(...serveDemo());
+    server.use(http.get("/api/demo/personas", () => HttpResponse.json([official])));
+    const posted = serveSignIn();
+    const { user } = renderApp("/sign-in");
+    await user.click(await screen.findByRole("button", { name: official.label }));
+    await screen.findByText(/Enter the 6-digit code/);
+    expect(posted).toEqual([
+      { role: "AREA_OFFICER", identifier: official.identifier, password: official.password },
+    ]);
+    // Back for a new code: the role and email are kept.
+    await user.click(screen.getByRole("button", { name: "Send a new code" }));
+    expect(screen.getByRole("radio", { name: "Area Officer" })).toBeChecked();
+    expect(screen.getByLabelText("Email")).toHaveValue(official.identifier);
+  });
+
+  it("offers sign-up in a demo only", async () => {
+    server.use(...serveDemo());
+    const { user, router } = renderApp("/sign-in", { signedOut: true });
+    await user.click(await screen.findByRole("link", { name: "Sign up" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/sign-up"));
+  });
+
+  it("has no sign-up link outside a demo", async () => {
+    renderApp("/sign-in", { signedOut: true });
+    await screen.findByLabelText("GSTIN");
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(screen.queryByRole("link", { name: "Sign up" })).not.toBeInTheDocument();
   });
 
   it("a wrong password shows the server's detail", async () => {
@@ -87,7 +186,7 @@ describe("SignInPage", () => {
       ),
     );
     const { user } = renderApp("/sign-in", { signedOut: true });
-    await user.type(await screen.findByLabelText("User ID"), "GJK2PY48DX3B");
+    await user.type(await screen.findByLabelText("GSTIN"), GSTIN);
     await user.type(screen.getByLabelText("Password"), "wrong");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid credentials");
@@ -96,7 +195,7 @@ describe("SignInPage", () => {
   it("too many tries shows the wait text", async () => {
     server.use(http.post("/api/auth/login", () => new HttpResponse(null, { status: 429 })));
     const { user } = renderApp("/sign-in", { signedOut: true });
-    await user.type(await screen.findByLabelText("User ID"), "GJK2PY48DX3B");
+    await user.type(await screen.findByLabelText("GSTIN"), GSTIN);
     await user.type(screen.getByLabelText("Password"), "a-password");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(TOO_MANY);
@@ -123,7 +222,7 @@ describe("SignInPage", () => {
     }
 
     await user.click(screen.getByRole("button", { name: "Send a new code" }));
-    expect(screen.getByLabelText("User ID")).toHaveValue("GJK2PY48DX3B");
+    expect(screen.getByLabelText("GSTIN")).toHaveValue(GSTIN);
     expect(screen.getByLabelText("Password")).toHaveValue("");
   });
 
@@ -136,14 +235,14 @@ describe("SignInPage", () => {
 
   it("has no expiry notice on a plain visit", async () => {
     renderApp("/sign-in", { signedOut: true });
-    await screen.findByLabelText("User ID");
+    await screen.findByLabelText("GSTIN");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("has no accessibility violations on either step", async () => {
     serveSignIn();
     const { container, user } = renderApp("/sign-in?expired=1");
-    await screen.findByLabelText("User ID");
+    await screen.findByLabelText("GSTIN");
     expect(await axe(container)).toHaveNoViolations();
     await passwordStep(user);
     expect(await axe(container)).toHaveNoViolations();

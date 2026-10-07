@@ -36,6 +36,7 @@ const CSRF_TOKEN = "mock-csrf-token";
 const ENDPOINTS: Endpoint[] = [
   { method: "post", path: "/api/auth/login", contract: "login_start" },
   { method: "post", path: "/api/auth/login/verify", contract: "login_verify" },
+  { method: "post", path: "/api/auth/password", contract: "password_changed" },
   {
     method: "get",
     path: "/api/auth/me",

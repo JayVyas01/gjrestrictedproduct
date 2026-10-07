@@ -3,7 +3,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiGet } from "@/api/client";
 import { keys } from "@/api/hooks/keys";
-import { contract } from "@/test/handlers";
+import { contract, serveContract, serveDemo } from "@/test/handlers";
 import { renderApp, serveSignedOut } from "@/test/render";
 import { server } from "@/test/server";
 import { IDLE_SIGN_OUT_MS, IDLE_WARNING_MS, KEEP_ALIVE_MS } from "./SessionProvider";
@@ -178,7 +178,7 @@ describe("idle timeout", () => {
   it("does not run while signed out", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { router } = renderApp("/sign-in", { signedOut: true });
-    await screen.findByLabelText("User ID");
+    await screen.findByLabelText("GSTIN");
     await idle(IDLE_SIGN_OUT_MS + MINUTE);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(router.state.location.search).toBe("");
@@ -196,10 +196,58 @@ describe("a session that ended before the page loaded", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/Your session ended/);
   });
 
+  it("in a demo, the anonymous demo data (personas) is nothing left behind", async () => {
+    let answerMe: () => void = () => {};
+    const meAnswered = new Promise<void>((resolve) => (answerMe = resolve));
+    server.use(...serveDemo());
+    const { router } = renderApp("/sign-up", { signedOut: true });
+    // `me` answers 403 only after the persona list has arrived.
+    server.use(
+      http.get("/api/auth/me", async () => {
+        await meAnswered;
+        return HttpResponse.json(contract<object>("error_403_not_signed_in"), { status: 403 });
+      }),
+    );
+    await screen.findByRole("heading", { level: 1, name: "Sign up your business" });
+    answerMe();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    expect(router.state.location.pathname).toBe("/sign-up");
+    expect(router.state.location.search).toBe("");
+  });
+
   it("with nothing left behind, is a plain sign-in", async () => {
     const { router } = renderApp("/licensee", { signedOut: true });
     await waitFor(() => expect(router.state.location.pathname).toBe("/sign-in"));
-    await screen.findByLabelText("User ID");
+    await screen.findByLabelText("GSTIN");
     expect(router.state.location.search).toBe("");
+  });
+});
+
+describe("a password the system issued (must_change_password)", () => {
+  const issued = (name: string) => ({ ...contract<object>(name), must_change_password: true });
+
+  it("every guarded screen sends the user to change it first", async () => {
+    server.use(http.get("/api/auth/me", () => HttpResponse.json(issued("me_personnel"))));
+    const { router } = renderApp("/personnel/transactions");
+    await waitFor(() => expect(router.state.location.pathname).toBe("/change-password"));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Choose a new password" }),
+    ).toBeInTheDocument();
+  });
+
+  it("a 403 password_change_required goes there too, without ending the session", async () => {
+    const { router, queryClient } = renderApp("/licensee");
+    await screen.findByRole("heading", { level: 1 });
+    sessionStorage.setItem(DRAFT, JSON.stringify({ owner: SELLER }));
+    server.use(
+      serveContract("error_403_password_change_required", { method: "get", path: "/api/home" }),
+    );
+    await act(async () => {
+      await apiGet("/api/home").catch(() => undefined);
+    });
+    await waitFor(() => expect(router.state.location.pathname).toBe("/change-password"));
+    expect(router.state.location.search).toBe("");
+    expect(sessionStorage.getItem(DRAFT)).not.toBeNull(); // not an expiry: nothing is cleared
+    expect(queryClient.getQueryData(keys.me)).toBeDefined();
   });
 });

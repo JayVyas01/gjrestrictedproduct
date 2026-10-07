@@ -1,5 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { listDemoInbox, listDemoPersonas } from "../demo";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  completeDemoSignup,
+  listDemoInbox,
+  listDemoPersonas,
+  listDemoSignupCandidates,
+  startDemoSignup,
+} from "../demo";
+import type { DemoSignupForm } from "../types";
 import { isBackground, keys } from "./keys";
 
 /** The demo SMS inbox refreshes this often while it is open. */
@@ -25,5 +32,30 @@ export function useDemoInbox() {
     queryKey: keys.demoInbox,
     queryFn: (context) => listDemoInbox({ background: isBackground(context) }),
     refetchInterval: INBOX_POLL_MS,
+  });
+}
+
+/** Licensed businesses not yet signed up ("Pick a demo business"). */
+export function useDemoSignupCandidates(enabled = true) {
+  return useQuery({
+    queryKey: keys.demoSignupCandidates,
+    queryFn: listDemoSignupCandidates,
+    enabled,
+  });
+}
+
+export function useStartDemoSignup() {
+  return useMutation({
+    mutationFn: (form: DemoSignupForm) => startDemoSignup(form),
+  });
+}
+
+/** The account now exists: the business leaves the candidates, and the personas may change. */
+export function useCompleteDemoSignup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ challengeId, code }: { challengeId: string; code: string }) =>
+      completeDemoSignup(challengeId, code),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.demoSignupCandidates }),
   });
 }

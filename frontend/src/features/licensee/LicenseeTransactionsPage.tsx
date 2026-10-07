@@ -54,7 +54,6 @@ function Results({ filters }: { filters: TransactionFilters }) {
       transactions={list.data}
       label={t("pages.licenseeTransactions")}
       basePath={TRANSACTIONS_PATH}
-      awaitingYou={filters.awaiting === "me"}
     />
   );
 }

@@ -36,6 +36,7 @@ export const keys = {
   ruleChange: (id: number) => ["rule-changes", "detail", id],
   demoPersonas: ["demo", "personas"],
   demoInbox: ["demo", "inbox"],
+  demoSignupCandidates: ["demo", "signup-candidates"],
 } as const;
 
 /** Home counts and alerts refresh this often (W7). */

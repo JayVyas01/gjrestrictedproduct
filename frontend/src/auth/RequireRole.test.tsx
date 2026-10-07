@@ -22,7 +22,7 @@ describe("landing and RequireRole", () => {
     const { router } = renderApp("/licensee/transactions", { signedOut: true });
     await waitFor(() => expect(router.state.location.pathname).toBe("/sign-in"));
     expect(router.state.location.search).toBe("");
-    expect(await screen.findByLabelText("User ID")).toBeInTheDocument();
+    expect(await screen.findByLabelText("GSTIN")).toBeInTheDocument();
   });
 
   it("sends the wrong role to their own home", async () => {

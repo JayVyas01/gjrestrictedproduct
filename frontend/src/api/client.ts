@@ -13,11 +13,17 @@ export class ApiError extends Error {
   readonly reasons?: string[];
   /** Field name → messages (400 validation errors). */
   readonly fieldErrors?: Record<string, string[]>;
+  /** The server's machine-readable reason, when it sent one (e.g. "password_change_required"). */
+  readonly code?: string;
 
   constructor(
     status: number,
     detail: string,
-    extra: { reasons?: string[]; fieldErrors?: Record<string, string[]> } = {},
+    extra: {
+      reasons?: string[];
+      fieldErrors?: Record<string, string[]>;
+      code?: string;
+    } = {},
   ) {
     super(detail || `Request failed with status ${status}`);
     this.name = "ApiError";
@@ -25,6 +31,7 @@ export class ApiError extends Error {
     this.detail = detail;
     this.reasons = extra.reasons;
     this.fieldErrors = extra.fieldErrors;
+    this.code = extra.code;
   }
 }
 
@@ -33,9 +40,12 @@ const ME = "/api/auth/me";
 /** Their 403s mean "refused", never "your session ended": there is no session yet. */
 const NO_SESSION_CHECK = new Set([ME, "/api/auth/login", "/api/auth/login/verify"]);
 export const BACKGROUND_HEADER = "X-Background-Refresh";
+/** The 403 `code` while a password the system issued must still be changed (A3). */
+export const PASSWORD_CHANGE_REQUIRED = "password_change_required";
 
 let csrfReady: Promise<void> | null = null;
 let onSessionExpired: (() => void) | null = null;
+let onPasswordChangeRequired: (() => void) | null = null;
 let lastActive = 0;
 
 /** When the last request that extends the session (any but a background refresh) answered. */
@@ -46,6 +56,11 @@ export function lastActiveRequestAt(): number {
 /** SessionProvider registers what to do when the session has ended (clear, go to sign-in). */
 export function setSessionExpiredHandler(handler: (() => void) | null): void {
   onSessionExpired = handler;
+}
+
+/** SessionProvider registers what to do when the server asks for a new password first. */
+export function setPasswordChangeRequiredHandler(handler: (() => void) | null): void {
+  onPasswordChangeRequired = handler;
 }
 
 /** Fetches the CSRF cookie once per page load (again only if that attempt failed). */
@@ -66,6 +81,7 @@ export function ensureCsrf(): Promise<void> {
 export function resetClientState(): void {
   csrfReady = null;
   onSessionExpired = null;
+  onPasswordChangeRequired = null;
   lastActive = 0;
 }
 
@@ -79,16 +95,17 @@ function toApiError(status: number, body: unknown): ApiError {
   const data: ErrorBody = body && typeof body === "object" ? (body as ErrorBody) : {};
   const detail = typeof data.detail === "string" ? data.detail : "";
   const reasons = Array.isArray(data.reasons) ? data.reasons : undefined;
+  const code = typeof data.code === "string" ? data.code : undefined;
   let fieldErrors: Record<string, string[]> | undefined;
   if (status === 400) {
     const fields = Object.entries(data).filter(
-      ([key, value]) => key !== "detail" && Array.isArray(value),
+      ([key, value]) => key !== "detail" && key !== "code" && Array.isArray(value),
     );
     if (fields.length) {
       fieldErrors = Object.fromEntries(fields.map(([key, value]) => [key, value as string[]]));
     }
   }
-  return new ApiError(status, detail, { reasons, fieldErrors });
+  return new ApiError(status, detail, { reasons, fieldErrors, code });
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -138,8 +155,14 @@ async function request<T>(
   if (!background) lastActive = Date.now();
   const data = await readJson(response);
   if (response.ok) return data as T;
-  if (response.status === 403 && !NO_SESSION_CHECK.has(path)) await checkSession();
-  throw toApiError(response.status, data);
+  const error = toApiError(response.status, data);
+  if (response.status === 403 && error.code === PASSWORD_CHANGE_REQUIRED) {
+    // Signed in, but a password the system issued must be changed first: not an expiry.
+    onPasswordChangeRequired?.();
+  } else if (response.status === 403 && !NO_SESSION_CHECK.has(path)) {
+    await checkSession();
+  }
+  throw error;
 }
 
 export function apiGet<T>(path: string, options?: RequestOptions): Promise<T> {

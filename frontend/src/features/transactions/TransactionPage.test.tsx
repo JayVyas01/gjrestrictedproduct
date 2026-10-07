@@ -84,6 +84,13 @@ describe("TransactionPage", () => {
   });
 
   describe("the seller", () => {
+    it("sees the status worded for them: the sale requires the buyer's approval", async () => {
+      renderApp(at(SELLER));
+      const status = await screen.findByText("Requires buyer approval");
+      expect(status.closest("[data-tone]")).toHaveAttribute("data-tone", "waiting");
+      expect(screen.getByText("Waiting for the buyer")).toBeInTheDocument();
+    });
+
     it("can cancel while the sale waits for the buyer, after confirming", async () => {
       const posts = recordPosts("/api/transactions/:reference/cancel", "transaction_detail_seller");
       const { user, queryClient } = renderApp(at(SELLER));
@@ -151,7 +158,9 @@ describe("TransactionPage", () => {
           .map((button) => button.textContent),
       ).toEqual(["Confirm purchase", "Reject"]);
       expect(screen.queryByRole("button", { name: "Cancel sale" })).not.toBeInTheDocument();
-      expect(screen.getByText("Awaiting you")).toBeInTheDocument();
+      // Worded for the viewer (A8), with the plain status beside it.
+      expect(screen.getByText("Requires your approval")).toBeInTheDocument();
+      expect(screen.getByText("Waiting for the buyer")).toBeInTheDocument();
     });
 
     it("confirms through the code dialog", async () => {

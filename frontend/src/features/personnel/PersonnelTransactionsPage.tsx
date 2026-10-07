@@ -30,7 +30,6 @@ function Results({ filters }: { filters: TransactionFilters }) {
       transactions={list.data}
       label={t("pages.personnelTransactions")}
       basePath={PERSONNEL_TRANSACTIONS_PATH}
-      awaitingYou={filters.awaiting === "me"}
       showChain
     />
   );

@@ -27,6 +27,26 @@ export interface LoginVerified {
   must_change_password: boolean;
 }
 
+/** The sign-in roles the web app offers (the Software Owner signs in through the API only). */
+export const SIGN_IN_ROLES = [
+  "PARTY",
+  "LICENSING_AUTHORITY",
+  "AREA_OFFICER",
+  "SUPERINTENDENT",
+  "HEAD_AUTHORITY",
+] as const satisfies readonly LoginRole[];
+export type SignInRole = (typeof SIGN_IN_ROLES)[number];
+
+/** POST /api/auth/password. */
+export interface PasswordChange {
+  current_password: string;
+  new_password: string;
+}
+
+export interface PasswordChanged {
+  must_change_password: boolean;
+}
+
 export interface Position {
   id: number;
   title: string;
@@ -82,6 +102,13 @@ export interface TransactionSummary {
   reference: string;
   status: TransactionStatus;
   status_label: string;
+  /**
+   * The status worded for the viewer (A8): "Requires your approval" when they must decide,
+   * "Requires buyer approval" and the like for a party waiting on someone; else the label.
+   */
+  status_for_you: string;
+  /** The viewer is the one whose decision is awaited (as `can_decide` on the detail). */
+  awaiting_you: boolean;
   substance: string;
   quantity: string;
   unit: string;
@@ -353,6 +380,8 @@ export interface LicenceDetail extends LicenceRow {
 /** A refusal: `detail` always, `reasons` on 422. A 400 may instead carry field errors. */
 export interface ErrorBody {
   detail?: string;
+  /** A machine-readable reason, e.g. "password_change_required" on a 403. */
+  code?: string;
   reasons?: string[];
   [field: string]: unknown;
 }

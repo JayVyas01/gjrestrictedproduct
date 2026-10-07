@@ -4,7 +4,11 @@ and officer's free-text comments, and who held the position when the officer
 and superintendent decided (`held_by`), are shown to officer, superintendent and authority
 viewers only. `can_decide` says whether the viewer is the one whose decision is awaited, and
 `allowed_outcomes` what they may decide. `stock_limit_problem` (the buyer's own stock numbers)
-is shown to the buyer only, while the sale waits for them; the seller never sees it."""
+is shown to the buyer only, while the sale waits for them; the seller never sees it.
+`status_for_you` is the status worded for the viewer (owner decision A8): "Requires your
+approval" for whoever must decide, "Requires … approval" for the seller and buyer while the
+sale waits on someone else, and the plain status label otherwise. `awaiting_you` (in lists
+too) is true exactly when the viewer is the decider, like `can_decide`."""
 
 from core.db_context import acting_as_system
 from identity.models import User
@@ -36,6 +40,24 @@ def _role(tx: Transaction, viewer: User) -> str:
     return "authority"
 
 
+_PARTIES = {"seller", "buyer"}
+_WAITING_ON = {
+    TransactionStatus.AWAITING_BUYER: "Requires buyer approval",
+    TransactionStatus.AWAITING_OFFICER: "Requires officer approval",
+    TransactionStatus.AWAITING_SUPERINTENDENT: "Requires superintendent approval",
+}
+
+
+def status_for_you(tx: Transaction, role: str, deciding_as: str | None) -> str:
+    """The A8 wording; `role` is the viewer's `your_role`, `deciding_as` their
+    `decision_role` (None when nothing waits on them)."""
+    if deciding_as is not None:
+        return "Requires your approval"
+    if role in _PARTIES and tx.status in _WAITING_ON:
+        return _WAITING_ON[tx.status]
+    return tx.get_status_display()
+
+
 def _names(tx: Transaction) -> tuple[str, str]:
     with acting_as_system("transaction_view"):
         return tx.seller_licence.holder_name, tx.buyer_licence.holder_name
@@ -43,17 +65,21 @@ def _names(tx: Transaction) -> tuple[str, str]:
 
 def transaction_summary(tx: Transaction, viewer: User) -> dict:
     seller_name, buyer_name = _names(tx)
+    role = _role(tx, viewer)
+    deciding_as = decision_role(tx, viewer)
     return {
         "reference": tx.reference,
         "status": tx.status,
         "status_label": tx.get_status_display(),
+        "status_for_you": status_for_you(tx, role, deciding_as),
+        "awaiting_you": deciding_as is not None,
         "substance": tx.substance.name,
         "quantity": fmt_qty(tx.quantity),
         "unit": tx.unit,
         "seller_name": seller_name,
         "buyer_name": buyer_name,
         "created_at": tx.created_at.isoformat(),
-        "your_role": _role(tx, viewer),
+        "your_role": role,
         "approval_chain": tx.approval_chain,
         "approval_chain_label": tx.get_approval_chain_display(),
     }
@@ -98,7 +124,7 @@ def _timeline(tx: Transaction, for_authority: bool) -> list[dict]:
 def transaction_detail(tx: Transaction, viewer: User) -> dict:
     summary = transaction_summary(tx, viewer)
     role = summary["your_role"]
-    deciding_as = decision_role(tx, viewer)
+    deciding_as = decision_role(tx, viewer) if summary["awaiting_you"] else None
     for_authority = (
         role in {"officer", "superintendent", "authority"} or viewer.role in _AUTHORITY_ROLES
     )

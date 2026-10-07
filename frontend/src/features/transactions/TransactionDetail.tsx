@@ -64,8 +64,8 @@ export function TransactionDetail({ transaction: tx }: Props) {
   return (
     <Stack gap="lg">
       <Group gap="sm">
-        <StatusBadge status={tx.status} awaitingYou={tx.can_decide} />
-        {tx.can_decide && (
+        <StatusBadge status={tx.status} label={tx.status_for_you} awaitingYou={tx.awaiting_you} />
+        {tx.status_for_you !== tx.status_label && (
           <Text c="dimmed" size="sm">
             {tx.status_label}
           </Text>

@@ -23,7 +23,7 @@ from demo.dataset import PERSONAS
 from demo.models import DemoInboxMessage, DemoPersona
 from identity.roles import Role
 from oversight.service import create_due_batches, set_review_period
-from tests.conftest import BUYER_GSTIN, login_body, set_decided_on
+from tests.conftest import BUYER_GSTIN, TEST_PASSWORD, login_body, set_decided_on
 from tests.test_buyer_stock_limit import buyer_holds
 from tests.test_governance_api import RULE, decide, draft
 from tests.test_transaction_api import NEW_TX, login, post
@@ -159,6 +159,31 @@ def _(ctx):
     challenge = post(ctx.client, "/api/auth/login", body).json()["challenge_id"]
     code = ctx.otp_outbox[-1][1]
     return post(ctx.client, "/api/auth/login/verify", {"challenge_id": challenge, "code": code})
+
+
+def _issued(ctx):
+    """A Licensing Authority whose password the system issued (must change it first)."""
+    user = ctx.make_user(
+        role=Role.LICENSING_AUTHORITY, contact="+919800000606", must_change_password=True
+    )
+    return as_(ctx, user)
+
+
+@contract("password_changed")
+def _(ctx):
+    body = {"current_password": TEST_PASSWORD, "new_password": "a-new-chosen-pass-2026"}
+    return post(_issued(ctx), "/api/auth/password", body)
+
+
+@contract("error_400_password_rules", status=400)
+def _(ctx):
+    body = {"current_password": TEST_PASSWORD, "new_password": "short"}
+    return post(_issued(ctx), "/api/auth/password", body)
+
+
+@contract("error_403_password_change_required", status=403)
+def _(ctx):
+    return _issued(ctx).get("/api/home")
 
 
 # Demo mode (D4): the persona list and the SMS inbox, both anonymous ------------------------

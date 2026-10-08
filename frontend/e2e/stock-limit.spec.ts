@@ -20,10 +20,12 @@ test("a sale over the buyer's stock limit can only be rejected, without an alert
   await startSale(page, { gstin: GSTIN.bopal, substance: "Whisky (L)", litres: 70 });
   await expect(page.getByText("This sale can go ahead.")).toBeVisible();
   const reference = await sendSale(page);
+  await expect(statusOf(page, "Requires buyer approval")).toBeVisible();
   await signOut(page);
 
   await signInAs(page, "buyer");
   await page.goto(`/licensee/transactions/${encodeURIComponent(reference)}`);
+  await expect(statusOf(page, "Requires your approval")).toBeVisible();
   await expect(
     page.getByText(
       "Confirming would take your Whisky stock to 510 L, above your licence limit of 500 L. " +

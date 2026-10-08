@@ -139,7 +139,7 @@ docs/demo/script.md, docs/demo/rehearsal.md, README.md (Run the demo)
 **`GET /api/demo/personas`:**
 - Anonymous, demo only, otherwise 404.
 - Returns the seeded personas in a fixed order: Seller, Buyer, Area Officer (Sanand), Superintendent (Ahmedabad), Licensing Authority, Head Authority A, Head Authority B.
-- Each entry is `{key, label, description, user_id, password}`. `password` is `DEMO_PASSWORD`.
+- Each entry is `{key, label, description, user_id, password}`. `password` is `DEMO_PASSWORD`. *(Superseded by the 2026-10-06 demo accounts plan: `{key, label, description, role, identifier, password}`, the current password from `DemoCredential`.)*
 - Personas come from `demo/dataset.py` (user IDs are looked up from a `DemoPersona` table that the seed fills: `key → user_id`; no RLS, demo only).
 
 **Tests (`test_demo_mode.py`):**
@@ -289,7 +289,7 @@ The entrypoint never seeds; that is a separate make target.
 
 **`PersonaPicker`**, on the sign-in page and only in demo mode:
 - a card "Demo: sign in as" with one button per persona (label and description)
-- clicking fills the user ID and password and submits step 1; **the real password and code login still runs**
+- clicking fills the user ID and password (*superseded 2026-10-06: the role, the GSTIN or email, and the password*) and submits step 1; **the real password and code login still runs**
 - the code step shows a hint: "Your code is in the Demo SMS inbox."
 
 **`SmsInbox`:**

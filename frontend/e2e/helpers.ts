@@ -1,9 +1,17 @@
 import { expect, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { csvRow } from "./demo-data";
 
-// Sign-in budget: an account that is sent 5 sign-in codes within 15 minutes is locked for 15
-// minutes (backend identity/login.py, R10), demo or not. A whole run must stay within 4 sign-ins
-// per account (so a CI retry still fits): a spec that needs someone again later keeps them
-// signed in in a second window (`signedInWindow`) instead of signing in twice.
+// Sign-in budget: in demo mode an account may be sent 30 sign-in codes within 15 minutes before
+// it is locked for 15 minutes (backend identity/login.py, A11); 5 wrong passwords lock it in
+// every mode. A run signs each persona in a handful of times, well inside that, and a CI retry
+// still fits. A spec that needs someone again later may keep them signed in in a second window
+// (`signedInWindow`), as a presenter would.
+//
+// Sign-in is role first (owner decision A1): a party gives its GSTIN, an official their email.
+// Officials' passwords are issued by the seed and must be changed at the first sign-in (A3):
+// the first time a run signs an official in, `signInAs` saves `newPasswordFor(persona)` on the
+// change-password page. The persona picker reads the current password from the backend, so
+// later sign-ins use the new one without the tests keeping track.
 
 /** Who an SMS code goes to, as the demo inbox shows it: display name and the number's last 4. */
 export interface Recipient {
@@ -34,14 +42,38 @@ export const PERSONAS = {
 
 export type PersonaKey = keyof typeof PERSONAS;
 
+/** The password an official persona chooses at their first sign-in of a run (deterministic). */
+export function newPasswordFor(persona: PersonaKey): string {
+  return `${persona}-New-2026!`;
+}
+
 /** Seeded buyers' GSTINs (synthetic: state code 99). */
 export const GSTIN = {
   bopal: "99AAFCB2002B1Z6",
   sanandRetail: "99AAHCS4004D1Z8",
 } as const;
 
-/** Sanand Retail Wines: a seeded Licensee without a persona (see global-setup.ts). */
+/** Sanand Retail Wines: a seeded Licensee without a persona (signed in with `signInAsParty`). */
 export const SANAND_RETAIL: Recipient = { name: "Sanand Retail Wines", last4: "0104" };
+
+interface DemoPersona {
+  key: string;
+  role: string;
+  identifier: string;
+  password: string;
+}
+
+/** A persona as GET /api/demo/personas lists it now: role, identifier and current password. */
+export async function personaAccount(
+  request: APIRequestContext,
+  persona: PersonaKey,
+): Promise<DemoPersona> {
+  const response = await request.get("/api/demo/personas");
+  expect(response.ok(), `GET /api/demo/personas answered ${response.status()}`).toBe(true);
+  const account = ((await response.json()) as DemoPersona[]).find((p) => p.key === persona);
+  if (!account) throw new Error(`e2e: no demo persona ${persona}`);
+  return account;
+}
 
 interface InboxMessage {
   display_name: string;
@@ -94,8 +126,15 @@ export async function codeFor(
   return code;
 }
 
-/** Sign-in step 2: the code arrives in the demo inbox; "Use this code" fills it in. */
-async function enterSignInCode(page: Page, who: Recipient, after: Set<string>): Promise<void> {
+/**
+ * On a code step (sign-in or sign-up): waits for the code sent to `who` since `after`, then
+ * fills it in through the demo SMS inbox's "Use this code", as a presenter would.
+ */
+export async function fillCodeFromInbox(
+  page: Page,
+  who: Recipient,
+  after: Set<string>,
+): Promise<void> {
   await expect(page.getByRole("group", { name: "One-time code" })).toBeVisible();
   const code = await codeFor(page.request, who, after);
   await page.getByRole("button", { name: "Open the Demo SMS inbox" }).click();
@@ -106,27 +145,67 @@ async function enterSignInCode(page: Page, who: Recipient, after: Set<string>): 
     .getByRole("button", { name: "Use this code" })
     .click();
   await expect(drawer).toBeHidden();
+}
+
+/**
+ * Sign-in step 2, then the change-password page when the password was issued (an official's
+ * first sign-in of the run): the current password is `current`, the new one `newPassword`.
+ */
+async function enterSignInCode(
+  page: Page,
+  who: Recipient,
+  after: Set<string>,
+  change?: { current: string; newPassword: string },
+): Promise<void> {
+  await fillCodeFromInbox(page, who, after);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL((url) => url.pathname !== "/sign-in");
+  if (new URL(page.url()).pathname === "/change-password") {
+    if (!change) throw new Error(`e2e: ${who.name} was asked to change an issued password`);
+    await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+    await page.getByLabel("Current password", { exact: true }).fill(change.current);
+    await page.getByLabel("New password", { exact: true }).fill(change.newPassword);
+    await page.getByLabel("Confirm the new password", { exact: true }).fill(change.newPassword);
+    await page.getByRole("button", { name: "Save the new password" }).click();
+    await page.waitForURL((url) => url.pathname !== "/change-password");
+  }
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 }
 
-/** Signs in through the persona picker and the demo SMS inbox, as a presenter would. */
+/**
+ * Signs in through the persona picker (role, identifier and current password filled in) and the
+ * demo SMS inbox, as a presenter would. An official's first sign-in of the run also chooses
+ * `newPasswordFor(persona)`.
+ */
 export async function signInAs(page: Page, persona: PersonaKey): Promise<void> {
   const who = PERSONAS[persona];
+  const { password } = await personaAccount(page.request, persona);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Demo: sign in as" })).toBeVisible();
   const after = await inboxSnapshot(page.request);
   await page.getByRole("button", { name: who.label, exact: true }).click();
-  await enterSignInCode(page, who, after);
+  await enterSignInCode(page, who, after, {
+    current: password,
+    newPassword: newPasswordFor(persona),
+  });
 }
 
-/** Signs in with a user ID and the demo password, for a seeded account without a persona. */
-export async function signInWithUserId(page: Page, userId: string, who: Recipient): Promise<void> {
-  const personas = await page.request.get("/api/demo/personas");
-  const [{ password }] = (await personas.json()) as { password: string }[];
+/**
+ * Signs in by hand as Party with a GSTIN, for a business without a persona. The password is the
+ * business's current one from demo-data/parties.csv unless given.
+ */
+export async function signInAsParty(
+  page: Page,
+  gstin: string,
+  who: Recipient,
+  password?: string,
+): Promise<void> {
+  const current = password ?? csvRow("parties.csv", "gstin", gstin)?.password;
+  if (!current) throw new Error(`e2e: no password for ${gstin} in demo-data/parties.csv`);
   await page.goto("/");
-  await page.getByLabel("User ID").fill(userId);
-  await page.getByLabel("Password").fill(password);
+  await page.getByRole("radio", { name: "Party" }).check();
+  await page.getByLabel("GSTIN", { exact: true }).fill(gstin);
+  await page.getByLabel("Password", { exact: true }).fill(current);
   const after = await inboxSnapshot(page.request);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await enterSignInCode(page, who, after);

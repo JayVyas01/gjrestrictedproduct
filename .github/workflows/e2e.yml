@@ -34,6 +34,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       # Fresh keys for this run only (.env.demo is never committed), then the images.
+      # demo-env also makes demo-data/ (chmod 0777: the backend container writes the CSV files
+      # there as uid 10001; the specs read parties.csv and officials.csv from it on the runner).
       - run: make demo-env
       - run: make demo-build
 

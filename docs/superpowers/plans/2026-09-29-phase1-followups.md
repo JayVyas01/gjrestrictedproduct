@@ -7,7 +7,7 @@ Open items from the Phase 1 reviews. None of them block D1. Pick them up in the 
 | Item | When |
 |---|---|
 | Rate-limit key: read `NUM_PROXIES` and `SECURE_PROXY_SSL_HEADER` from env, set per deployment (behind a load balancer, `NUM_PROXIES=0` makes the login limit global) | Phase 6 deploy |
-| Account-lockout DoS: anyone who knows a user ID can keep it locked; add per-(IP, user) counting or progressive delay | Phase 2/6 |
+| Account-lockout DoS: anyone who knows the sign-in identifier can keep an account locked with wrong passwords. Since role-first sign-in (2026-10-06) that is a party's GSTIN, which is public, or an official's email; add per-(IP, account) counting or progressive delay | Phase 2/6 |
 | Absolute session lifetime, alongside session listing (idle timeout alone never expires an active session) | Phase 2 |
 | `failed_login_count` never decays (old failures count toward a new lock) | Phase 2 |
 | Five-codes-in-15-minutes cap counts successful logins too (Ruling R12); revisit if real users hit it | After the demo |
@@ -153,7 +153,6 @@ Open items from the D1 reviews. None of them block D2.
 
 ## For D3 (screens) and D4 (demo tooling)
 
-- **D4 seed data:** seed a Whisky threshold above 200 L, so the demo shows both chains, and the Head Authority persona.
 - **D3 buyer reject dropdown:** hide the `STOCK_LIMIT` reason unless `stock_limit_problem` is set. The backend refuses it otherwise, but the buyer should not be offered it.
 - **D3 home screen:** `next_due` is the earliest due date of an OPEN batch only. Overdue batches are counted separately (`overdue_batches`), so the screen must show both.
 
@@ -176,7 +175,6 @@ Open items from the D1 reviews. None of them block D2.
 
 ## For D3 (screens) and D4 (demo tooling)
 
-- **D4 seed data:** seed one approved and one pending rule-change proposal, and two Head Authority users, so the maker-checker flow can be demoed (the drafter cannot decide their own change).
 - **D3 before/after diff:** the rule-change detail screen shows `current` against `proposed`. `current` is null once the proposal is decided or withdrawn, so a decided proposal shows `proposed` only.
 - **D3 `current` is same-scope only:** `current` is the latest rule version for the same licence type and scope (or the latest threshold for the same scope). It does not show the rule that would actually resolve for a substance when a class rule governs it today. The screen should say so, or D3 can add the resolved rule.
 - **D3 licence register area filter:** `?area=` is an exact match, so a district does not include its talukas. D3 may want a hierarchy filter.
@@ -212,14 +210,23 @@ Open items from the D1 reviews. None of them block D2.
 - **Status tab in the URL uses server values:** `/rule-changes?status=SUBMITTED` (and the other tabs) carry the server's status names. Harmless (no personal data, unknown values fall back to Open), but a rename on the server would break bookmarked links.
 - **Bundle split (Task 11):** pages load lazily, one chunk per feature area plus four vendor chunks (`vite.config.ts`); the largest chunk is `vendor-mantine` at about 225 kB (67 kB gzip). If it grows past 500 kB again, split Mantine's less-used components out.
 
-## For D4 (demo tooling and deployment)
-
-- **Caddy CSP** from design §6: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'` (Mantine injects styles); `frame-ancestors 'none'`.
-- **Persona picker:** a demo-only way to switch between the seeded people without typing codes (mock mode has `?as=`; the real backend needs its own, demo-only, never in production).
-- **SMS inbox:** a demo page that shows the one-time codes the fake SMS sender "sent", so codes can be read on screen.
-- **Playwright on the real backend:** end-to-end runs of the transaction journey, the two-step approval, the buyer's stock-limit reject, batch sign-off and a rule change against the seeded backend.
-- **Seed data:** a Whisky approval threshold above 200 L (so the two-step approval shows), two Head Authority users (the drafter can't decide their own change), and one approved and one pending rule-change proposal.
-
 ## Needs the owner's confirmation
 
 - **Adding `frontend` and `analyze (javascript-typescript)` to the required checks of the ruleset needs the owner's confirmation.** Both jobs run on every PR today but are not required, so a red frontend build or CodeQL finding would not block a merge.
+
+# Demo accounts, sign-up and CSV follow-ups (added 2026-10-07)
+
+From plan `2026-10-06-demo-accounts-and-csv.md` (role-first sign-in, issued passwords changed at the first sign-in, demo party sign-up, demo CSV files, viewer-aware status). Done there, and so removed above: the D4 items (Caddy CSP, persona picker, SMS inbox, Playwright journeys on the real backend, seed data with the Whisky threshold, two Head Authority users and the rule-change proposals).
+
+## Deferred
+
+- **A party's business name is not shown in the app:** the name given at sign-up is kept in `DemoCredential.business_name` and written to `parties.csv`, but every screen (and the demo inbox) shows the licence's holder name. Decide whether the account should carry its own display name.
+- **Software Owner signs in through the API only:** `SOFTWARE_OWNER` is a valid login role for `POST /api/auth/login`, but the web app offers only the five sign-in roles and has no Software Owner persona. Add it to the role choice if the owner wants a Software Owner screen in the demo.
+- **e2e on Linux relies on a world-writable `demo-data/`:** `make demo-data` runs `chmod 0777` so the backend container (uid 10001) can write the CSV files on the CI runner; macOS Docker Desktop maps ownership and needs none. Synthetic data only, but a proper fix is to run the container with the host's uid or have the e2e job read the files through `docker compose exec`.
+- **Status wording is not translated:** `status_for_you` ("Requires your approval", "Requires buyer approval", and the plain label of a finished sale such as "Approved") comes from the server in English and the web app shows it as it is, so it would not follow a Gujarati locale. Translate it in the app from `status` and `awaiting_you`, or have the server send a key.
+- **Mock-mode personas not updated:** `npm run dev:mock` (`src/mocks/browser.ts`, `?as=`) still switches people by contract, not through the new role-first sign-in, change-password or sign-up pages; those pages are covered by unit tests and the e2e journeys only.
+
+## Test gaps
+
+- **No e2e for a wrong role or identifier:** the same 401 for every mismatch is proved in `test_login_api.py`, not on screen.
+- **No e2e for a sign-up refusal** (wrong phone, already signed up): covered by `test_demo_signup.py` and `SignUpPage.test.tsx` only.

@@ -27,6 +27,7 @@ test("a buyer rejection alerts the officer, who acknowledges it", async ({ brows
 
   await signInAs(page, "buyer");
   await page.goto(`/licensee/transactions/${encodeURIComponent(reference)}`);
+  await expect(statusOf(page, "Requires your approval")).toBeVisible();
   await decide(page, "Reject", { as: PERSONAS.buyer, reason: "I did not place this order" });
   await expect(statusOf(page, "Rejected by the buyer")).toBeVisible();
   await signOut(page);

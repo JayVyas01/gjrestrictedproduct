@@ -207,7 +207,7 @@ backend/tests/test_api_contracts.py
 
 ### Task 3: Sign-in, session and the app shell
 
-- [ ] **`SignInPage`, step 1:** user ID and password.
+- [ ] **`SignInPage`, step 1:** user ID and password. *(Superseded by the 2026-10-06 demo accounts plan: the role first, then a party's GSTIN or an official's email, and the password.)*
   - Calls `POST /api/auth/login`. Use the backend's `identity/views.py` for the exact request and response.
   - **Errors:** a wrong password shows the server's `detail`; 429 shows the "too many tries" text.
 - [ ] **`SignInPage`, step 2:** the six-digit code (Mantine `PinInput`, accepts a paste), then `login/verify`.

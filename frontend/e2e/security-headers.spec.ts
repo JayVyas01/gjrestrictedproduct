@@ -32,6 +32,10 @@ test("the main pages raise no CSP violation", async ({ page }) => {
     });
   });
 
+  // The demo sign-up page, before anyone signs in.
+  await page.goto("/sign-up");
+  await expect(page.getByRole("heading", { level: 1, name: "Sign up your business" })).toBeVisible();
+
   await signInAs(page, "buyer");
   for (const path of ["/licensee", "/licensee/transactions", "/licensee/sale/new"]) {
     await page.goto(path);

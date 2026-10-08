@@ -6,7 +6,7 @@ import {
   decide,
   sendSale,
   signInAs,
-  signInWithUserId,
+  signInAsParty,
   signOut,
   signedInWindow,
   startSale,
@@ -21,9 +21,6 @@ test("a sale above the threshold needs the superintendent's final approval", asy
   browser,
   page,
 }) => {
-  const retailUserId = process.env.E2E_RETAIL_USER_ID ?? "";
-  expect(retailUserId, "set by global-setup.ts").not.toBe("");
-
   // The seller starts the sale in their own window; the check says the superintendent gives
   // final approval.
   const seller = await signedInWindow(browser, "seller");
@@ -34,19 +31,24 @@ test("a sale above the threshold needs the superintendent's final approval", asy
     seller.getByText("Above the threshold: the superintendent gives final approval."),
   ).toBeVisible();
   const reference = await sendSale(seller);
+  // Each viewer sees the status in their own words (A8), with the plain status beside it.
+  await expect(statusOf(seller, "Requires buyer approval")).toBeVisible();
   await expect(statusOf(seller, "Waiting for the buyer")).toBeVisible();
 
-  // The buyer confirms with an SMS code.
-  await signInWithUserId(page, retailUserId, SANAND_RETAIL);
+  // The buyer, Sanand Retail Wines (no persona: signed in as Party with its GSTIN), confirms
+  // with an SMS code.
+  await signInAsParty(page, GSTIN.sanandRetail, SANAND_RETAIL);
   const buyerBefore = await stockOf(page, "Whisky");
   await page.goto(`/licensee/transactions/${encodeURIComponent(reference)}`);
+  await expect(statusOf(page, "Requires your approval")).toBeVisible();
   await decide(page, "Confirm purchase", { as: SANAND_RETAIL });
-  await expect(statusOf(page, "Waiting for the officer")).toBeVisible();
+  await expect(statusOf(page, "Requires officer approval")).toBeVisible();
   await signOut(page);
 
   // The Area Officer can only recommend it upward (or reject it).
   await signInAs(page, "area_officer");
   await page.goto(`/personnel/transactions/${encodeURIComponent(reference)}`);
+  await expect(statusOf(page, "Requires your approval")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await decide(page, "Recommend for approval", { as: PERSONAS.area_officer });
   await expect(statusOf(page, "Waiting for the superintendent")).toBeVisible();
@@ -65,6 +67,6 @@ test("a sale above the threshold needs the superintendent's final approval", asy
   // The stock moved on both homes.
   expect(await stockOf(seller, "Whisky")).toBe(sellerBefore - 250);
   await seller.context().close();
-  await signInWithUserId(page, retailUserId, SANAND_RETAIL);
+  await signInAsParty(page, GSTIN.sanandRetail, SANAND_RETAIL);
   expect(await stockOf(page, "Whisky")).toBe(buyerBefore + 250);
 });
